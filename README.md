@@ -273,13 +273,15 @@ regression signal, not proof that every user graph is leak-free.
 `npm run benchmark:compare` production-builds a separate equal-semantics
 comparison against React, Solid and Preact Signals. Before timing, every adapter
 must prove that it mounted 1,000 rows, updated the requested text, retained row
-DOM identity and produced the requested keyed order. Framework-specific flushes
-are included in the measured work and every sample ends with a forced layout.
-The comparison is intended to expose trade-offs, not produce a single winner.
+DOM identity and focus, and produced the requested keyed order. Framework-specific
+flushes are included in the measured work and every sample ends with a forced
+layout. Mount samples use equal warm-up and balanced execution orders; cold
+first mount is intentionally treated as a separate future measurement. The
+comparison is intended to expose trade-offs, not produce a single winner.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately
-`4.06 KB gzip` for low-level core exports, `4.97 KB` for `createApp`, and
-`5.16 KB` for the complete main entry. The larger playground bundle also
+`4.16 KB gzip` for low-level core exports, `5.07 KB` for `createApp`, and
+`5.27 KB` for the complete main entry. The larger playground bundle also
 contains the example UI and diagnostics, so it is not a library-size
 measurement.
