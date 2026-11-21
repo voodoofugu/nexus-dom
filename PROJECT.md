@@ -46,6 +46,8 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 - General reorders use LIS to minimize physical moves. `app.list(key)` attaches
   insert/remove/move/replace metadata to the existing Nexus `UpdateContext`, so
   direct array bindings can skip the O(n) key scan for known operations.
+- Keyed blocks prefer `ParentNode.moveBefore()` so modern browsers retain focus
+  and DOM state during moves; `insertBefore()` remains the compatibility path.
 - `app.list(key).batch(...)` preserves an ordered set of operations and unique
   operation ids through one automatically batched Nexus notification. Arbitrary
   array replacement still uses O(n) reconciliation because identity alone does
@@ -68,6 +70,20 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
   branches are prepared off-DOM and retain the previous branch on failure;
   scheduled errors can be observed through renderer `onError` without blocking
   unrelated bindings in the same commit.
+- Library-owned failures use exported `NexusDOMError` with the visual format
+  `nexus-dom: [CODE]` followed by an actionable message. Errors thrown by user
+  code remain untouched.
+
+## Structural hash decision
+
+A hash of serialized list or DOM structure is not used as an update protocol.
+An order-sensitive hash can show that an arbitrary tree changed, but it cannot
+describe which rows moved or which DOM operations restore the new order. A
+per-row hash still requires an O(n) pass, duplicates keyed identity and needs a
+collision check. Maintaining hashes incrementally would itself require precise
+mutation metadata, which `app.list(...)` already provides without losing the
+operation. Hashes may still be useful later for hydration or immutable-subtree
+memoization, but they do not reduce the physical work of a full reverse.
 
 ## Validation questions
 
@@ -93,11 +109,18 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `3.89 KB
-gzip` for core, `4.73 KB` for `createApp`, and `4.89 KB` for the full main entry
+The isolated Rollup/Terser ESM benchmark currently measures roughly `4.06 KB
+gzip` for core, `4.97 KB` for `createApp`, and `5.16 KB` for the full main entry
 with `nexus-state` externalized. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle
 mount/update/dispose run left zero fixture nodes and about `7 KiB` heap delta;
 use it only as a regression baseline because browser heap measurements vary.
+
+The separate production comparison runner covers nexus-dom, React, Solid and
+Preact Signals. Each adapter has correctness gates for row count, text update,
+DOM identity and keyed order before timing. The first Chrome run puts nexus-dom
+close to Solid for targeted and structural updates, ahead of React for large
+reorders, and behind React/Solid on initial mount; repeat runs and broader
+scenarios are required before drawing general conclusions.

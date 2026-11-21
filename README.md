@@ -129,6 +129,9 @@ Reactive arrays own a keyed DOM region through `.each(...)`:
 Rows with unchanged keys and values keep their DOM and owner when reordered.
 Removing a key disposes its row. Replacing an item under the same key updates
 the row's `$item` bindings without rerunning its component or replacing its DOM.
+On browsers with `ParentNode.moveBefore()`, keyed moves also preserve focus and
+other state associated with moved DOM nodes; older browsers use `insertBefore()`
+as a compatibility fallback.
 Use `$item.title` in JSX and `$item.id.get()` when an event needs the current
 plain value. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
@@ -206,6 +209,7 @@ npm run dev
 npm run check
 npm run benchmark
 npm run benchmark:browser
+npm run benchmark:compare
 npm run benchmark:bundle
 ```
 
@@ -235,6 +239,18 @@ Initial mount errors remain synchronous, but the renderer disposes the partial
 owner before rethrowing. A failed dynamic replacement is prepared off-DOM, so
 the previous working branch remains mounted.
 
+Errors raised by the library itself have a recognizable, searchable format and
+a stable code:
+
+```text
+nexus-dom: [RENDER_TARGET_NOT_FOUND]
+Render target "#app" was not found.
+```
+
+They are instances of the exported `NexusDOMError`. Exceptions thrown by user
+components or callbacks keep their original type and message, so the renderer
+does not mislabel application failures as library failures.
+
 `npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
 
 The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.
@@ -254,9 +270,16 @@ reports both remaining fixture nodes and heap delta. The first 20-cycle run left
 zero fixture nodes and roughly `7 KiB` of heap delta after warm-up; this is a
 regression signal, not proof that every user graph is leak-free.
 
+`npm run benchmark:compare` production-builds a separate equal-semantics
+comparison against React, Solid and Preact Signals. Before timing, every adapter
+must prove that it mounted 1,000 rows, updated the requested text, retained row
+DOM identity and produced the requested keyed order. Framework-specific flushes
+are included in the measured work and every sample ends with a forced layout.
+The comparison is intended to expose trade-offs, not produce a single winner.
+
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately
-`3.89 KB gzip` for low-level core exports, `4.73 KB` for `createApp`, and
-`4.89 KB` for the complete main entry. The larger playground bundle also
+`4.06 KB gzip` for low-level core exports, `4.97 KB` for `createApp`, and
+`5.16 KB` for the complete main entry. The larger playground bundle also
 contains the example UI and diagnostics, so it is not a library-size
 measurement.
