@@ -50,7 +50,7 @@ function moveBlockBefore(block: KeyedBlock, reference: Node) {
   }
 }
 
-function longestIncreasingPositions(values: readonly number[]) {
+function findIncreasingPositions(values: readonly number[]) {
   const tails: number[] = [];
   const previous = new Array<number>(values.length).fill(-1);
 
@@ -79,6 +79,42 @@ function longestIncreasingPositions(values: readonly number[]) {
     cursor = previous[cursor] ?? -1;
   }
   return positions;
+}
+
+function longestIncreasingPositions(
+  values: readonly number[],
+  requiredIndex?: number
+) {
+  const requiredValue =
+    requiredIndex === undefined ? undefined : values[requiredIndex];
+  if (
+    requiredIndex === undefined ||
+    requiredValue === undefined ||
+    requiredValue < 0
+  ) {
+    return findIncreasingPositions(values);
+  }
+
+  const before = values.map((value, index) =>
+    index < requiredIndex && value < requiredValue ? value : -1
+  );
+  const after = values.map((value, index) =>
+    index > requiredIndex && value > requiredValue ? value : -1
+  );
+  return new Set([
+    ...findIncreasingPositions(before),
+    requiredIndex,
+    ...findIncreasingPositions(after),
+  ]);
+}
+
+function blockContains(block: KeyedBlock, node: Node | null) {
+  if (!node) return false;
+  return block.nodes.some(
+    (root) =>
+      root === node ||
+      (root.nodeType === Node.ELEMENT_NODE && (root as Element).contains(node))
+  );
 }
 
 function renderNodes(
@@ -204,7 +240,15 @@ export function mountKeyedRegion<C>({
     const positions = nextBlocks.map(
       (block) => oldPositions.get(block.key) ?? -1
     );
-    const stablePositions = longestIncreasingPositions(positions);
+    const parent = end.parentNode as StatefulParentNode | null;
+    const activeElement = document.activeElement;
+    const activeIndex = parent?.moveBefore
+      ? -1
+      : nextBlocks.findIndex((block) => blockContains(block, activeElement));
+    const stablePositions = longestIncreasingPositions(
+      positions,
+      activeIndex < 0 ? undefined : activeIndex
+    );
 
     for (let index = nextBlocks.length - 1; index >= 0; index--) {
       const block = nextBlocks[index];
@@ -317,6 +361,36 @@ export function mountKeyedRegion<C>({
         if (targetItem === undefined || vnode.key(targetItem) !== block.key) {
           return false;
         }
+      }
+      const parent = end.parentNode as StatefulParentNode | null;
+      const activeElement = document.activeElement;
+      if (!parent?.moveBefore && blockContains(block, activeElement)) {
+        if (operation.from > operation.to) {
+          let reference = currentBlocks[operation.from + 1]?.nodes[0] ?? end;
+          for (
+            let index = operation.from - 1;
+            index >= operation.to;
+            index--
+          ) {
+            const shifted = currentBlocks[index];
+            if (!shifted) continue;
+            moveBlockBefore(shifted, reference);
+            reference = shifted.nodes[0] ?? reference;
+          }
+        } else {
+          const reference = block.nodes[0] ?? end;
+          for (
+            let index = operation.from + 1;
+            index <= operation.to;
+            index++
+          ) {
+            const shifted = currentBlocks[index];
+            if (shifted) moveBlockBefore(shifted, reference);
+          }
+        }
+        currentBlocks.splice(operation.from, 1);
+        currentBlocks.splice(operation.to, 0, block);
+        return true;
       }
       currentBlocks.splice(operation.from, 1);
       currentBlocks.splice(operation.to, 0, block);
