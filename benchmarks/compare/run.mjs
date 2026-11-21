@@ -8,12 +8,20 @@ import { build, preview } from "vite";
 
 const configFile = fileURLToPath(new URL("./vite.config.ts", import.meta.url));
 const browserName = process.env.NEXUS_DOM_BROWSER ?? "chromium";
+const cpuThrottle = Number(process.env.NEXUS_DOM_CPU_THROTTLE ?? 1);
+const skipMemory = process.env.NEXUS_DOM_SKIP_MEMORY === "1";
 const browserTypes = { chromium, firefox, webkit };
 const browserType = browserTypes[browserName];
 if (!browserType) {
   throw new Error(
     `Unknown NEXUS_DOM_BROWSER "${browserName}". Use chromium, firefox or webkit.`
   );
+}
+if (!Number.isFinite(cpuThrottle) || cpuThrottle < 1) {
+  throw new Error("NEXUS_DOM_CPU_THROTTLE must be a number greater than or equal to 1.");
+}
+if (cpuThrottle !== 1 && browserName !== "chromium") {
+  throw new Error("CPU throttling is only available for Chromium benchmarks.");
 }
 
 const knownChromiumBrowsers = [
@@ -50,6 +58,11 @@ try {
     ...(browserName === "chromium" ? { executablePath } : {}),
     headless: true,
   });
+  const configurePage = async (page) => {
+    if (cpuThrottle === 1) return;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: cpuThrottle });
+  };
   const frameworkNames = ["nexus-dom", "React", "Solid", "Preact Signals"];
   const coldSamples = new Map(frameworkNames.map((name) => [name, []]));
   for (let round = 0; round < 8; round++) {
@@ -61,6 +74,7 @@ try {
     if (round >= frameworkNames.length) order.reverse();
     for (const frameworkName of order) {
       const coldPage = await browser.newPage();
+      await configurePage(coldPage);
       await coldPage.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
       const duration = await coldPage.evaluate(
         (name) => window.runFirstMount(name),
@@ -93,12 +107,14 @@ try {
   );
 
   const page = await browser.newPage();
+  await configurePage(page);
   page.on("console", (message) => console.error(`[browser] ${message.text()}`));
   page.on("pageerror", (error) => console.error(`[browser] ${error.message}`));
   await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
   const report = await page.evaluate(() => window.runRendererComparison());
 
   console.log(`Browser: ${report.userAgent}`);
+  console.log(`CPU throttle: ${cpuThrottle}x`);
   console.log(`Rows: ${report.rows}`);
   console.log(`ParentNode.moveBefore: ${report.supportsMoveBefore ? "yes" : "no"}`);
   console.table(report.correctness);
@@ -121,7 +137,7 @@ try {
     }))
   );
 
-  if (browserName === "chromium") {
+  if (browserName === "chromium" && !skipMemory) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Performance.enable");
     const collectMemory = async () => {
@@ -178,6 +194,8 @@ try {
     }
     console.log("Heap diagnostics after forced GC:");
     console.table(memoryResults);
+  } else if (skipMemory) {
+    console.log("Heap diagnostics: skipped by NEXUS_DOM_SKIP_MEMORY.");
   } else {
     console.log("Heap diagnostics: skipped (requires Chromium CDP).");
   }
