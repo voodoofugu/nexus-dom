@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "nexus-dom",
+    "baseUrl": ".",
+    "paths": {
+      "nexus-dom": ["./src/index.ts"],
+      "nexus-dom/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "nexus-dom/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
+    },
+    "noEmit": true
+  },
+  "include": ["src", "tests", "benchmarks", "vitest.config.ts"]
+}
