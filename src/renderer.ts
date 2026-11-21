@@ -214,66 +214,80 @@ export function createDOMRenderer<C = unknown>(
     );
   };
 
+  const renderRegion = (
+    target: Node,
+    owner: Owner,
+    source: LiveValue<unknown, unknown>,
+    project: (value: unknown) => Renderable,
+    label: string
+  ) => {
+    const document = target.ownerDocument ?? (target as Document);
+    const start = document.createComment(`nexus-${label}`);
+    const end = document.createComment(`/nexus-${label}`);
+    target.appendChild(start);
+    target.appendChild(end);
+
+    let active = true;
+    let nextValue = source.get();
+    let branchOwner: Owner | undefined;
+    const token = {};
+
+    const clearBranch = () => {
+      branchOwner?.dispose();
+      branchOwner = undefined;
+      let node = start.nextSibling;
+      while (node && node !== end) {
+        const next = node.nextSibling;
+        node.parentNode?.removeChild(node);
+        node = next;
+      }
+    };
+
+    const mountBranch = () => {
+      branchOwner = new Owner(owner);
+      const fragment = document.createDocumentFragment();
+      renderInto(project(nextValue), fragment, branchOwner);
+      end.parentNode?.insertBefore(fragment, end);
+    };
+
+    mountBranch();
+
+    const unsubscribe = source.subscribe((value, context) => {
+      nextValue = value;
+      enqueue(
+        token,
+        () => {
+          if (!active) return;
+          clearBranch();
+          mountBranch();
+        },
+        context as C | undefined
+      );
+    });
+
+    owner.addCleanup(() => {
+      active = false;
+      cancel(token);
+      unsubscribe();
+      clearBranch();
+    });
+  };
+
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
+    if (vnode.kind === "dynamic") {
+      renderRegion(target, owner, vnode.source, vnode.project, "dynamic");
+      return;
+    }
+
     if (vnode.kind === "show") {
-      const document = target.ownerDocument ?? (target as Document);
-      const start = document.createComment("nexus-show");
-      const end = document.createComment("/nexus-show");
-      target.appendChild(start);
-      target.appendChild(end);
-
-      let active = true;
-      let visible = Boolean(vnode.when.get());
-      let nextVisible = visible;
-      let branchOwner: Owner | undefined;
-      const token = {};
-
-      const clearBranch = () => {
-        branchOwner?.dispose();
-        branchOwner = undefined;
-        let node = start.nextSibling;
-        while (node && node !== end) {
-          const next = node.nextSibling;
-          node.parentNode?.removeChild(node);
-          node = next;
-        }
-      };
-
-      const mountBranch = () => {
-        branchOwner = new Owner(owner);
-        const fragment = document.createDocumentFragment();
-        renderInto(
-          visible ? vnode.children : vnode.fallback,
-          fragment,
-          branchOwner
-        );
-        end.parentNode?.insertBefore(fragment, end);
-      };
-
-      mountBranch();
-
-      const unsubscribe = vnode.when.subscribe((value, context) => {
-        nextVisible = Boolean(value);
-        if (nextVisible === visible) return;
-
-        enqueue(
-          token,
-          () => {
-            if (!active || nextVisible === visible) return;
-            clearBranch();
-            visible = nextVisible;
-            mountBranch();
-          },
-          context as C | undefined
-        );
-      });
-
-      owner.addCleanup(() => {
-        active = false;
-        cancel(token);
-        unsubscribe();
-        clearBranch();
-      });
+      const condition = vnode.when.map(Boolean);
+      renderRegion(
+        target,
+        owner,
+        condition,
+        (visible) => (visible ? vnode.children : vnode.fallback),
+        "show"
+      );
       return;
     }
 

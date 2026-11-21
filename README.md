@@ -50,23 +50,27 @@ renderer.mount(<p>Total: {total}</p>, document.body);
 
 Selectors dynamically resubscribe when the set of keys they read changes.
 
-### Structural syntax is not settled
+### Runtime ternaries without a compiler
 
-The prototype currently includes `Show` only to test branch ownership, replacement and cleanup:
-
-```tsx
-<Show when={$.authorized} fallback={<Login />}>
-  <Profile />
-</Show>
-```
-
-The desired user-facing syntax is an ordinary JSX ternary:
+An ordinary ternary can run inside a live structural region without an extra compiler:
 
 ```tsx
-{authorized ? <Profile /> : <Login />}
+{$.authorized.render((authorized) =>
+  authorized ? <Profile /> : <Login />
+)}
 ```
 
-Plain JavaScript evaluates that expression once when a one-shot component mounts. Making it reactive requires either a small JSX transform, an explicit reactive expression, or a different component execution model. The project does not choose between them yet; `Show` is a correctness baseline, not the intended final API.
+`render` owns only this local DOM region. When the live value changes, the old branch is disposed and the selected branch is mounted. Mapping to the actual condition first avoids replacing the branch for unrelated source values:
+
+```tsx
+const positive = $.count.map((count) => count >= 0);
+
+{positive.render((isPositive) =>
+  isPositive ? <Positive /> : <Negative />
+)}
+```
+
+The prototype still includes `Show` as a correctness baseline for branch ownership. A literally bare `{authorized ? A : B}` would require a JSX transform or component rerun because plain JavaScript evaluates it once during a one-shot component mount. Whether `.render(...)` is sufficiently intuitive remains an explicit usability question rather than a settled API decision.
 
 ## Implemented
 
@@ -80,6 +84,7 @@ Plain JavaScript evaluates that expression once when a one-shot component mounts
 - owner-based subscription, event and component cleanup;
 - update contexts carried into renderer commit events.
 - an experimental owned `Show` branch with deterministic cleanup.
+- compiler-free `LiveValue.render(...)` regions with normal ternary expressions.
 
 ## Deliberately missing
 

@@ -39,8 +39,8 @@ The renderer preserves the Nexus update context so tooling can explain which sta
 4. Does provenance remain useful at the DOM commit boundary?
 5. What are the memory and update costs per binding?
 6. At what point is local rerender/reconciliation simpler than more bindings?
-7. Can ordinary JSX ternaries become reactive without an intrusive compiler, or
-   is a small build transform preferable to an explicit `Show`/reactive block?
+7. Is compiler-free `LiveValue.render(value => value ? A : B)` intuitive enough,
+   or is a small transform/component rerun worth supporting bare JSX ternaries?
 
 ## Benchmark policy
 

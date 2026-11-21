@@ -102,6 +102,23 @@ h1 {
   box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.22);
 }
 
+.syntax {
+  grid-column: 1 / -1;
+}
+
+.syntax pre {
+  overflow-x: auto;
+  margin: 0;
+  padding: 1rem;
+  color: #cbd6ff;
+  background: #0b0f16;
+  border: 1px solid #252d3b;
+  border-radius: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
 .counter-card {
   padding: clamp(1.25rem, 4vw, 2.25rem);
 }

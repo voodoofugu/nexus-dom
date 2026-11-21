@@ -7,6 +7,7 @@ export type {
   CommitEvent,
   Component,
   DOMRenderer,
+  DynamicVNode,
   EqualityFn,
   LiveListener,
   LiveValue,

@@ -2,10 +2,12 @@ import type { Nexus, UpdateContext } from "nexus-state";
 import {
   LIVE_VALUE,
   type BoundState,
+  type DynamicVNode,
   type EqualityFn,
   type LiveListener,
   type LiveValue,
   type NexusSource,
+  type Renderable,
 } from "./types.js";
 
 const sameValue: EqualityFn<unknown> = Object.is;
@@ -73,6 +75,20 @@ function mapLive<T, U, C>(
     map<V>(nextProject: (value: U) => V, nextEqual?: EqualityFn<V>) {
       return mapLive(this, nextProject, nextEqual);
     },
+    render(project: (value: U) => Renderable) {
+      return renderLive(this, project);
+    },
+  };
+}
+
+function renderLive<T, C>(
+  source: LiveValue<T, C>,
+  project: (value: T) => Renderable
+): DynamicVNode {
+  return {
+    kind: "dynamic",
+    source: source as LiveValue<unknown, unknown>,
+    project: project as (value: unknown) => Renderable,
   };
 }
 
@@ -117,6 +133,9 @@ function selectorLive<S extends object, R, C>(
     },
     map<U>(project: (value: R) => U, nextEqual?: EqualityFn<U>) {
       return mapLive(this, project, nextEqual);
+    },
+    render(project: (value: R) => Renderable) {
+      return renderLive(this, project);
     },
   };
 }

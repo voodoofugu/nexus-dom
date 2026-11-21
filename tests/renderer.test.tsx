@@ -217,4 +217,70 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("strong")).not.toBe(visibleNode);
     expect(visibleRuns).toBe(2);
   });
+
+  it("renders an ordinary ternary inside a live structural region", () => {
+    const store = createNexus({ state: { authorized: false } });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+    const loginCleanup = vi.fn();
+
+    function Login() {
+      onCleanup(loginCleanup);
+      return <button>Log in</button>;
+    }
+
+    function Profile() {
+      return <h2>Profile</h2>;
+    }
+
+    renderer.mount(
+      $.authorized.render((authorized) =>
+        authorized ? <Profile /> : <Login />
+      ),
+      host
+    );
+
+    expect(host.querySelector("button")?.textContent).toBe("Log in");
+
+    store.set({ authorized: true }, "login");
+    renderer.flush();
+
+    expect(host.querySelector("button")).toBeNull();
+    expect(host.querySelector("h2")?.textContent).toBe("Profile");
+    expect(loginCleanup).toHaveBeenCalledOnce();
+  });
+
+  it("does not replace a rendered branch while a mapped condition is equal", () => {
+    const store = createNexus({ state: { count: 1 } });
+    const $ = bind(store);
+    const positive = $.count.map((count) => count >= 0);
+    const commits = vi.fn();
+    const renderer = createDOMRenderer({
+      schedule: "manual",
+      onCommit: commits,
+    });
+    const host = document.createElement("div");
+
+    renderer.mount(
+      positive.render((isPositive) =>
+        isPositive ? <strong>Positive</strong> : <em>Negative</em>
+      ),
+      host
+    );
+
+    const positiveNode = host.querySelector("strong");
+    store.set({ count: 2 });
+    renderer.flush();
+
+    expect(host.querySelector("strong")).toBe(positiveNode);
+    expect(commits).not.toHaveBeenCalled();
+
+    store.set({ count: -1 });
+    renderer.flush();
+
+    expect(host.querySelector("strong")).toBeNull();
+    expect(host.querySelector("em")?.textContent).toBe("Negative");
+    expect(commits).toHaveBeenCalledOnce();
+  });
 });

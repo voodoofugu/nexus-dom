@@ -1,6 +1,6 @@
 /** @jsxImportSource nexus-dom */
 import { createNexus, type UpdateContext } from "nexus-state";
-import { bind, createDOMRenderer, Show } from "nexus-dom";
+import { bind, createDOMRenderer } from "nexus-dom";
 import "./style.css";
 
 const counter = createNexus({
@@ -124,14 +124,13 @@ function App() {
           </div>
         </dl>
 
-        <Show
-          when={positive}
-          fallback={
+        {positive.render((isPositive) =>
+          isPositive ? (
+            <p class="branch branch--positive">Positive branch is mounted</p>
+          ) : (
             <p class="branch branch--negative">Negative branch is mounted</p>
-          }
-        >
-          <p class="branch branch--positive">Positive branch is mounted</p>
-        </Show>
+          )
+        )}
 
         <button class="toggle" onClick={counter.acts.toggle}>
           Toggle counter controls
@@ -164,6 +163,15 @@ function App() {
           >
             <li>Waiting for an update</li>
           </ol>
+        </div>
+
+        <div class="syntax">
+          <h2>Runtime ternary</h2>
+          <pre><code>{`{positive.render((isPositive) =>
+  isPositive
+    ? <Positive />
+    : <Negative />
+)}`}</code></pre>
         </div>
       </aside>
     </main>
