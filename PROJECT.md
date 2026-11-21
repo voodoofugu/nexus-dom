@@ -112,6 +112,8 @@ memoization, but they do not reduce the physical work of a full reverse.
   the normal JSX runtime transform.
 - The renderer has explicit ownership, deterministic cleanup, atomic dynamic
   branch replacement and actionable library errors.
+- Local error boundaries dispose failed owned subtrees, render recovery UI and
+  can remount their original children from current state.
 - Update and reorder performance is already close to Solid in the current
   browser benchmark, while the API remains centered on `nexus-state`.
 
@@ -133,7 +135,7 @@ lifecycle instead of another reactive runtime to coordinate.
   component reruns.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
   operations require `app.list(...)` metadata.
-- SSR, hydration, portals, local error boundaries, suspense, transitions,
+- SSR, hydration, portals, suspense, transitions,
   style integration and renderer devtools do not exist yet.
 - Empty text anchors are still internal structural nodes, even though comments,
   wrappers and custom attributes were removed.
@@ -142,7 +144,7 @@ lifecycle instead of another reactive runtime to coordinate.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `7.61 KB gzip`; actual application cost still depends on imported APIs
+  about `7.92 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -165,9 +167,10 @@ lifecycle instead of another reactive runtime to coordinate.
    component-rerun mode is still justified.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
-5. **Error recovery.** Add a local owned boundary only when its fallback,
-   reset and propagation semantics are clear; global `onError` is reporting, not
-   local recovery UI.
+5. **Error recovery.** The local owned boundary now has explicit fallback,
+   reset and outward propagation semantics. Event-handler and arbitrary async
+   errors intentionally remain outside its rendering scope; global `onError`
+   remains the final renderer-level reporting hook.
 6. **Compatibility and evidence.** Chromium, Firefox and WebKit now share the
    same correctness gates and broad relative result. A 4x CPU-throttled Chrome
    run and total bundled dependency cost are recorded; real mobile hardware and
@@ -184,9 +187,9 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `4.84 KB
-gzip` for core, `5.78 KB` for `createApp`, and `6.00 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `7.61 KB gzip` when the
+The isolated Rollup/Terser ESM benchmark currently measures roughly `5.13 KB
+gzip` for core, `6.06 KB` for `createApp`, and `6.30 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `7.92 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

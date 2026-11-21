@@ -187,6 +187,30 @@ They do not add `nexus-item`, `nexus-dynamic` or `nexus-show` comments, wrappers
 or custom attributes to user markup. Empty text nodes are used only as invisible
 insertion anchors and when a rendered keyed row has no nodes.
 
+## Local error recovery
+
+`ErrorBoundary` owns its rendered subtree and replaces it locally when initial
+rendering or a scheduled binding/structural update throws:
+
+```tsx
+<ErrorBoundary
+  fallback={(error, reset) => (
+    <section role="alert">
+      <p>{String(error)}</p>
+      <button onClick={reset}>Try again</button>
+    </section>
+  )}
+>
+  <Editor />
+</ErrorBoundary>
+```
+
+The failed owner is disposed before the fallback mounts. `reset()` remounts the
+original children from current state; if a fallback itself fails, the error
+continues to the next surrounding boundary and then to renderer `onError`.
+Like React error boundaries, this scope covers rendering work, not exceptions
+thrown later by event handlers or arbitrary asynchronous callbacks.
+
 ## Implemented
 
 - automatic JSX runtime;
@@ -204,13 +228,14 @@ insertion anchors and when a rendered keyed row has no nodes.
 - fine-grained live item fields that preserve row DOM and focus on replacement;
 - LIS-based general keyed reordering and exact context-driven list operations;
 - integrated app root and resource disposal through `app.dispose()`.
+- local owned error boundaries with fallback propagation and manual reset;
 - SVG namespace support, including HTML descendants of `foreignObject`;
 - animation-frame scheduling for paint-aligned updates.
 
 ## Deliberately missing
 
 - SSR and hydration;
-- portals, boundaries, suspense or transitions;
+- portals, suspense or transitions;
 - a style adapter;
 - full cold-navigation measurements including resource loading.
 
@@ -320,8 +345,8 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `4.84 KB gzip` for
-low-level core exports, `5.78 KB` for `createApp`, `6.00 KB` for the complete
-main entry, and `7.61 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `5.13 KB gzip` for
+low-level core exports, `6.06 KB` for `createApp`, `6.30 KB` for the complete
+main entry, and `7.92 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.
