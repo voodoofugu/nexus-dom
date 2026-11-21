@@ -7,7 +7,7 @@ export const formatText = (value: unknown) =>
   value === null || value === undefined || value === false ? "" : String(value);
 
 function writeStyle(
-  element: HTMLElement,
+  element: HTMLElement | SVGElement,
   value: unknown,
   previous: unknown
 ) {
@@ -55,8 +55,11 @@ export function writeProperty(
     return;
   }
 
-  if (property === "style" && element instanceof HTMLElement) {
-    writeStyle(element, value, previous);
+  if (
+    property === "style" &&
+    (element instanceof HTMLElement || element instanceof SVGElement)
+  ) {
+    writeStyle(element as HTMLElement | SVGElement, value, previous);
     return;
   }
 

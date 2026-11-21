@@ -99,6 +99,18 @@ export function createMutableLiveItem<T, C>(initial: T) {
   let current = initial;
   const listeners = new Set<LiveListener<T, C>>();
   const fields = new Map<PropertyKey, LiveValue<unknown, C>>();
+  const getField = (property: PropertyKey) => {
+    let field = fields.get(property);
+    if (!field) {
+      field = mapLive(live, (value) =>
+        value === null || value === undefined
+          ? undefined
+          : (value as Record<PropertyKey, unknown>)[property]
+      );
+      fields.set(property, field);
+    }
+    return field;
+  };
 
   const live: LiveValue<T, C> = {
     [LIVE_VALUE]: true,
@@ -125,19 +137,14 @@ export function createMutableLiveItem<T, C>(initial: T) {
     },
   };
 
+  Object.defineProperty(live, "$field", {
+    value: (property: PropertyKey) => getField(property),
+  });
+
   const item = new Proxy(live as LiveItem<T, C>, {
     get(target, property, receiver) {
       if (property in target) return Reflect.get(target, property, receiver);
-      let field = fields.get(property);
-      if (!field) {
-        field = mapLive(live, (value) =>
-          value === null || value === undefined
-            ? undefined
-            : (value as Record<PropertyKey, unknown>)[property]
-        );
-        fields.set(property, field);
-      }
-      return field;
+      return getField(property);
     },
   });
 

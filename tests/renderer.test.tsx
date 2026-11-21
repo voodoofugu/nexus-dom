@@ -109,6 +109,28 @@ describe("nexus-dom rendering model", () => {
     root.flush();
     expect(keyCalls).toBe(1);
     expect(host.querySelector('[data-id="4"]')?.textContent).toBe("Fourth");
+
+    const firstNode = host.querySelector('[data-id="1"]');
+    keyCalls = 0;
+    app.list("items").batch((items) => {
+      items.move(3, 0);
+      items.replace(2, { id: 1, label: "First updated" });
+      items.remove(3);
+    });
+    root.flush();
+
+    expect(keyCalls).toBe(1);
+    expect(host.querySelector('[data-id="1"]')).toBe(firstNode);
+    expect(firstNode?.textContent).toBe("First updated");
+    expect(
+      Array.from(host.querySelectorAll("li"), (item) => item.dataset.id)
+    ).toEqual(["4", "3", "1"]);
+    const batchContext = commits.at(-1)?.contexts.at(-1) as
+      | { source: string; meta?: Record<string, any> }
+      | undefined;
+    expect(batchContext?.source).toBe("list.batch");
+    expect(batchContext?.meta?.nexusDOM.list.id).toEqual(expect.any(Number));
+    expect(batchContext?.meta?.nexusDOM.list.operations).toHaveLength(3);
   });
 
   it("uses a longest increasing subsequence to minimize keyed moves", () => {
@@ -223,6 +245,34 @@ describe("nexus-dom rendering model", () => {
     expect(button.disabled).toBe(true);
   });
 
+  it("creates SVG descendants in the SVG namespace", () => {
+    const host = document.createElement("div");
+    const renderer = createDOMRenderer();
+
+    renderer.mount(
+      <svg viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="4" style={{ fill: "red" }} />
+        <foreignObject>
+          <div>HTML</div>
+        </foreignObject>
+      </svg>,
+      host
+    );
+
+    expect(host.querySelector("svg")?.namespaceURI).toBe(
+      "http://www.w3.org/2000/svg"
+    );
+    expect(host.querySelector("circle")?.namespaceURI).toBe(
+      "http://www.w3.org/2000/svg"
+    );
+    expect(host.querySelector("circle")?.getAttribute("style")).toContain(
+      "fill: red"
+    );
+    expect(host.querySelector("foreignObject div")?.namespaceURI).toBe(
+      "http://www.w3.org/1999/xhtml"
+    );
+  });
+
   it("tracks only keys read by a selector", () => {
     const store = createNexus({
       state: { first: "Ada", last: "Lovelace", unrelated: 0 },
@@ -290,6 +340,30 @@ describe("nexus-dom rendering model", () => {
     expect(host.textContent).toBe("3");
     expect(commits).toHaveBeenCalledTimes(1);
     expect(commits.mock.calls[0]?.[0].updates).toBe(1);
+  });
+
+  it("can align a deduplicated commit to an animation frame", () => {
+    const store = createNexus({ state: { value: 0 } });
+    const $ = bind(store);
+    const host = document.createElement("div");
+    let frame: FrameRequestCallback | undefined;
+    const requestFrame = vi
+      .spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        frame = callback;
+        return 1;
+      });
+    const renderer = createDOMRenderer({ schedule: "animationFrame" });
+    renderer.mount(<p>{$.value}</p>, host);
+
+    store.set({ value: 1 });
+    store.set({ value: 2 });
+    expect(host.textContent).toBe("0");
+    expect(requestFrame).toHaveBeenCalledOnce();
+
+    frame?.(performance.now());
+    expect(host.textContent).toBe("2");
+    requestFrame.mockRestore();
   });
 
   it("preserves update provenance in commit events", () => {
@@ -577,5 +651,27 @@ describe("nexus-dom rendering model", () => {
     expect(secondInput?.value).toBe("Updated");
     expect(document.activeElement).toBe(secondInput);
     host.remove();
+  });
+
+  it("reads item fields that collide with LiveValue methods", () => {
+    const app = createApp({
+      state: { items: [{ id: 1, get: "Initial" }] },
+    });
+    const host = document.createElement("div");
+    const root = app.render(
+      app.$.items.each(
+        (item) => item.id,
+        ($item) => <span>{$item.$field("get")}</span>
+      ),
+      host,
+      { schedule: "manual" }
+    );
+    const span = host.querySelector("span");
+
+    app.list("items").replace(0, { id: 1, get: "Updated" });
+    root.flush();
+
+    expect(host.querySelector("span")).toBe(span);
+    expect(span?.textContent).toBe("Updated");
   });
 });

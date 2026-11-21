@@ -1,6 +1,11 @@
 import { Owner } from "./owner.js";
 import { createMutableLiveItem } from "./live.js";
-import { readListOperation, type ListOperation } from "./list.js";
+import {
+  hasListOperationPayload,
+  readListOperation,
+  readListOperationPayload,
+  type ListOperation,
+} from "./list.js";
 import type { Scheduler } from "./scheduler.js";
 import type { KeyedVNode, LiveItem, Renderable } from "./types.js";
 
@@ -174,8 +179,16 @@ export function mountKeyedRegion<C>({
 
   const applyOperation = (
     operation: ListOperation,
-    context?: unknown
+    context?: unknown,
+    validateFinalState = true
   ): boolean => {
+    if (operation.type === "batch") {
+      for (const nested of operation.operations) {
+        if (!applyOperation(nested, context, false)) return false;
+      }
+      return currentBlocks.length === nextItems.length;
+    }
+
     if (operation.type === "insert") {
       if (
         !Number.isInteger(operation.index) ||
@@ -186,12 +199,15 @@ export function mountKeyedRegion<C>({
       ) {
         return false;
       }
-      if (nextItems.length !== currentBlocks.length + operation.count) return false;
-      const items = nextItems.slice(
-        operation.index,
-        operation.index + operation.count
-      );
-      if (items.length !== operation.count) return false;
+      if (
+        validateFinalState &&
+        nextItems.length !== currentBlocks.length + operation.count
+      ) {
+        return false;
+      }
+      const payload = readListOperationPayload(operation);
+      if (!Array.isArray(payload) || payload.length !== operation.count) return false;
+      const items = payload as unknown[];
 
       const keyedItems = items.map((item) => ({ item, key: vnode.key(item) }));
       const insertedKeys = new Set<PropertyKey>();
@@ -227,7 +243,12 @@ export function mountKeyedRegion<C>({
       ) {
         return false;
       }
-      if (nextItems.length !== currentBlocks.length - operation.count) return false;
+      if (
+        validateFinalState &&
+        nextItems.length !== currentBlocks.length - operation.count
+      ) {
+        return false;
+      }
       const removed = currentBlocks.splice(operation.index, operation.count);
       if (removed.length !== operation.count) return false;
       for (const block of removed) {
@@ -248,11 +269,15 @@ export function mountKeyedRegion<C>({
       ) {
         return false;
       }
-      if (nextItems.length !== currentBlocks.length) return false;
+      if (validateFinalState && nextItems.length !== currentBlocks.length) return false;
       const block = currentBlocks[operation.from];
       if (!block) return false;
-      const targetItem = nextItems[operation.to];
-      if (targetItem === undefined || vnode.key(targetItem) !== block.key) return false;
+      if (validateFinalState) {
+        const targetItem = nextItems[operation.to];
+        if (targetItem === undefined || vnode.key(targetItem) !== block.key) {
+          return false;
+        }
+      }
       currentBlocks.splice(operation.from, 1);
       currentBlocks.splice(operation.to, 0, block);
       const reference = currentBlocks[operation.to + 1]?.nodes[0] ?? end;
@@ -268,10 +293,10 @@ export function mountKeyedRegion<C>({
       ) {
         return false;
       }
-      if (nextItems.length !== currentBlocks.length) return false;
+      if (validateFinalState && nextItems.length !== currentBlocks.length) return false;
       const previous = currentBlocks[operation.index];
-      const item = nextItems[operation.index];
-      if (!previous || item === undefined) return false;
+      const item = readListOperationPayload(operation);
+      if (!previous || !hasListOperationPayload(operation)) return false;
       const key = vnode.key(item);
       if (key === previous.key) {
         previous.item = item;

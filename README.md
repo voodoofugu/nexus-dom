@@ -129,10 +129,16 @@ Reactive arrays own a keyed DOM region through `.each(...)`:
 Rows with unchanged keys and values keep their DOM and owner when reordered.
 Removing a key disposes its row. Replacing an item under the same key updates
 the row's `$item` bindings without rerunning its component or replacing its DOM.
-Use `$item.field` in JSX and `$item.field.get()` when an event needs the current
+Use `$item.title` in JSX and `$item.id.get()` when an event needs the current
 plain value. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
 references are intentionally not treated as the stored values.
+
+Fields that collide with LiveValue methods use the explicit escape hatch:
+
+```tsx
+{$item.$field("get")}
+```
 
 `createApp` also exposes typed list operations:
 
@@ -141,13 +147,22 @@ app.list("tasks").append(task);
 app.list("tasks").replace(index, nextTask);
 app.list("tasks").move(from, to);
 app.list("tasks").remove(index);
+
+app.list("tasks").batch((tasks) => {
+  tasks.move(9, 0);
+  tasks.replace(2, nextTask);
+  tasks.remove(5);
+});
 ```
 
 They update Nexus state normally and attach an operation description to the
-existing `UpdateContext.meta`. A direct array binding can then apply insert,
-remove, move or replace without rediscovering the operation by scanning every
-key. Arbitrary `set({ tasks })` calls remain supported and use a general keyed
-diff with a longest-increasing-subsequence pass to minimize DOM moves.
+existing `UpdateContext.meta`. Every operation receives a unique provenance id;
+`batch` carries an ordered operation list through one Nexus notification. A
+direct array binding can then apply insert, remove, move or replace without
+rediscovering the operation by scanning every key. Arbitrary `set({ tasks })`
+calls remain supported and use a general keyed diff with a
+longest-increasing-subsequence pass to minimize DOM moves. An id alone cannot
+describe an arbitrary diff, so it would not remove that O(n) fallback.
 
 Keyed blocks and dynamic branches store their actual top-level nodes internally.
 They do not add `nexus-item`, `nexus-dynamic` or `nexus-show` comments, wrappers
@@ -171,13 +186,14 @@ insertion anchors and when a rendered keyed row has no nodes.
 - fine-grained live item fields that preserve row DOM and focus on replacement;
 - LIS-based general keyed reordering and exact context-driven list operations;
 - integrated app root and resource disposal through `app.dispose()`.
+- SVG namespace support, including HTML descendants of `foreignObject`;
+- animation-frame scheduling for paint-aligned updates.
 
 ## Deliberately missing
 
 - SSR and hydration;
 - portals, boundaries, suspense or transitions;
 - a style adapter;
-- a production scheduler;
 - equal-semantics browser comparisons with other renderers.
 
 These should only be added after the basic binding model proves understandable and useful.
@@ -190,6 +206,12 @@ npm run dev
 npm run check
 npm run benchmark
 npm run benchmark:browser
+```
+
+Visual workloads can opt into frame batching:
+
+```tsx
+app.render(<CanvasView />, "#app", { schedule: "animationFrame" });
 ```
 
 `npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.

@@ -48,7 +48,8 @@ export function createScheduler<C>(
 
       if (schedule === "manual" || scheduled) return;
       scheduled = true;
-      queueMicrotask(flush);
+      if (schedule === "animationFrame") requestAnimationFrame(flush);
+      else queueMicrotask(flush);
     },
     cancel(token) {
       pending.delete(token);

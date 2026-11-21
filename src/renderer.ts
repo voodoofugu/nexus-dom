@@ -17,6 +17,18 @@ import type {
   VNode,
 } from "./types.js";
 
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+
+function createElement(document: Document, target: Node, type: string) {
+  const parent = target instanceof Element ? target : undefined;
+  const isSVG =
+    type === "svg" ||
+    (parent?.namespaceURI === SVG_NAMESPACE && parent.localName !== "foreignObject");
+  return isSVG
+    ? document.createElementNS(SVG_NAMESPACE, type)
+    : document.createElement(type);
+}
+
 export function createDOMRenderer<C = unknown>(
   options: RendererOptions<C> = {}
 ): DOMRenderer<C> {
@@ -180,7 +192,7 @@ export function createDOMRenderer<C = unknown>(
     }
 
     const document = target.ownerDocument ?? (target as Document);
-    const element = document.createElement(vnode.type);
+    const element = createElement(document, target, vnode.type);
 
     for (const [property, value] of Object.entries(vnode.props)) {
       if (property === "children" || property === "key") continue;

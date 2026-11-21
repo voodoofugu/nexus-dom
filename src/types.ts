@@ -23,9 +23,15 @@ export interface LiveValue<T, C = unknown> {
   ): KeyedVNode;
 }
 
-export type LiveItem<T, C = unknown> = LiveValue<T, C> &
-  (T extends object
-    ? { readonly [K in keyof T]: LiveValue<T[K], C> }
+export type LiveItem<T, C = unknown> = LiveValue<T, C> & {
+  $field<K extends keyof T>(key: K): LiveValue<T[K], C>;
+} & (T extends object
+    ? {
+        readonly [K in Exclude<
+          keyof T,
+          keyof LiveValue<T, C> | "$field"
+        >]: LiveValue<T[K], C>;
+      }
     : Record<never, never>);
 
 export interface NexusSource<S extends object, C = unknown> {
@@ -124,8 +130,8 @@ export interface CommitEvent<C = unknown> {
 }
 
 export interface RendererOptions<C = unknown> {
-  /** Microtask batches updates by default. Manual mode is useful for tests. */
-  schedule?: "microtask" | "manual";
+  /** Microtask batches by default; animationFrame aligns visual work to paint. */
+  schedule?: "microtask" | "animationFrame" | "manual";
   onCommit?: (event: CommitEvent<C>) => void;
 }
 

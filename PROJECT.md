@@ -46,6 +46,10 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 - General reorders use LIS to minimize physical moves. `app.list(key)` attaches
   insert/remove/move/replace metadata to the existing Nexus `UpdateContext`, so
   direct array bindings can skip the O(n) key scan for known operations.
+- `app.list(key).batch(...)` preserves an ordered set of operations and unique
+  operation ids through one automatically batched Nexus notification. Arbitrary
+  array replacement still uses O(n) reconciliation because identity alone does
+  not describe a diff.
 - Keyed blocks and dynamic branches retain their actual top-level nodes. No
   item/dynamic/show comments, wrapper elements or custom Nexus attributes are
   injected into user markup.
@@ -58,6 +62,8 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
 - `app.dispose()` owns all roots and setup cleanups; `setup({ onCleanup })`
   provides lifecycle for sockets and other user runtime refs.
+- SVG elements use their native namespace, and `animationFrame` scheduling is
+  available for paint-aligned canvas/scroll-style workloads.
 
 ## Validation questions
 
