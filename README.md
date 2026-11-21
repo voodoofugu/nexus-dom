@@ -212,7 +212,7 @@ insertion anchors and when a rendered keyed row has no nodes.
 - SSR and hydration;
 - portals, boundaries, suspense or transitions;
 - a style adapter;
-- equal-semantics browser comparisons with other renderers.
+- full cold-navigation measurements including resource loading.
 
 These should only be added after the basic binding model proves understandable and useful.
 
@@ -225,6 +225,7 @@ npm run check
 npm run benchmark
 npm run benchmark:browser
 npm run benchmark:compare
+npm run benchmark:compare:mobile
 npm run benchmark:compare:matrix
 npm run benchmark:bundle
 ```
@@ -291,9 +292,10 @@ comparison against React, Solid and Preact Signals. Before timing, every adapter
 must prove that it mounted 1,000 rows, updated the requested text, retained row
 DOM identity and focus, and produced the requested keyed order. Framework-specific
 flushes are included in the measured work and every sample ends with a forced
-layout. Mount samples use equal warm-up and balanced execution orders; cold
-first mount is intentionally treated as a separate future measurement. The
-comparison is intended to expose trade-offs, not produce a single winner.
+layout. Mount samples use equal warm-up and balanced execution orders. First-call
+mount is measured separately in fresh pages so it is not confused with warm
+steady state. The comparison is intended to expose trade-offs, not produce a
+single winner.
 
 The same runner measures the first mount in fresh pages and compares JS heap at
 1,000 and 10,000 mounted rows after forced garbage collection. It separates
@@ -306,9 +308,20 @@ WebKit exercises the `insertBefore()` fallback. All three preserve nexus-dom row
 identity, keyed order and focus in the tested reorder sequence. Heap diagnostics
 remain Chromium-only because they use CDP.
 
+`npm run benchmark:compare:mobile` repeats the Chromium comparison with 4x CDP
+CPU throttling. This is a stable low-CPU regression workload, not a substitute
+for a real phone: it does not emulate mobile memory, thermals, GPU or network
+conditions. In the current local run, fresh-page first mount was about `16.9
+ms` for nexus-dom, `23.2 ms` for React, `20.6 ms` for Solid and `22.5 ms` for
+Preact Signals. Warm 1,000-row mount was `6.4 / 6.9 / 7.3 / 9.0 ms` in the same
+order; nexus-dom full reverse was `6.7 ms`, close to Solid at `6.3 ms` and below
+React at `11.0 ms` and Preact Signals at `17.6 ms`. These are machine-specific
+measurements, not universal rankings.
+
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
-`nexus-state` externalized. The current local measurement is approximately
-`4.84 KB gzip` for low-level core exports, `5.78 KB` for `createApp`, and
-`6.00 KB` for the complete main entry. The larger playground bundle also
-contains the example UI and diagnostics, so it is not a library-size
-measurement.
+`nexus-state` externalized and also builds the full entry with the dependency
+included. The current local measurement is approximately `4.84 KB gzip` for
+low-level core exports, `5.78 KB` for `createApp`, `6.00 KB` for the complete
+main entry, and `7.61 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The larger playground bundle also contains the example UI and
+diagnostics, so it is not a library-size measurement.

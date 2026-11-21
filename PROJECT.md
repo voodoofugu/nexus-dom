@@ -141,8 +141,9 @@ lifecycle instead of another reactive runtime to coordinate.
   `insertBefore()`; the renderer keeps the active block stationary during
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
-- The measured library entry excludes the installed `nexus-state` dependency;
-  total application cost must be reported separately before publication.
+- The complete tree-shaken renderer and `nexus-state` runtime currently measure
+  about `7.61 KB gzip`; actual application cost still depends on imported APIs
+  and bundler behavior.
 
 ### Current problems and likely solutions
 
@@ -168,8 +169,9 @@ lifecycle instead of another reactive runtime to coordinate.
    reset and propagation semantics are clear; global `onError` is reporting, not
    local recovery UI.
 6. **Compatibility and evidence.** Chromium, Firefox and WebKit now share the
-   same correctness gates and broad relative result. Add mobile-class runs,
-   total bundle cost and a full network-cold navigation before public claims.
+   same correctness gates and broad relative result. A 4x CPU-throttled Chrome
+   run and total bundled dependency cost are recorded; real mobile hardware and
+   full network-cold navigation remain necessary before public claims.
 
 ## Benchmark policy
 
@@ -184,7 +186,8 @@ identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `4.84 KB
 gzip` for core, `5.78 KB` for `createApp`, and `6.00 KB` for the full main entry
-with `nexus-state` externalized. Track these separately from the playground
+with `nexus-state` externalized. The same full entry is `7.61 KB gzip` when the
+tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle
@@ -198,7 +201,8 @@ run through balanced permutations so one renderer does not consistently pay for
 JIT or preceding allocation. After batching initial keyed construction into one
 staging fragment, the current warm Chrome median for 1,000 rows is roughly `1.6
 ms` for nexus-dom, `1.5 ms` for React, `1.6 ms` for Solid and `1.9 ms` for Preact
-Signals. Cold first mount remains a separate unanswered question.
+Signals. Fresh-page first-call mount is reported separately from this warm
+steady-state result; full network-cold navigation is still unmeasured.
 
 Initial keyed rows now share one staging `DocumentFragment` instead of creating
 and transferring one fragment per row. On the balanced Chrome mount benchmark,
@@ -217,3 +221,10 @@ and neighbor-shifting exact move keep the focused block stationary. WebKit now
 retains focus for nexus-dom in the benchmark where Solid and Preact Signals do
 not. Absolute Firefox/WebKit timings have coarser resolution than Chrome and are
 used mainly for relative behavior and regression detection.
+
+The CPU-throttled Chrome workload uses a 4x CDP slowdown. In the current run,
+nexus-dom had the lowest fresh-page first-mount median (`16.9 ms`) and its warm
+1,000-row mount (`6.4 ms`) stayed near React (`6.9 ms`) and Solid (`7.3 ms`).
+Full reverse was `6.7 ms`, compared with Solid `6.3 ms`, React `11.0 ms` and
+Preact Signals `17.6 ms`. This isolates CPU pressure on the desktop browser; it
+does not model a phone's memory, GPU, thermal limits or network.
