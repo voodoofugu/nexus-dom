@@ -34,10 +34,9 @@ export function createPlaygroundDiagnostics() {
       <div class="syntax">
         <h2>Runtime ternary</h2>
         <pre>
-          <code>{`{positive.render((isPositive) =>
-  isPositive
-    ? <Positive />
-    : <Negative />
+          <code>{`{$.count.render(
+  count => count >= 0 ? <Positive /> : <Negative />,
+  { key: count => count >= 0 }
 )}`}</code>
         </pre>
       </div>

@@ -9,6 +9,7 @@ import {
   render,
   Show,
   type CommitEvent,
+  type LiveItem,
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
@@ -41,6 +42,109 @@ describe("nexus-dom rendering model", () => {
     expect(host.textContent).toBe("1");
     expect(app.refs.runtimeCount.current).toBe(11);
     expect(app.nexus.get("count")).toBe(1);
+  });
+
+  it("disposes every app root and setup resource", () => {
+    const cleanup = vi.fn();
+    const app = createApp({
+      state: { count: 0 },
+      setup({ onCleanup }) {
+        onCleanup(cleanup);
+      },
+    });
+    const firstHost = document.createElement("div");
+    const secondHost = document.createElement("div");
+    app.render(<p>{app.$.count}</p>, firstHost);
+    app.render(<p>{app.$.count}</p>, secondHost);
+
+    app.dispose();
+
+    expect(firstHost.childNodes).toHaveLength(0);
+    expect(secondHost.childNodes).toHaveLength(0);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(() => app.render(<p />, firstHost)).toThrow("disposed app");
+  });
+
+  it("applies typed list operations without rescanning every key", () => {
+    const app = createApp({
+      state: {
+        items: [
+          { id: 1, label: "First" },
+          { id: 2, label: "Second" },
+          { id: 3, label: "Third" },
+        ],
+      },
+    });
+    const host = document.createElement("div");
+    const commits: CommitEvent<{ source: string }>[] = [];
+    let keyCalls = 0;
+    const root = app.render(
+      <ul>
+        {app.$.items.each(
+          (item) => {
+            keyCalls++;
+            return item.id;
+          },
+          ($item) => <li data-id={$item.id}>{$item.label}</li>
+        )}
+      </ul>,
+      host,
+      {
+        schedule: "manual",
+        onCommit: (event) => commits.push(event),
+      }
+    );
+    const thirdNode = host.querySelector('[data-id="3"]');
+    keyCalls = 0;
+
+    app.list("items").move(2, 0);
+    root.flush();
+
+    expect(keyCalls).toBe(1);
+    expect(host.querySelector("li")).toBe(thirdNode);
+    expect(commits.at(-1)?.contexts.at(-1)?.source).toBe("list.move");
+
+    keyCalls = 0;
+    app.list("items").append({ id: 4, label: "Fourth" });
+    root.flush();
+    expect(keyCalls).toBe(1);
+    expect(host.querySelector('[data-id="4"]')?.textContent).toBe("Fourth");
+  });
+
+  it("uses a longest increasing subsequence to minimize keyed moves", () => {
+    const store = createNexus({
+      state: {
+        items: [
+          { id: 1 },
+          { id: 2 },
+          { id: 3 },
+          { id: 4 },
+        ],
+      },
+    });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+    renderer.mount(
+      <ul>
+        {$.items.each(
+          (item) => item.id,
+          ($item) => <li data-id={$item.id}>{$item.id}</li>
+        )}
+      </ul>,
+      host
+    );
+    const list = host.querySelector("ul")!;
+    const insertBefore = vi.spyOn(list, "insertBefore");
+    const current = store.get("items");
+
+    store.set({ items: [current[3]!, ...current.slice(0, 3)] });
+    renderer.flush();
+
+    expect(insertBefore).toHaveBeenCalledOnce();
+    expect(
+      Array.from(list.querySelectorAll("li"), (item) => item.dataset.id)
+    ).toEqual(["4", "1", "2", "3"]);
   });
 
   it("returns one stable binding for the same Nexus store", () => {
@@ -352,6 +456,39 @@ describe("nexus-dom rendering model", () => {
     expect(commits).toHaveBeenCalledOnce();
   });
 
+  it("keeps a dynamic branch while its structural key is equal", () => {
+    const store = createNexus({ state: { count: 1 } });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+    const cleanup = vi.fn();
+
+    function Positive() {
+      onCleanup(cleanup);
+      return <strong>Positive</strong>;
+    }
+
+    renderer.mount(
+      $.count.render(
+        (count) => (count >= 0 ? <Positive /> : <em>Negative</em>),
+        { key: (count) => count >= 0 }
+      ),
+      host
+    );
+    const branch = host.querySelector("strong");
+
+    store.set({ count: 2 });
+    renderer.flush();
+    expect(host.querySelector("strong")).toBe(branch);
+    expect(cleanup).not.toHaveBeenCalled();
+
+    store.set({ count: -1 });
+    renderer.flush();
+    expect(host.querySelector("strong")).toBeNull();
+    expect(host.querySelector("em")?.textContent).toBe("Negative");
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it("preserves keyed rows while reordering and removes owned rows", () => {
     const first = { id: 1, label: "First" };
     const second = { id: 2, label: "Second" };
@@ -361,9 +498,9 @@ describe("nexus-dom rendering model", () => {
     const host = document.createElement("div");
     const cleanups = new Map<number, ReturnType<typeof vi.fn>>();
 
-    function Row({ item }: { item: { id: number; label: string } }) {
+    function Row({ item }: { item: LiveItem<{ id: number; label: string }> }) {
       const cleanup = vi.fn();
-      cleanups.set(item.id, cleanup);
+      cleanups.set(item.id.get(), cleanup);
       onCleanup(cleanup);
       return <li data-id={item.id}>{item.label}</li>;
     }
@@ -402,24 +539,32 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector('[data-id="2"]')).toBe(secondNode);
   });
 
-  it("rerenders only a keyed row whose item value changed", () => {
+  it("updates a keyed row without replacing its DOM or focus", () => {
     const first = { id: 1, label: "First" };
     const second = { id: 2, label: "Second" };
     const store = createNexus({ state: { items: [first, second] } });
     const $ = bind(store);
     const renderer = createDOMRenderer({ schedule: "manual" });
     const host = document.createElement("div");
+    document.body.appendChild(host);
 
     renderer.mount(
       $.items.each(
         (item) => item.id,
-        (item) => <p data-id={item.id}>{item.label}</p>
+        (item) => (
+          <label data-id={item.id}>
+            <input value={item.label} />
+            <span>{item.label}</span>
+          </label>
+        )
       ),
       host
     );
 
     const firstNode = host.querySelector('[data-id="1"]');
     const secondNode = host.querySelector('[data-id="2"]');
+    const secondInput = secondNode?.querySelector("input");
+    secondInput?.focus();
     const [storedFirst, storedSecond] = store.get("items");
     store.set({
       items: [storedFirst!, { ...storedSecond!, label: "Updated" }],
@@ -427,7 +572,10 @@ describe("nexus-dom rendering model", () => {
     renderer.flush();
 
     expect(host.querySelector('[data-id="1"]')).toBe(firstNode);
-    expect(host.querySelector('[data-id="2"]')).not.toBe(secondNode);
+    expect(host.querySelector('[data-id="2"]')).toBe(secondNode);
     expect(host.querySelector('[data-id="2"]')?.textContent).toBe("Updated");
+    expect(secondInput?.value).toBe("Updated");
+    expect(document.activeElement).toBe(secondInput);
+    host.remove();
   });
 });

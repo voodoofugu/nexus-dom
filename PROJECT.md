@@ -42,7 +42,10 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
   cleanup model without introducing a component-like `<For>` primitive.
 - Keyed arrays use `liveArray.each(key, project)` rather than a component-like
   `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
-  changed values rerender only their keyed row.
+  changed values update `$item` bindings without rerunning or replacing the row.
+- General reorders use LIS to minimize physical moves. `app.list(key)` attaches
+  insert/remove/move/replace metadata to the existing Nexus `UpdateContext`, so
+  direct array bindings can skip the O(n) key scan for known operations.
 - Keyed blocks and dynamic branches retain their actual top-level nodes. No
   item/dynamic/show comments, wrapper elements or custom Nexus attributes are
   injected into user markup.
@@ -53,6 +56,8 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
   is re-exported so applications can install and import only `nexus-dom`; the
   small structural `NexusSource` contract remains available for future adapters.
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
+- `app.dispose()` owns all roots and setup cleanups; `setup({ onCleanup })`
+  provides lifecycle for sockets and other user runtime refs.
 
 ## Validation questions
 
@@ -71,9 +76,9 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 
 Microbenchmarks are regression tools, not marketing evidence. Meaningful comparisons must use production browser builds and equal behavior. Measure initial mount, one-of-many updates, bulk updates, structural list changes, branch replacement, event storms, cleanup, heap retention and bundle size. Direct DOM is the lower bound; React, Preact Signals and Solid are comparison points once the model supports equivalent structural behavior.
 
-The first automated Headless Chrome benchmark covers one-row updates, adjacent
-swap, last-to-first and full reverse with forced layout. Keyed rendering won the
-targeted and small reorder cases; after removing per-item comment anchors, full
-reverse was roughly equal to naive rebuilding on the first local run. Keep the
-jsdom discrepancy as evidence that browser measurements, identity semantics and
-multiple reorder shapes all matter.
+The automated Headless Chrome benchmark covers exact row replacement, adjacent
+swap, generic/LIS and exact/context last-to-first moves, full reverse and stable
+dynamic branches with forced layout. Exact move is currently around `0.5 ms`
+median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
+equal. Keep the jsdom discrepancy as evidence that browser measurements,
+identity semantics and multiple reorder shapes all matter.

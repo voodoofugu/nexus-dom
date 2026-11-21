@@ -70,6 +70,22 @@ function measure(
   return summarize(name, samples);
 }
 
+function measureBatched(
+  name: string,
+  samplesCount: number,
+  batchSize: number,
+  run: () => void
+): Measurement {
+  for (let index = 0; index < batchSize; index++) run();
+  const samples: number[] = [];
+  for (let sample = 0; sample < samplesCount; sample++) {
+    const start = performance.now();
+    for (let index = 0; index < batchSize; index++) run();
+    samples.push((performance.now() - start) / batchSize);
+  }
+  return summarize(name, samples);
+}
+
 function createKeyedFixture() {
   const app = createApp({ state: { items: initial } });
   const host = document.createElement("div");
@@ -77,7 +93,8 @@ function createKeyedFixture() {
   const root = app.render(
     app.$.items.each(
       (item) => item.id,
-      (item) => jsx("span", { "data-id": item.id, children: item.label })
+      ($item) =>
+        jsx("span", { "data-id": $item.id, children: $item.label })
     ),
     host,
     { schedule: "manual" }
@@ -86,10 +103,13 @@ function createKeyedFixture() {
   return {
     app,
     host,
-    update(items: Item[]) {
-      app.nexus.set({ items });
+    flush() {
       root.flush();
       forceLayout(host);
+    },
+    update(items: Item[]) {
+      app.nexus.set({ items });
+      this.flush();
     },
     dispose() {
       root.dispose();
@@ -149,10 +169,13 @@ function benchmarkPermutation(
 function benchmarkRowUpdate() {
   const keyed = createKeyedFixture();
   let keyedVersion = 0;
-  const keyedMeasurement = measure("one row update: keyed", 80, () => {
-    const items = [...keyed.app.nexus.get("items")];
-    items[500] = { ...items[500]!, label: `Keyed ${++keyedVersion}` };
-    keyed.update(items);
+  const keyedMeasurement = measure("one row update: exact replace", 80, () => {
+    const item = keyed.app.nexus.get("items")[500]!;
+    keyed.app.list("items").replace(500, {
+      ...item,
+      label: `Keyed ${++keyedVersion}`,
+    });
+    keyed.flush();
   });
 
   const rebuild = createRebuildFixture();
@@ -172,6 +195,77 @@ function benchmarkRowUpdate() {
   return { measurements: [keyedMeasurement, rebuildMeasurement], comments };
 }
 
+function benchmarkExactMove() {
+  const keyed = createKeyedFixture();
+  let atFront = false;
+  const keyedMeasurement = measure("last to first: exact move", 60, () => {
+    if (atFront) keyed.app.list("items").move(0, size - 1);
+    else keyed.app.list("items").move(size - 1, 0);
+    atFront = !atFront;
+    keyed.flush();
+  });
+
+  const rebuild = createRebuildFixture();
+  const forward = [...keyed.app.nexus.get("items")];
+  const moved = [forward.at(-1)!, ...forward.slice(0, -1)];
+  let rebuildAtFront = false;
+  const rebuildMeasurement = measure("last to first: rebuild", 60, () => {
+    rebuildAtFront = !rebuildAtFront;
+    rebuild.update(rebuildAtFront ? moved : forward);
+  });
+
+  keyed.dispose();
+  rebuild.dispose();
+  return [keyedMeasurement, rebuildMeasurement];
+}
+
+function benchmarkDynamicBranch() {
+  const createFixture = (keyed: boolean) => {
+    const app = createApp({ state: { value: 1 } });
+    const host = document.createElement("div");
+    fixtures.appendChild(host);
+    const branch = (value: number) =>
+      value >= 0
+        ? jsx("strong", { children: "Positive" })
+        : jsx("em", { children: "Negative" });
+    const root = app.render(
+      app.$.value.render(branch, keyed ? { key: (value) => value >= 0 } : {}),
+      host,
+      { schedule: "manual" }
+    );
+    let value = 1;
+    return {
+      run() {
+        app.nexus.set({ value: ++value });
+        root.flush();
+        forceLayout(host);
+      },
+      dispose() {
+        root.dispose();
+        host.remove();
+      },
+    };
+  };
+
+  const keyed = createFixture(true);
+  const keyedMeasurement = measureBatched(
+    "stable dynamic branch: keyed",
+    40,
+    100,
+    keyed.run
+  );
+  const remounted = createFixture(false);
+  const remountedMeasurement = measureBatched(
+    "stable dynamic branch: remount",
+    40,
+    100,
+    remounted.run
+  );
+  keyed.dispose();
+  remounted.dispose();
+  return [keyedMeasurement, remountedMeasurement];
+}
+
 window.runNexusDOMBenchmarks = async () => {
   const rowUpdate = benchmarkRowUpdate();
   const adjacent = benchmarkPermutation("adjacent swap", 60, (items) => {
@@ -187,6 +281,8 @@ window.runNexusDOMBenchmarks = async () => {
     items,
     [...items].reverse(),
   ]);
+  const exactMove = benchmarkExactMove();
+  const dynamicBranch = benchmarkDynamicBranch();
 
   return {
     userAgent: navigator.userAgent,
@@ -195,7 +291,9 @@ window.runNexusDOMBenchmarks = async () => {
       ...rowUpdate.measurements,
       ...adjacent,
       ...moveToFront,
+      ...exactMove,
       ...reverse,
+      ...dynamicBranch,
     ],
     commentsInsideKeyedList: rowUpdate.comments,
   };

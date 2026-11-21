@@ -44,6 +44,19 @@ work, which makes them suitable for elements, canvas contexts, sockets and other
 runtime resources. The lower-level `createNexus`, `bind` and `render` exports
 remain available independently.
 
+`app.dispose()` disposes every root mounted by the app and runs setup cleanups:
+
+```tsx
+const app = createApp({
+  state,
+  refs: { socket: null as WebSocket | null },
+  setup({ refs, onCleanup }) {
+    refs.socket.current = new WebSocket(url);
+    onCleanup(() => refs.socket.current?.close());
+  },
+});
+```
+
 `$.count` is a stable `LiveValue<number>`, not the current number. The renderer attaches it to one text node and subscribes that binding to the `count` key. The `Counter` function runs only during mounting.
 
 Derived bindings use the existing top-level dependency model of `nexus-state`:
@@ -58,7 +71,7 @@ Selectors dynamically resubscribe when the set of keys they read changes.
 Calling `bind` again with the same store returns the same binding, so integration
 code can safely expose or reuse it without creating duplicate wrappers.
 
-`render` is the normal application entry point. `createDOMRenderer` remains
+`app.render` is the normal application entry point. `createDOMRenderer` remains
 available for tests, custom scheduling and advanced integrations that need to
 mount several roots through the same renderer.
 
@@ -87,6 +100,19 @@ const positive = $.count.map((count) => count >= 0);
 )}
 ```
 
+The same optimization can stay local to the region through a structural key:
+
+```tsx
+{$.count.render(
+  (count) => count >= 0 ? <Positive /> : <Negative />,
+  { key: (count) => count >= 0 }
+)}
+```
+
+The project function runs again only when the key changes. Bind changing values
+inside a retained branch separately instead of deriving them from a skipped
+project call.
+
 The prototype still includes `Show` as a correctness baseline for branch ownership. A literally bare `{authorized ? A : B}` would require a JSX transform or component rerun because plain JavaScript evaluates it once during a one-shot component mount. Whether `.render(...)` is sufficiently intuitive remains an explicit usability question rather than a settled API decision.
 
 ### Keyed lists without a control-flow component
@@ -96,15 +122,32 @@ Reactive arrays own a keyed DOM region through `.each(...)`:
 ```tsx
 {$.tasks.each(
   (task) => task.id,
-  (task) => <Task task={task} />
+  ($task) => <Task task={$task} />
 )}
 ```
 
 Rows with unchanged keys and values keep their DOM and owner when reordered.
-Removing a key disposes its row, while replacing an item under the same key
-rerenders only that row. Items should be derived from the current Nexus state;
+Removing a key disposes its row. Replacing an item under the same key updates
+the row's `$item` bindings without rerunning its component or replacing its DOM.
+Use `$item.field` in JSX and `$item.field.get()` when an event needs the current
+plain value. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
 references are intentionally not treated as the stored values.
+
+`createApp` also exposes typed list operations:
+
+```tsx
+app.list("tasks").append(task);
+app.list("tasks").replace(index, nextTask);
+app.list("tasks").move(from, to);
+app.list("tasks").remove(index);
+```
+
+They update Nexus state normally and attach an operation description to the
+existing `UpdateContext.meta`. A direct array binding can then apply insert,
+remove, move or replace without rediscovering the operation by scanning every
+key. Arbitrary `set({ tasks })` calls remain supported and use a general keyed
+diff with a longest-increasing-subsequence pass to minimize DOM moves.
 
 Keyed blocks and dynamic branches store their actual top-level nodes internally.
 They do not add `nexus-item`, `nexus-dynamic` or `nexus-show` comments, wrappers
@@ -125,6 +168,9 @@ insertion anchors and when a rendered keyed row has no nodes.
 - an experimental owned `Show` branch with deterministic cleanup.
 - compiler-free `LiveValue.render(...)` regions with normal ternary expressions.
 - compiler-free keyed list regions through `LiveValue.each(...)`.
+- fine-grained live item fields that preserve row DOM and focus on replacement;
+- LIS-based general keyed reordering and exact context-driven list operations;
+- integrated app root and resource disposal through `app.dispose()`.
 
 ## Deliberately missing
 
@@ -132,7 +178,7 @@ insertion anchors and when a rendered keyed row has no nodes.
 - portals, boundaries, suspense or transitions;
 - a style adapter;
 - a production scheduler;
-- browser-level comparative benchmarks.
+- equal-semantics browser comparisons with other renderers.
 
 These should only be added after the basic binding model proves understandable and useful.
 
@@ -152,8 +198,9 @@ The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, 
 
 The automated browser benchmark launches an installed Chrome/Chromium through
 `playwright-core` (set `CHROME_PATH` when it is not in a known location). It
-measures a targeted row update, adjacent swap, last-to-first move and complete
-reversal with forced layout. On the first local Headless Chrome run, keyed
-updates won the targeted and small-reorder cases while a full reversal was
+measures an exact row replacement, general and context-described moves, adjacent
+swap, complete reversal and stable dynamic branches with forced layout. On the
+current local Headless Chrome run, an exact last-to-first move measured about
+`0.5 ms` median versus `1.4 ms` for rebuilding 1,000 rows; a full reversal was
 roughly equal to rebuilding. Results are printed with browser identity and must
 be treated as machine-specific evidence, not general performance claims.

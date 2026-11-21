@@ -1,12 +1,16 @@
 import { Owner } from "./owner.js";
+import { createMutableLiveItem } from "./live.js";
+import { readListOperation, type ListOperation } from "./list.js";
 import type { Scheduler } from "./scheduler.js";
-import type { KeyedVNode, Renderable } from "./types.js";
+import type { KeyedVNode, LiveItem, Renderable } from "./types.js";
 
 interface KeyedBlock {
   readonly key: PropertyKey;
   nodes: Node[];
   owner: Owner;
   item: unknown;
+  live: LiveItem<unknown, unknown>;
+  setItem(item: unknown, context?: unknown): void;
 }
 
 interface MountKeyedOptions<C> {
@@ -32,6 +36,37 @@ function moveBlockBefore(block: KeyedBlock, reference: Node) {
   const fragment = document.createDocumentFragment();
   for (const node of block.nodes) fragment.appendChild(node);
   reference.parentNode?.insertBefore(fragment, reference);
+}
+
+function longestIncreasingPositions(values: readonly number[]) {
+  const tails: number[] = [];
+  const previous = new Array<number>(values.length).fill(-1);
+
+  for (let index = 0; index < values.length; index++) {
+    const value = values[index];
+    if (value === undefined || value < 0) continue;
+
+    let low = 0;
+    let high = tails.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      const tailIndex = tails[middle];
+      const tailValue = tailIndex === undefined ? -1 : values[tailIndex] ?? -1;
+      if (tailValue < value) low = middle + 1;
+      else high = middle;
+    }
+
+    if (low > 0) previous[index] = tails[low - 1] ?? -1;
+    tails[low] = index;
+  }
+
+  const positions = new Set<number>();
+  let cursor = tails.at(-1) ?? -1;
+  while (cursor >= 0) {
+    positions.add(cursor);
+    cursor = previous[cursor] ?? -1;
+  }
+  return positions;
 }
 
 function renderNodes(
@@ -62,37 +97,24 @@ export function mountKeyedRegion<C>({
 
   const token = {};
   const blocks = new Map<PropertyKey, KeyedBlock>();
+  let currentBlocks: KeyedBlock[] = [];
   let active = true;
   let nextItems = vnode.source.get();
+  let nextOperation: ListOperation | undefined;
 
-  const renderBlock = (block: KeyedBlock) => {
-    const reference = block.nodes.at(-1)?.nextSibling ?? end;
-    block.owner.dispose();
-    removeNodes(block.nodes);
-    block.owner = new Owner(owner);
-    const rendered = renderNodes(
-      document,
-      vnode.project(block.item),
-      block.owner,
-      renderInto
-    );
-    block.nodes = rendered.nodes;
-    reference.parentNode?.insertBefore(rendered.fragment, reference);
-  };
-
-  const createBlock = (
-    key: PropertyKey,
-    item: unknown
-  ): KeyedBlock => {
+  const createBlock = (key: PropertyKey, item: unknown): KeyedBlock => {
+    const mutable = createMutableLiveItem<unknown, unknown>(item);
     const block: KeyedBlock = {
       key,
       item,
       owner: new Owner(owner),
       nodes: [],
+      live: mutable.live,
+      setItem: mutable.set,
     };
     const rendered = renderNodes(
       document,
-      vnode.project(item),
+      vnode.project(block.live),
       block.owner,
       renderInto
     );
@@ -101,10 +123,13 @@ export function mountKeyedRegion<C>({
     return block;
   };
 
-  const reconcile = () => {
+  const reconcile = (context?: unknown) => {
     const nextBlocks: KeyedBlock[] = [];
     const nextKeys = new Set<PropertyKey>();
     const keyedItems = nextItems.map((item) => ({ item, key: vnode.key(item) }));
+    const oldPositions = new Map(
+      currentBlocks.map((block, index) => [block.key, index] as const)
+    );
 
     for (const { key } of keyedItems) {
       if (nextKeys.has(key)) {
@@ -120,7 +145,7 @@ export function mountKeyedRegion<C>({
         blocks.set(key, block);
       } else if (!Object.is(block.item, item)) {
         block.item = item;
-        renderBlock(block);
+        block.setItem(item, context);
       }
       nextBlocks.push(block);
     });
@@ -131,23 +156,155 @@ export function mountKeyedRegion<C>({
       blocks.delete(key);
     }
 
-    let reference: Node = end;
+    const positions = nextBlocks.map(
+      (block) => oldPositions.get(block.key) ?? -1
+    );
+    const stablePositions = longestIncreasingPositions(positions);
+
     for (let index = nextBlocks.length - 1; index >= 0; index--) {
       const block = nextBlocks[index];
       if (!block) continue;
-      moveBlockBefore(block, reference);
-      reference = block.nodes[0] ?? reference;
+      const reference = nextBlocks[index + 1]?.nodes[0] ?? end;
+      if (positions[index] === -1 || !stablePositions.has(index)) {
+        moveBlockBefore(block, reference);
+      }
     }
+    currentBlocks = nextBlocks;
+  };
+
+  const applyOperation = (
+    operation: ListOperation,
+    context?: unknown
+  ): boolean => {
+    if (operation.type === "insert") {
+      if (
+        !Number.isInteger(operation.index) ||
+        !Number.isInteger(operation.count) ||
+        operation.index < 0 ||
+        operation.index > currentBlocks.length ||
+        operation.count < 1
+      ) {
+        return false;
+      }
+      if (nextItems.length !== currentBlocks.length + operation.count) return false;
+      const items = nextItems.slice(
+        operation.index,
+        operation.index + operation.count
+      );
+      if (items.length !== operation.count) return false;
+
+      const keyedItems = items.map((item) => ({ item, key: vnode.key(item) }));
+      const insertedKeys = new Set<PropertyKey>();
+      for (const { key } of keyedItems) {
+        if (blocks.has(key) || insertedKeys.has(key)) return false;
+        insertedKeys.add(key);
+      }
+
+      const inserted: KeyedBlock[] = [];
+      for (const { item, key } of keyedItems) {
+        const block = createBlock(key, item);
+        blocks.set(key, block);
+        inserted.push(block);
+      }
+      currentBlocks.splice(operation.index, 0, ...inserted);
+      let reference = currentBlocks[operation.index + inserted.length]?.nodes[0] ?? end;
+      for (let index = inserted.length - 1; index >= 0; index--) {
+        const block = inserted[index];
+        if (!block) continue;
+        moveBlockBefore(block, reference);
+        reference = block.nodes[0] ?? reference;
+      }
+      return true;
+    }
+
+    if (operation.type === "remove") {
+      if (
+        !Number.isInteger(operation.index) ||
+        !Number.isInteger(operation.count) ||
+        operation.index < 0 ||
+        operation.count < 1 ||
+        operation.index + operation.count > currentBlocks.length
+      ) {
+        return false;
+      }
+      if (nextItems.length !== currentBlocks.length - operation.count) return false;
+      const removed = currentBlocks.splice(operation.index, operation.count);
+      if (removed.length !== operation.count) return false;
+      for (const block of removed) {
+        blocks.delete(block.key);
+        removeBlock(block);
+      }
+      return true;
+    }
+
+    if (operation.type === "move") {
+      if (
+        !Number.isInteger(operation.from) ||
+        !Number.isInteger(operation.to) ||
+        operation.from < 0 ||
+        operation.from >= currentBlocks.length ||
+        operation.to < 0 ||
+        operation.to >= currentBlocks.length
+      ) {
+        return false;
+      }
+      if (nextItems.length !== currentBlocks.length) return false;
+      const block = currentBlocks[operation.from];
+      if (!block) return false;
+      const targetItem = nextItems[operation.to];
+      if (targetItem === undefined || vnode.key(targetItem) !== block.key) return false;
+      currentBlocks.splice(operation.from, 1);
+      currentBlocks.splice(operation.to, 0, block);
+      const reference = currentBlocks[operation.to + 1]?.nodes[0] ?? end;
+      moveBlockBefore(block, reference);
+      return true;
+    }
+
+    if (operation.type === "replace") {
+      if (
+        !Number.isInteger(operation.index) ||
+        operation.index < 0 ||
+        operation.index >= currentBlocks.length
+      ) {
+        return false;
+      }
+      if (nextItems.length !== currentBlocks.length) return false;
+      const previous = currentBlocks[operation.index];
+      const item = nextItems[operation.index];
+      if (!previous || item === undefined) return false;
+      const key = vnode.key(item);
+      if (key === previous.key) {
+        previous.item = item;
+        previous.setItem(item, context);
+        return true;
+      }
+      if (blocks.has(key)) return false;
+
+      blocks.delete(previous.key);
+      removeBlock(previous);
+      const replacement = createBlock(key, item);
+      blocks.set(key, replacement);
+      currentBlocks[operation.index] = replacement;
+      const reference = currentBlocks[operation.index + 1]?.nodes[0] ?? end;
+      moveBlockBefore(replacement, reference);
+      return true;
+    }
+
+    return false;
   };
 
   reconcile();
 
   const unsubscribe = vnode.source.subscribe((items, context) => {
     nextItems = items;
+    nextOperation = readListOperation(context, vnode.stateKey);
     scheduler.enqueue(
       token,
       () => {
-        if (active) reconcile();
+        if (!active) return;
+        const operation = nextOperation;
+        nextOperation = undefined;
+        if (!operation || !applyOperation(operation, context)) reconcile(context);
       },
       context as C | undefined
     );

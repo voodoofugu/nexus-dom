@@ -88,7 +88,8 @@ export function createDOMRenderer<C = unknown>(
     target: Node,
     owner: Owner,
     source: LiveValue<unknown, unknown>,
-    project: (value: unknown) => Renderable
+    project: (value: unknown) => Renderable,
+    structuralKey?: (value: unknown) => unknown
   ) => {
     const document = target.ownerDocument ?? (target as Document);
     const end = document.createTextNode("");
@@ -96,6 +97,7 @@ export function createDOMRenderer<C = unknown>(
 
     let active = true;
     let nextValue = source.get();
+    let currentKey = structuralKey?.(nextValue);
     let branchOwner: Owner | undefined;
     let branchNodes: Node[] = [];
     const token = {};
@@ -119,6 +121,11 @@ export function createDOMRenderer<C = unknown>(
 
     const unsubscribe = source.subscribe((value, context) => {
       nextValue = value;
+      if (structuralKey) {
+        const nextKey = structuralKey(value);
+        if (Object.is(currentKey, nextKey)) return;
+        currentKey = nextKey;
+      }
       scheduler.enqueue(
         token,
         () => {
@@ -145,7 +152,7 @@ export function createDOMRenderer<C = unknown>(
     }
 
     if (vnode.kind === "dynamic") {
-      renderRegion(target, owner, vnode.source, vnode.project);
+      renderRegion(target, owner, vnode.source, vnode.project, vnode.key);
       return;
     }
 

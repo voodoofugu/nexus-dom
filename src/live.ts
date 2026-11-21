@@ -5,6 +5,7 @@ import {
   type DynamicVNode,
   type EqualityFn,
   type LiveListener,
+  type LiveItem,
   type LiveValue,
   type KeyedVNode,
   type NexusSource,
@@ -13,6 +14,7 @@ import {
 
 const sameValue: EqualityFn<unknown> = Object.is;
 const bindingCache = new WeakMap<object, object>();
+const sourceKeys = new WeakMap<object, PropertyKey>();
 
 interface Tracked<R, S extends object> {
   value: R;
@@ -77,49 +79,115 @@ function mapLive<T, U, C>(
     map<V>(nextProject: (value: U) => V, nextEqual?: EqualityFn<V>) {
       return mapLive(this, nextProject, nextEqual);
     },
-    render(project: (value: U) => Renderable) {
-      return renderLive(this, project);
+    render(
+      project: (value: U) => Renderable,
+      options?: { key?: (value: U) => unknown }
+    ) {
+      return renderLive(this, project, options);
     },
     each<Item, Key extends PropertyKey>(
       this: LiveValue<readonly Item[], C>,
       key: (item: Item) => Key,
-      project: (item: Item) => Renderable
+      project: (item: LiveItem<Item, C>) => Renderable
     ) {
       return eachLive(this, key, project);
     },
   };
 }
 
+export function createMutableLiveItem<T, C>(initial: T) {
+  let current = initial;
+  const listeners = new Set<LiveListener<T, C>>();
+  const fields = new Map<PropertyKey, LiveValue<unknown, C>>();
+
+  const live: LiveValue<T, C> = {
+    [LIVE_VALUE]: true,
+    get: () => current,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    map<U>(project: (value: T) => U, isEqual?: EqualityFn<U>) {
+      return mapLive(this, project, isEqual);
+    },
+    render(
+      project: (value: T) => Renderable,
+      options?: { key?: (value: T) => unknown }
+    ) {
+      return renderLive(this, project, options);
+    },
+    each<Item, Key extends PropertyKey>(
+      this: LiveValue<readonly Item[], C>,
+      key: (item: Item) => Key,
+      project: (item: LiveItem<Item, C>) => Renderable
+    ) {
+      return eachLive(this, key, project);
+    },
+  };
+
+  const item = new Proxy(live as LiveItem<T, C>, {
+    get(target, property, receiver) {
+      if (property in target) return Reflect.get(target, property, receiver);
+      let field = fields.get(property);
+      if (!field) {
+        field = mapLive(live, (value) =>
+          value === null || value === undefined
+            ? undefined
+            : (value as Record<PropertyKey, unknown>)[property]
+        );
+        fields.set(property, field);
+      }
+      return field;
+    },
+  });
+
+  return {
+    live: item,
+    set(value: T, context?: C) {
+      if (Object.is(current, value)) return;
+      current = value;
+      for (const listener of Array.from(listeners)) listener(value, context);
+    },
+  };
+}
+
 function renderLive<T, C>(
   source: LiveValue<T, C>,
-  project: (value: T) => Renderable
+  project: (value: T) => Renderable,
+  options?: { key?: (value: T) => unknown }
 ): DynamicVNode {
   return {
     kind: "dynamic",
     source: source as LiveValue<unknown, unknown>,
     project: project as (value: unknown) => Renderable,
+    ...(options?.key
+      ? { key: options.key as (value: unknown) => unknown }
+      : {}),
   };
 }
 
 function eachLive<Item, Key extends PropertyKey, C>(
   source: LiveValue<readonly Item[], C>,
   key: (item: Item) => Key,
-  project: (item: Item) => Renderable
+  project: (item: LiveItem<Item, C>) => Renderable
 ): KeyedVNode {
+  const stateKey = sourceKeys.get(source);
   return {
     kind: "keyed",
     source: source as LiveValue<readonly unknown[], unknown>,
+    ...(stateKey === undefined ? {} : { stateKey }),
     key: key as (item: unknown) => PropertyKey,
-    project: project as (item: unknown) => Renderable,
+    project: project as (item: LiveItem<unknown, unknown>) => Renderable,
   };
 }
 
 function selectorLive<S extends object, R, C>(
   nexus: NexusSource<S, C>,
   selector: (state: S) => R,
-  isEqual: EqualityFn<R> = Object.is
+  isEqual: EqualityFn<R> = Object.is,
+  sourceKey?: PropertyKey
 ): LiveValue<R, C> {
-  return {
+  const live: LiveValue<R, C> = {
     [LIVE_VALUE]: true,
     get: () => selector(nexus.get()),
     subscribe(listener: LiveListener<R, C>) {
@@ -156,17 +224,22 @@ function selectorLive<S extends object, R, C>(
     map<U>(project: (value: R) => U, nextEqual?: EqualityFn<U>) {
       return mapLive(this, project, nextEqual);
     },
-    render(project: (value: R) => Renderable) {
-      return renderLive(this, project);
+    render(
+      project: (value: R) => Renderable,
+      options?: { key?: (value: R) => unknown }
+    ) {
+      return renderLive(this, project, options);
     },
     each<Item, Key extends PropertyKey>(
       this: LiveValue<readonly Item[], C>,
       key: (item: Item) => Key,
-      project: (item: Item) => Renderable
+      project: (item: LiveItem<Item, C>) => Renderable
     ) {
       return eachLive(this, key, project);
     },
   };
+  if (sourceKey !== undefined) sourceKeys.set(live, sourceKey);
+  return live;
 }
 
 /**
@@ -199,7 +272,12 @@ export function bind<S extends object, C = unknown>(
 
       let value = cache.get(property);
       if (!value) {
-        value = selectorLive(nexus, (state) => state[property as keyof S]);
+        value = selectorLive(
+          nexus,
+          (state) => state[property as keyof S],
+          Object.is,
+          property
+        );
         cache.set(property, value);
       }
       return value;

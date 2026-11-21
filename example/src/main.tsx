@@ -23,7 +23,7 @@ const app = createApp({
   refs: {
     lastChangedTask: null as number | null,
   },
-  acts: (get, set, refs) => ({
+  acts: (get, set, refs, { list }) => ({
     increment() {
       set({ count: get("count") + get("step") });
     },
@@ -38,28 +38,27 @@ const app = createApp({
     },
     addTask() {
       const id = get("nextTaskId");
-      set({
-        tasks: [
-          ...get("tasks"),
-          { id, title: `Experiment ${id}`, done: false },
-        ],
-        nextTaskId: id + 1,
+      list("tasks").append({
+        id,
+        title: `Experiment ${id}`,
+        done: false,
       });
+      set({ nextTaskId: id + 1 });
     },
     reverseTasks() {
-      set({ tasks: [...get("tasks")].reverse() });
+      list("tasks").reverse();
     },
     toggleTask(id: number) {
       refs.lastChangedTask.current = id;
-      set({
-        tasks: get("tasks").map((task) =>
-          task.id === id ? { ...task, done: !task.done } : task
-        ),
-      });
+      const index = get("tasks").findIndex((task) => task.id === id);
+      if (index < 0) return;
+      const task = get("tasks")[index]!;
+      list("tasks").replace(index, { ...task, done: !task.done });
     },
     removeTask(id: number) {
       refs.lastChangedTask.current = id;
-      set({ tasks: get("tasks").filter((task) => task.id !== id) });
+      const index = get("tasks").findIndex((task) => task.id === id);
+      if (index >= 0) list("tasks").remove(index);
     },
     changeStep(step: number) {
       set({ step }, "changeStep");
@@ -70,7 +69,6 @@ const app = createApp({
 const { $, acts } = app;
 const doubled = $.count.map((count) => count * 2);
 const parity = $.count.map((count) => (count % 2 === 0 ? "even" : "odd"));
-const positive = $.count.map((count) => count >= 0);
 
 let appExecutions = 0;
 const diagnostics = createPlaygroundDiagnostics();
@@ -139,12 +137,14 @@ function App() {
           </div>
         </dl>
 
-        {positive.render((isPositive) =>
-          isPositive ? (
-            <p class="branch branch--positive">Positive branch is mounted</p>
-          ) : (
-            <p class="branch branch--negative">Negative branch is mounted</p>
-          ),
+        {$.count.render(
+          (count) =>
+            count >= 0 ? (
+              <p class="branch branch--positive">Positive branch is mounted</p>
+            ) : (
+              <p class="branch branch--negative">Negative branch is mounted</p>
+            ),
+          { key: (count) => count >= 0 }
         )}
 
         <button class="toggle" onClick={acts.toggle}>
@@ -167,16 +167,19 @@ function App() {
         <ul class="task-list">
           {$.tasks.each(
             (task) => task.id,
-            (task) => (
-              <li data-task={task.id} class={task.done ? "is-done" : ""}>
+            ($task) => (
+              <li
+                data-task={$task.id}
+                class={$task.done.map((done) => (done ? "is-done" : ""))}
+              >
                 <button
                   class="task-toggle"
-                  onClick={() => acts.toggleTask(task.id)}
+                  onClick={() => acts.toggleTask($task.id.get())}
                 >
-                  {task.done ? "Restore" : "Complete"}
+                  {$task.done.map((done) => (done ? "Restore" : "Complete"))}
                 </button>
-                <span>{task.title}</span>
-                <button onClick={() => acts.removeTask(task.id)}>
+                <span>{$task.title}</span>
+                <button onClick={() => acts.removeTask($task.id.get())}>
                   Remove
                 </button>
               </li>
@@ -187,7 +190,7 @@ function App() {
         <pre class="inline-syntax">
           <code>{`{$.tasks.each(
   (task) => task.id,
-  (task) => <Task task={task} />
+  ($task) => <Task task={$task} />
 )}`}</code>
         </pre>
       </section>

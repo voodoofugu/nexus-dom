@@ -78,7 +78,7 @@ describe("reverse 1,000 keyed rows", () => {
   renderer.mount(
     $.items.each(
       (item) => item.id,
-      (item) => jsx("span", { children: item.label })
+      ($item) => jsx("span", { children: $item.label })
     ),
     host
   );
@@ -121,7 +121,7 @@ describe("replace one keyed row among 1,000", () => {
   renderer.mount(
     $.items.each(
       (item) => item.id,
-      (item) => jsx("span", { children: item.label })
+      ($item) => jsx("span", { children: $item.label })
     ),
     host
   );

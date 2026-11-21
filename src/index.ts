@@ -20,9 +20,17 @@ export { createApp } from "./app.js";
 export type {
   AppActsCreate,
   AppRefs,
+  AppSetupContext,
   NexusDOMApp,
   RefValue,
 } from "./app.js";
+export type {
+  AppHelpers,
+  ArrayItem,
+  ArrayKey,
+  ListController,
+  ListOperation,
+} from "./list.js";
 export { bind, createLiveSelector, isLiveValue } from "./live.js";
 export { onCleanup } from "./owner.js";
 export { render } from "./render.js";
@@ -36,6 +44,7 @@ export type {
   DynamicVNode,
   EqualityFn,
   LiveListener,
+  LiveItem,
   LiveValue,
   KeyedVNode,
   MountedRoot,
