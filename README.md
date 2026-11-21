@@ -209,6 +209,11 @@ npm run benchmark:browser
 npm run benchmark:bundle
 ```
 
+`npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
+the main entry and both JSX runtimes. Declarations are emitted separately to
+`dist/types`, and `npm run smoke:dist` loads every built runtime entry in both
+module formats.
+
 Visual workloads can opt into frame batching:
 
 ```tsx
@@ -228,8 +233,9 @@ current local Headless Chrome run, an exact last-to-first move measured about
 roughly equal to rebuilding. Results are printed with browser identity and must
 be treated as machine-specific evidence, not general performance claims.
 
-The bundle benchmark builds isolated, minified ESM entries with `nexus-state`
-externalized. The current local measurement is approximately `4.44 KB gzip`
-for low-level core exports, `5.45 KB` for `createApp`, and `5.61 KB` for the
-complete main entry. The larger playground bundle also contains the example UI
-and diagnostics, so it is not a library-size measurement.
+The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
+`nexus-state` externalized. The current local measurement is approximately
+`3.89 KB gzip` for low-level core exports, `4.73 KB` for `createApp`, and
+`4.89 KB` for the complete main entry. The larger playground bundle also
+contains the example UI and diagnostics, so it is not a library-size
+measurement.

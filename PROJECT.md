@@ -89,6 +89,7 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated ESM bundle benchmark currently measures roughly `4.44 KB gzip`
-for core, `5.45 KB` for `createApp`, and `5.61 KB` for the full main entry with
-`nexus-state` externalized. Track these separately from the playground bundle.
+The isolated Rollup/Terser ESM benchmark currently measures roughly `3.89 KB
+gzip` for core, `4.73 KB` for `createApp`, and `4.89 KB` for the full main entry
+with `nexus-state` externalized. Track these separately from the playground
+bundle.

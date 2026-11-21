@@ -1,34 +1,31 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
-import { build } from "vite";
+import { rollup } from "rollup";
+import { createPlugins, external } from "../../rollup.config.mjs";
 
-const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 const outputRoot = fileURLToPath(
   new URL("../../benchmark-dist/bundle/", import.meta.url)
 );
 const entries = ["core", "app", "full"];
 const results = [];
 
+await rm(outputRoot, { recursive: true, force: true });
+await mkdir(outputRoot, { recursive: true });
+
 for (const name of entries) {
   const outDir = `${outputRoot}${name}`;
-  await build({
-    configFile: false,
-    logLevel: "silent",
-    root: projectRoot,
-    build: {
-      outDir,
-      emptyOutDir: true,
-      lib: {
-        entry: fileURLToPath(new URL(`./${name}.ts`, import.meta.url)),
-        formats: ["es"],
-        fileName: () => `${name}.js`,
-      },
-      rollupOptions: {
-        external: ["nexus-state"],
-      },
-    },
+  const bundle = await rollup({
+    input: fileURLToPath(new URL(`./${name}.ts`, import.meta.url)),
+    plugins: createPlugins(),
+    external,
   });
+  await bundle.write({
+    file: `${outDir}/${name}.js`,
+    format: "esm",
+    generatedCode: "es2015",
+  });
+  await bundle.close();
 
   const files = (await readdir(outDir)).filter((file) => file.endsWith(".js"));
   const contents = await Promise.all(

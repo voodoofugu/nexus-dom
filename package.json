@@ -8,20 +8,24 @@
   "engines": {
     "node": ">=20"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
     },
     "./jsx-runtime": {
-      "types": "./dist/jsx-runtime.d.ts",
-      "import": "./dist/jsx-runtime.js"
+      "types": "./dist/types/jsx-runtime.d.ts",
+      "import": "./dist/esm/jsx-runtime.js",
+      "require": "./dist/cjs/jsx-runtime.js"
     },
     "./jsx-dev-runtime": {
-      "types": "./dist/jsx-dev-runtime.d.ts",
-      "import": "./dist/jsx-dev-runtime.js"
+      "types": "./dist/types/jsx-dev-runtime.d.ts",
+      "import": "./dist/esm/jsx-dev-runtime.js",
+      "require": "./dist/cjs/jsx-dev-runtime.js"
     }
   },
   "files": [
@@ -31,7 +35,10 @@
   "scripts": {
     "dev": "vite --config example/vite.config.ts",
     "example:build": "vite build --config example/vite.config.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build": "npm run typecheck && rollup -c rollup.config.mjs && npm run build:types && node scripts/prepare-dist.mjs",
+    "build:dev": "npm run typecheck && NEXUS_DOM_BUILD=development rollup -c rollup.config.mjs && npm run build:types && node scripts/prepare-dist.mjs",
+    "smoke:dist": "node scripts/smoke-dist.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -39,15 +46,22 @@
     "benchmark:browser": "node benchmarks/browser/run.mjs",
     "benchmark:browser:dev": "vite --config benchmarks/browser/vite.config.ts",
     "benchmark:bundle": "node benchmarks/bundle/run.mjs",
-    "check": "npm run typecheck && npm run test && npm run build && npm run example:build"
+    "check": "npm run test && npm run build && npm run smoke:dist && npm run example:build"
   },
   "dependencies": {
     "nexus-state": "^4.0.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^11.1.6",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.65.1",
+    "rollup": "^4.21.3",
+    "rollup-plugin-delete": "^3.0.1",
+    "tslib": "^2.7.0",
     "typescript": "^5.6.2",
     "vite": "^8.0.0",
     "vitest": "4.1.12"
