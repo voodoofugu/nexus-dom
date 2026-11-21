@@ -6,6 +6,7 @@ import {
   type UpdateContext,
 } from "nexus-state";
 import { bind } from "./live.js";
+import { nexusDOMError } from "./errors.js";
 import {
   createListHelpers,
   type AppHelpers,
@@ -156,7 +157,10 @@ export function createApp<
     },
     render(view, target, rendererOptions) {
       if (disposed) {
-        throw new Error("[nexus-dom] Cannot render a disposed app.");
+        throw nexusDOMError(
+          "APP_DISPOSED",
+          "Cannot render a disposed app. app.dispose() has already run."
+        );
       }
       const root = renderView(view, target, rendererOptions);
       let rootDisposed = false;

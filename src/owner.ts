@@ -1,3 +1,5 @@
+import { nexusDOMError } from "./errors.js";
+
 type Cleanup = () => void;
 
 export class Owner {
@@ -47,7 +49,10 @@ export function withOwner<T>(owner: Owner, run: () => T): T {
 /** Registers component cleanup against its current owner scope. */
 export function onCleanup(cleanup: Cleanup) {
   if (!currentOwner) {
-    throw new Error("[nexus-dom] onCleanup must run inside a component.");
+    throw nexusDOMError(
+      "CLEANUP_OUTSIDE_COMPONENT",
+      "onCleanup() must run inside a component."
+    );
   }
   currentOwner.addCleanup(cleanup);
 }

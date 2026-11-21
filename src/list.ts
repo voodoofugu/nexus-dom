@@ -1,4 +1,5 @@
 import type { Getter, Setter, UpdateContext } from "nexus-state";
+import { nexusDOMError } from "./errors.js";
 
 type RecordAny = Record<string, any>;
 
@@ -66,8 +67,9 @@ function createOperation<T extends ListOperationWithoutId>(
 function assertIndex(index: number, length: number, allowEnd = false) {
   const maximum = allowEnd ? length : length - 1;
   if (!Number.isInteger(index) || index < 0 || index > maximum) {
-    throw new RangeError(
-      `[nexus-dom] List index ${index} is outside 0..${Math.max(maximum, 0)}.`
+    throw nexusDOMError(
+      "INVALID_LIST_INDEX",
+      `List index ${index} is outside 0..${Math.max(maximum, 0)}.`
     );
   }
 }
@@ -133,7 +135,10 @@ export function createListHelpers<S extends RecordAny>(
             count < 1 ||
             index + count > current.length
           ) {
-            throw new RangeError("[nexus-dom] Invalid list removal count.");
+            throw nexusDOMError(
+              "INVALID_LIST_REMOVE_COUNT",
+              `Cannot remove ${count} item(s) from index ${index} in a list of ${current.length}.`
+            );
           }
           write([...current.slice(0, index), ...current.slice(index + count)], createOperation({
             key,

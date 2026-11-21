@@ -17,6 +17,8 @@ export type {
   UpdateContext,
 } from "nexus-state";
 export { createApp } from "./app.js";
+export { NexusDOMError } from "./errors.js";
+export type { NexusDOMErrorCode } from "./errors.js";
 export type {
   AppActsCreate,
   AppRefs,

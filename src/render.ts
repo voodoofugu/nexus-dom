@@ -1,4 +1,5 @@
 import { createDOMRenderer } from "./renderer.js";
+import { nexusDOMError } from "./errors.js";
 import type {
   Renderable,
   RendererOptions,
@@ -10,7 +11,10 @@ function resolveTarget(target: ParentNode | string): ParentNode {
 
   const element = document.querySelector(target);
   if (!element) {
-    throw new Error(`[nexus-dom] Render target "${target}" was not found.`);
+    throw nexusDOMError(
+      "RENDER_TARGET_NOT_FOUND",
+      `Render target "${target}" was not found.`
+    );
   }
   return element;
 }

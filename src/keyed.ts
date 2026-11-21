@@ -1,4 +1,5 @@
 import { Owner } from "./owner.js";
+import { nexusDOMError } from "./errors.js";
 import { createMutableLiveItem } from "./live.js";
 import {
   hasListOperationPayload,
@@ -144,7 +145,10 @@ export function mountKeyedRegion<C>({
 
     for (const { key } of keyedItems) {
       if (nextKeys.has(key)) {
-        throw new Error(`[nexus-dom] Duplicate key "${String(key)}" in .each().`);
+        throw nexusDOMError(
+          "DUPLICATE_LIST_KEY",
+          `Duplicate key "${String(key)}" in .each(). Keys must be unique.`
+        );
       }
       nextKeys.add(key);
     }

@@ -5,6 +5,7 @@ import {
   createApp,
   createNexus,
   createDOMRenderer,
+  NexusDOMError,
   onCleanup,
   render,
   Show,
@@ -62,7 +63,18 @@ describe("nexus-dom rendering model", () => {
     expect(firstHost.childNodes).toHaveLength(0);
     expect(secondHost.childNodes).toHaveLength(0);
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(() => app.render(<p />, firstHost)).toThrow("disposed app");
+    let thrown: unknown;
+    try {
+      app.render(<p />, firstHost);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(NexusDOMError);
+    expect(thrown).toMatchObject({ code: "APP_DISPOSED", name: "nexus-dom" });
+    expect(String(thrown)).toBe(
+      "nexus-dom: [APP_DISPOSED]\n" +
+        "Cannot render a disposed app. app.dispose() has already run."
+    );
   });
 
   it("applies typed list operations without rescanning every key", () => {
