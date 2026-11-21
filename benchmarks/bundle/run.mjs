@@ -7,18 +7,25 @@ import { createPlugins, external } from "../../rollup.config.mjs";
 const outputRoot = fileURLToPath(
   new URL("../../benchmark-dist/bundle/", import.meta.url)
 );
-const entries = ["core", "app", "full"];
+const entries = [
+  { entry: "core", external: true },
+  { entry: "app", external: true },
+  { entry: "full", external: true },
+  { entry: "full", external: false, label: "full + nexus-state" },
+];
 const results = [];
 
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
 
-for (const name of entries) {
-  const outDir = `${outputRoot}${name}`;
+for (const scenario of entries) {
+  const name = scenario.entry;
+  const label = scenario.label ?? name;
+  const outDir = `${outputRoot}${label.replaceAll(/[^a-z0-9]+/gi, "-")}`;
   const bundle = await rollup({
     input: fileURLToPath(new URL(`./${name}.ts`, import.meta.url)),
     plugins: createPlugins(),
-    external,
+    external: scenario.external ? external : undefined,
   });
   await bundle.write({
     file: `${outDir}/${name}.js`,
@@ -37,7 +44,7 @@ for (const name of entries) {
     0
   );
   results.push({
-    entry: name,
+    entry: label,
     bytes,
     gzip_bytes: gzipBytes,
     gzip_kb: (gzipBytes / 1024).toFixed(2),
