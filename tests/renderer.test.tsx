@@ -303,6 +303,8 @@ describe("nexus-dom rendering model", () => {
     );
 
     expect(host.querySelector("button")?.textContent).toBe("Log in");
+    const comments = document.createTreeWalker(host, NodeFilter.SHOW_COMMENT);
+    expect(comments.nextNode()).toBeNull();
 
     store.set({ authorized: true }, "login");
     renderer.flush();
@@ -310,6 +312,11 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("button")).toBeNull();
     expect(host.querySelector("h2")?.textContent).toBe("Profile");
     expect(loginCleanup).toHaveBeenCalledOnce();
+    const updatedComments = document.createTreeWalker(
+      host,
+      NodeFilter.SHOW_COMMENT
+    );
+    expect(updatedComments.nextNode()).toBeNull();
   });
 
   it("does not replace a rendered branch while a mapped condition is equal", () => {

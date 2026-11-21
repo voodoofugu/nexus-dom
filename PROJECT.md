@@ -34,7 +34,7 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 ## Current boundaries
 
 - Browser DOM only.
-- `nexus-state` remains a peer, not copied into the renderer.
+- `nexus-state` is a regular dependency, not copied into the renderer runtime.
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
 - No Virtual DOM or whole-tree reconciliation in the first experiment.
 - No claim of being universally faster: subscriptions, binding objects and cleanup have their own costs.
@@ -43,8 +43,9 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 - Keyed arrays use `liveArray.each(key, project)` rather than a component-like
   `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
   changed values rerender only their keyed row.
-- Keyed blocks retain their actual top-level nodes. No item comments, wrapper
-  elements or custom Nexus attributes are injected into user markup.
+- Keyed blocks and dynamic branches retain their actual top-level nodes. No
+  item/dynamic/show comments, wrapper elements or custom Nexus attributes are
+  injected into user markup.
 - DOM block references remain private renderer ownership. They are not stored in
   Nexus state, because one store may feed several roots and DOM resources must
   follow root disposal. `app.refs` is reserved for explicit user runtime values.

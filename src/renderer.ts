@@ -88,35 +88,30 @@ export function createDOMRenderer<C = unknown>(
     target: Node,
     owner: Owner,
     source: LiveValue<unknown, unknown>,
-    project: (value: unknown) => Renderable,
-    label: string
+    project: (value: unknown) => Renderable
   ) => {
     const document = target.ownerDocument ?? (target as Document);
-    const start = document.createComment(`nexus-${label}`);
-    const end = document.createComment(`/nexus-${label}`);
-    target.appendChild(start);
+    const end = document.createTextNode("");
     target.appendChild(end);
 
     let active = true;
     let nextValue = source.get();
     let branchOwner: Owner | undefined;
+    let branchNodes: Node[] = [];
     const token = {};
 
     const clearBranch = () => {
       branchOwner?.dispose();
       branchOwner = undefined;
-      let node = start.nextSibling;
-      while (node && node !== end) {
-        const next = node.nextSibling;
-        node.parentNode?.removeChild(node);
-        node = next;
-      }
+      for (const node of branchNodes) node.parentNode?.removeChild(node);
+      branchNodes = [];
     };
 
     const mountBranch = () => {
       branchOwner = new Owner(owner);
       const fragment = document.createDocumentFragment();
       renderInto(project(nextValue), fragment, branchOwner);
+      branchNodes = Array.from(fragment.childNodes);
       end.parentNode?.insertBefore(fragment, end);
     };
 
@@ -150,7 +145,7 @@ export function createDOMRenderer<C = unknown>(
     }
 
     if (vnode.kind === "dynamic") {
-      renderRegion(target, owner, vnode.source, vnode.project, "dynamic");
+      renderRegion(target, owner, vnode.source, vnode.project);
       return;
     }
 
@@ -160,8 +155,7 @@ export function createDOMRenderer<C = unknown>(
         target,
         owner,
         condition,
-        (visible) => (visible ? vnode.children : vnode.fallback),
-        "show"
+        (visible) => (visible ? vnode.children : vnode.fallback)
       );
       return;
     }

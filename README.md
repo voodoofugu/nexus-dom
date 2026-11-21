@@ -106,10 +106,10 @@ rerenders only that row. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
 references are intentionally not treated as the stored values.
 
-Keyed blocks store their actual top-level nodes internally. They do not add
-`nexus-item` comments, wrappers or custom attributes to user markup. An empty
-text node is used only when a rendered row has no nodes and as the list's final
-insertion anchor.
+Keyed blocks and dynamic branches store their actual top-level nodes internally.
+They do not add `nexus-item`, `nexus-dynamic` or `nexus-show` comments, wrappers
+or custom attributes to user markup. Empty text nodes are used only as invisible
+insertion anchors and when a rendered keyed row has no nodes.
 
 ## Implemented
 
