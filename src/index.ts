@@ -33,7 +33,7 @@ export type {
   ListController,
   ListOperation,
 } from "./list.js";
-export { bind, createLiveSelector, isLiveValue } from "./live.js";
+export { bind, createLiveSelector, isLiveValue, when } from "./live.js";
 export { onCleanup } from "./owner.js";
 export { render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";

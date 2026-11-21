@@ -82,6 +82,19 @@ leaving room for explicit adapters without making them the primary design.
 
 ### Runtime ternaries without a compiler
 
+The common boolean case can use a plain function rather than a control-flow
+component:
+
+```tsx
+import { when } from "nexus-dom";
+
+{when($.authorized, <Profile />, <Login />)}
+```
+
+`when` retains the current branch while source truthiness stays the same, even
+if the underlying value changes. Function components in the inactive VNode are
+not executed until that branch mounts.
+
 An ordinary ternary can run inside a live structural region without an extra compiler:
 
 ```tsx
@@ -287,6 +300,6 @@ heap values cover JavaScript objects, not complete native DOM memory.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately
 `4.49 KB gzip` for low-level core exports, `5.42 KB` for `createApp`, and
-`5.61 KB` for the complete main entry. The larger playground bundle also
+`5.64 KB` for the complete main entry. The larger playground bundle also
 contains the example UI and diagnostics, so it is not a library-size
 measurement.

@@ -9,6 +9,7 @@ import {
   onCleanup,
   render,
   Show,
+  when,
   type CommitEvent,
   type LiveItem,
 } from "nexus-dom";
@@ -649,6 +650,34 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("strong")).toBeNull();
     expect(host.querySelector("em")?.textContent).toBe("Negative");
     expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("switches a when branch only when source truthiness changes", () => {
+    const app = createApp({ state: { count: 1 } });
+    const host = document.createElement("div");
+    const positiveCleanup = vi.fn();
+
+    function Positive() {
+      onCleanup(positiveCleanup);
+      return <strong>Positive</strong>;
+    }
+
+    const root = app.render(
+      when(app.$.count, <Positive />, <em>Not positive</em>),
+      host,
+      { schedule: "manual" }
+    );
+    const positive = host.querySelector("strong");
+
+    app.nexus.set({ count: 2 });
+    root.flush();
+    expect(host.querySelector("strong")).toBe(positive);
+    expect(positiveCleanup).not.toHaveBeenCalled();
+
+    app.nexus.set({ count: 0 });
+    root.flush();
+    expect(host.textContent).toBe("Not positive");
+    expect(positiveCleanup).toHaveBeenCalledOnce();
   });
 
   it("preserves keyed rows while reordering and removes owned rows", () => {

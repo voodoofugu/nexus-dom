@@ -441,4 +441,15 @@ export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown
   );
 }
 
+/** Creates a boolean structural branch without a control-flow component. */
+export function when<T, C>(
+  source: LiveValue<T, C>,
+  truthy: Renderable,
+  fallback?: Renderable
+): DynamicVNode {
+  return source
+    .map((value) => Boolean(value))
+    .render((visible) => (visible ? truthy : fallback));
+}
+
 export { selectorLive as createLiveSelector };
