@@ -144,7 +144,9 @@ Removing a key disposes its row. Replacing an item under the same key updates
 the row's `$item` bindings without rerunning its component or replacing its DOM.
 On browsers with `ParentNode.moveBefore()`, keyed moves also preserve focus and
 other state associated with moved DOM nodes; older browsers use `insertBefore()`
-as a compatibility fallback.
+as a compatibility fallback. On that fallback, the general diff keeps the
+focused block in its increasing subsequence and exact moves rearrange neighbors
+around it, so the active element itself is not detached.
 Use `$item.title` in JSX and `$item.id.get()` when an event needs the current
 plain value. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
@@ -223,6 +225,7 @@ npm run check
 npm run benchmark
 npm run benchmark:browser
 npm run benchmark:compare
+npm run benchmark:compare:matrix
 npm run benchmark:bundle
 ```
 
@@ -297,9 +300,15 @@ The same runner measures the first mount in fresh pages and compares JS heap at
 one-field and two-field keyed rows, then measures again after disposal. These
 heap values cover JavaScript objects, not complete native DOM memory.
 
+`npm run benchmark:compare:matrix` repeats correctness and timing in Chromium,
+Firefox and WebKit. Chromium and Firefox currently expose `moveBefore()`;
+WebKit exercises the `insertBefore()` fallback. All three preserve nexus-dom row
+identity, keyed order and focus in the tested reorder sequence. Heap diagnostics
+remain Chromium-only because they use CDP.
+
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately
-`4.49 KB gzip` for low-level core exports, `5.42 KB` for `createApp`, and
-`5.64 KB` for the complete main entry. The larger playground bundle also
+`4.84 KB gzip` for low-level core exports, `5.78 KB` for `createApp`, and
+`6.00 KB` for the complete main entry. The larger playground bundle also
 contains the example UI and diagnostics, so it is not a library-size
 measurement.

@@ -137,8 +137,10 @@ lifecycle instead of another reactive runtime to coordinate.
   style integration and renderer devtools do not exist yet.
 - Empty text anchors are still internal structural nodes, even though comments,
   wrappers and custom attributes were removed.
-- `moveBefore()` preserves state in modern browsers, but the compatibility
-  `insertBefore()` path cannot promise identical focus behavior everywhere.
+- `moveBefore()` preserves state in Chromium and Firefox. WebKit currently uses
+  `insertBefore()`; the renderer keeps the active block stationary during
+  general and exact moves, preserving focus in the tested cases, but cannot
+  promise every other stateful-move behavior of the native primitive.
 - The measured library entry excludes the installed `nexus-state` dependency;
   total application cost must be reported separately before publication.
 
@@ -152,9 +154,10 @@ lifecycle instead of another reactive runtime to coordinate.
 2. **Per-row allocation.** Every keyed row owns an Owner, mutable LiveItem,
    Proxy, field storage and subscriptions. Lazy Owner storage, shared LiveValue
    prototypes, specialized field values and single-entry listener/field storage
-   reduced two-field rows from roughly `2,247` to `1,506 B/row`; one-field rows
-   use about `1,027 B/row`. This remains above Preact Signals (`~755 B`) and
-   Solid (`~566 B`), so binding cleanup structures are the next profiling target.
+   plus direct field dispatch reduced two-field rows from roughly `2,247` to
+   `1,287 B/row`; one-field rows use about `979 B/row`. This remains above
+   Preact Signals (`~755 B`) and Solid (`~557 B`), so binding cleanup structures
+   are the next profiling target.
 3. **Control-flow ergonomics.** The plain `when(...)` helper now covers boolean
    branches without a component-like primitive. Test it and `.render(...)` in a
    real application before deciding whether an optional transform or controlled
@@ -164,9 +167,9 @@ lifecycle instead of another reactive runtime to coordinate.
 5. **Error recovery.** Add a local owned boundary only when its fallback,
    reset and propagation semantics are clear; global `onError` is reporting, not
    local recovery UI.
-6. **Compatibility and evidence.** Add Firefox/WebKit and mobile-class runs,
-   cold-start measurements, total bundle cost and heap-per-binding tests before
-   making public performance claims.
+6. **Compatibility and evidence.** Chromium, Firefox and WebKit now share the
+   same correctness gates and broad relative result. Add mobile-class runs,
+   total bundle cost and a full network-cold navigation before public claims.
 
 ## Benchmark policy
 
@@ -179,8 +182,8 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `4.49 KB
-gzip` for core, `5.42 KB` for `createApp`, and `5.64 KB` for the full main entry
+The isolated Rollup/Terser ESM benchmark currently measures roughly `4.84 KB
+gzip` for core, `5.78 KB` for `createApp`, and `6.00 KB` for the full main entry
 with `nexus-state` externalized. Track these separately from the playground
 bundle.
 
@@ -207,3 +210,10 @@ rows, and again after disposal. The current optimized one-field keyed model uses
 about `10 MB` for 10,000 mounted rows and returns to baseline after disposal;
 native DOM memory is not represented by `JSHeapUsedSize`, so direct-DOM values
 are only a JS-object baseline.
+
+The same production workload passes in Firefox and WebKit. Firefox exposes
+`moveBefore()` and retains focus naturally. WebKit does not; a constrained LIS
+and neighbor-shifting exact move keep the focused block stationary. WebKit now
+retains focus for nexus-dom in the benchmark where Solid and Preact Signals do
+not. Absolute Firefox/WebKit timings have coarser resolution than Chrome and are
+used mainly for relative behavior and regression detection.
