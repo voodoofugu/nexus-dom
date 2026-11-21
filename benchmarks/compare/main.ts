@@ -46,6 +46,19 @@ interface ComparisonReport {
 declare global {
   interface Window {
     runRendererComparison(): ComparisonReport;
+    runFirstMount(frameworkName: string): number;
+    mountMemoryFixture(
+      variant:
+        | "direct DOM"
+        | "static JSX"
+        | "reactive keyed (1 field)"
+        | "reactive keyed (2 fields)"
+        | "React"
+        | "Solid"
+        | "Preact Signals",
+      count: number
+    ): number;
+    disposeMemoryFixture(): void;
   }
 }
 
@@ -91,7 +104,7 @@ const createNexusFixture = (): Fixture => {
       (item) => item.id,
       ($item) =>
         jsx("span", {
-          "data-id": $item.id,
+          "data-id": $item.id.get(),
           tabIndex: $item.id.get() === 500 ? 0 : undefined,
           children: $item.label,
         })
@@ -393,6 +406,157 @@ const frameworks: Framework[] = [
   { name: "Solid", create: createSolidFixture },
   { name: "Preact Signals", create: createPreactFixture },
 ];
+
+window.runFirstMount = (frameworkName) => {
+  const framework = frameworks.find(({ name }) => name === frameworkName);
+  if (!framework) throw new Error(`Unknown framework "${frameworkName}".`);
+  const start = performance.now();
+  const fixture = framework.create();
+  const duration = performance.now() - start;
+  assertEqual(
+    fixture.host.children.length,
+    rows,
+    `${framework.name} first-mount row count`
+  );
+  fixture.dispose();
+  return duration;
+};
+
+let disposeMemoryFixture: (() => void) | undefined;
+
+window.mountMemoryFixture = (variant, count) => {
+  window.disposeMemoryFixture();
+  const items = Array.from({ length: count }, (_, id) => ({
+    id,
+    label: `Row ${id}`,
+  }));
+  const host = createHost();
+
+  if (variant === "direct DOM") {
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const span = document.createElement("span");
+      span.dataset.id = String(item.id);
+      span.textContent = item.label;
+      fragment.appendChild(span);
+    }
+    host.appendChild(fragment);
+    disposeMemoryFixture = () => host.remove();
+  } else if (variant === "static JSX") {
+    const root = renderNexus(
+      items.map((item) =>
+        jsx("span", { "data-id": item.id, children: item.label })
+      ),
+      host,
+      { schedule: "manual" }
+    );
+    disposeMemoryFixture = () => {
+      root.dispose();
+      host.remove();
+    };
+  } else if (
+    variant === "reactive keyed (1 field)" ||
+    variant === "reactive keyed (2 fields)"
+  ) {
+    const app = createApp({ state: { items } });
+    app.render(
+      app.$.items.each(
+        (item) => item.id,
+        ($item) =>
+          jsx("span", {
+            "data-id":
+              variant === "reactive keyed (2 fields)"
+                ? $item.id
+                : $item.id.get(),
+            children: $item.label,
+          })
+      ),
+      host,
+      { schedule: "manual" }
+    );
+    disposeMemoryFixture = () => {
+      app.dispose();
+      host.remove();
+    };
+  } else if (variant === "React") {
+    const root = createRoot(host);
+    function Rows() {
+      const [current] = useState(items);
+      return createElement(
+        Fragment,
+        null,
+        current.map((item) =>
+          createElement(
+            "span",
+            { key: item.id, "data-id": item.id },
+            item.label
+          )
+        )
+      );
+    }
+    flushSync(() => root.render(createElement(Rows)));
+    disposeMemoryFixture = () => {
+      flushSync(() => root.unmount());
+      host.remove();
+    };
+  } else if (variant === "Solid") {
+    const solidItems = items.map((item) => {
+      const [label] = createSignal(item.label);
+      return { id: item.id, label };
+    });
+    const [order] = createSignal(solidItems);
+    const dispose = renderSolid(
+      () =>
+        For({
+          get each() {
+            return order();
+          },
+          children: (item) => {
+            const span = document.createElement("span");
+            span.dataset.id = String(item.id);
+            insert(span, item.label);
+            return span;
+          },
+        }),
+      host
+    );
+    flushSolid();
+    disposeMemoryFixture = () => {
+      dispose();
+      host.remove();
+    };
+  } else {
+    const previousDebounce = options.debounceRendering;
+    options.debounceRendering = (callback) => callback();
+    const signalItems = items.map((item) => ({
+      id: item.id,
+      label: signal(item.label),
+    }));
+    const order = signal(signalItems);
+    function Row({ item }: { item: SignalItem }) {
+      return h("span", { "data-id": item.id }, item.label.value);
+    }
+    function Rows() {
+      return order.value.map((item) => h(Row, { key: item.id, item }));
+    }
+    renderPreact(h(Rows, {}), host);
+    disposeMemoryFixture = () => {
+      renderPreact(null, host);
+      if (previousDebounce) options.debounceRendering = previousDebounce;
+      else delete options.debounceRendering;
+      host.remove();
+    };
+  }
+
+  forceLayout(host);
+  assertEqual(host.children.length, count, `${variant} memory row count`);
+  return host.children.length;
+};
+
+window.disposeMemoryFixture = () => {
+  disposeMemoryFixture?.();
+  disposeMemoryFixture = undefined;
+};
 
 function assertEqual(actual: unknown, expected: unknown, message: string) {
   if (!Object.is(actual, expected)) {

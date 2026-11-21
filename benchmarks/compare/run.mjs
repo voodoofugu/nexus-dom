@@ -38,6 +38,48 @@ try {
   if (!url) throw new Error("Vite did not expose a comparison URL.");
 
   browser = await chromium.launch({ executablePath, headless: true });
+  const frameworkNames = ["nexus-dom", "React", "Solid", "Preact Signals"];
+  const coldSamples = new Map(frameworkNames.map((name) => [name, []]));
+  for (let round = 0; round < 8; round++) {
+    const offset = round % frameworkNames.length;
+    const order = [
+      ...frameworkNames.slice(offset),
+      ...frameworkNames.slice(0, offset),
+    ];
+    if (round >= frameworkNames.length) order.reverse();
+    for (const frameworkName of order) {
+      const coldPage = await browser.newPage();
+      await coldPage.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+      const duration = await coldPage.evaluate(
+        (name) => window.runFirstMount(name),
+        frameworkName
+      );
+      coldSamples.get(frameworkName).push(duration);
+      await coldPage.close();
+    }
+  }
+
+  const summarize = (samples) => {
+    const sorted = [...samples].sort((left, right) => left - right);
+    return {
+      median: sorted[Math.floor(sorted.length * 0.5)] ?? 0,
+      p95: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0,
+    };
+  };
+
+  console.log("Fresh-page first mount:");
+  console.table(
+    frameworkNames.map((frameworkName) => {
+      const result = summarize(coldSamples.get(frameworkName));
+      return {
+        framework: frameworkName,
+        samples: coldSamples.get(frameworkName).length,
+        median_ms: result.median.toFixed(3),
+        p95_ms: result.p95.toFixed(3),
+      };
+    })
+  );
+
   const page = await browser.newPage();
   page.on("console", (message) => console.error(`[browser] ${message.text()}`));
   page.on("pageerror", (error) => console.error(`[browser] ${error.message}`));
@@ -64,6 +106,60 @@ try {
       p95_ms: measurement.p95Ms.toFixed(3),
     }))
   );
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Performance.enable");
+  const collectMemory = async () => {
+    await cdp.send("HeapProfiler.collectGarbage");
+    await cdp.send("HeapProfiler.collectGarbage");
+    const [metrics, dom] = await Promise.all([
+      cdp.send("Performance.getMetrics"),
+      cdp.send("Memory.getDOMCounters"),
+    ]);
+    return {
+      heap:
+        metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")
+          ?.value ?? 0,
+      nodes: dom.nodes,
+      listeners: dom.jsEventListeners,
+    };
+  };
+  const memoryResults = [];
+  for (const count of [1_000, 10_000]) {
+    for (const variant of [
+      "direct DOM",
+      "static JSX",
+      "reactive keyed (1 field)",
+      "reactive keyed (2 fields)",
+      "React",
+      "Solid",
+      "Preact Signals",
+    ]) {
+      await page.evaluate(() => window.disposeMemoryFixture());
+      const before = await collectMemory();
+      await page.evaluate(
+        ({ variant, count }) => window.mountMemoryFixture(variant, count),
+        { variant, count }
+      );
+      const mounted = await collectMemory();
+      await page.evaluate(() => window.disposeMemoryFixture());
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      );
+      const disposed = await collectMemory();
+      memoryResults.push({
+        variant,
+        rows: count,
+        mounted_kib: ((mounted.heap - before.heap) / 1024).toFixed(1),
+        bytes_per_row: ((mounted.heap - before.heap) / count).toFixed(1),
+        retained_kib: ((disposed.heap - before.heap) / 1024).toFixed(1),
+        dom_nodes: mounted.nodes - before.nodes,
+        listeners: mounted.listeners - before.listeners,
+      });
+    }
+  }
+  console.log("Heap diagnostics after forced GC:");
+  console.table(memoryResults);
 } finally {
   await browser?.close();
   server?.httpServer.close();
