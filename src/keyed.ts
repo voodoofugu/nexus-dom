@@ -36,12 +36,18 @@ function removeBlock(block: KeyedBlock) {
   removeNodes(block.nodes);
 }
 
+type StatefulParentNode = ParentNode & {
+  moveBefore?(node: Node, reference: Node | null): void;
+};
+
 function moveBlockBefore(block: KeyedBlock, reference: Node) {
   if (block.nodes.at(-1)?.nextSibling === reference) return;
-  const document = reference.ownerDocument ?? (reference as Document);
-  const fragment = document.createDocumentFragment();
-  for (const node of block.nodes) fragment.appendChild(node);
-  reference.parentNode?.insertBefore(fragment, reference);
+  const parent = reference.parentNode as StatefulParentNode | null;
+  if (!parent) return;
+  for (const node of block.nodes) {
+    if (parent.moveBefore) parent.moveBefore(node, reference);
+    else parent.insertBefore(node, reference);
+  }
 }
 
 function longestIncreasingPositions(values: readonly number[]) {
