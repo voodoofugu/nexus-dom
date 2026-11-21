@@ -127,8 +127,10 @@ lifecycle instead of another reactive runtime to coordinate.
 
 ### Limitations
 
-- Conditional UI requires `.render(...)`; bare reactive JSX expressions cannot
-  work with one-shot components without a compiler or component reruns.
+- Boolean conditional UI has compiler-free `when(live, truthy, fallback)`;
+  value-dependent branches still require `.render(...)`. Bare reactive JSX
+  expressions cannot work with one-shot components without a compiler or
+  component reruns.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
   operations require `app.list(...)` metadata.
 - SSR, hydration, portals, local error boundaries, suspense, transitions,
@@ -153,9 +155,10 @@ lifecycle instead of another reactive runtime to coordinate.
    reduced two-field rows from roughly `2,247` to `1,506 B/row`; one-field rows
    use about `1,027 B/row`. This remains above Preact Signals (`~755 B`) and
    Solid (`~566 B`), so binding cleanup structures are the next profiling target.
-3. **Control-flow ergonomics.** Test `.render(...)` in a real application before
-   deciding between the current compiler-free API, a small optional transform or
-   a controlled component-rerun mode.
+3. **Control-flow ergonomics.** The plain `when(...)` helper now covers boolean
+   branches without a component-like primitive. Test it and `.render(...)` in a
+   real application before deciding whether an optional transform or controlled
+   component-rerun mode is still justified.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** Add a local owned boundary only when its fallback,
@@ -177,7 +180,7 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `4.49 KB
-gzip` for core, `5.42 KB` for `createApp`, and `5.61 KB` for the full main entry
+gzip` for core, `5.42 KB` for `createApp`, and `5.64 KB` for the full main entry
 with `nexus-state` externalized. Track these separately from the playground
 bundle.
 
