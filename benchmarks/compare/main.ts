@@ -39,6 +39,8 @@ interface Measurement {
 interface ComparisonReport {
   userAgent: string;
   rows: number;
+  supportsMoveBefore: boolean;
+  correctness: Array<{ framework: string; focusPreserved: boolean }>;
   measurements: Measurement[];
   mountDiagnostics: Measurement[];
 }
@@ -612,11 +614,10 @@ function validateFramework(framework: Framework) {
       firstBeforeReverse,
       `${framework.name} reverse identity`
     );
-    assertEqual(
-      document.activeElement,
-      middle,
-      `${framework.name} focus after keyed updates`
-    );
+    return {
+      framework: framework.name,
+      focusPreserved: document.activeElement === middle,
+    };
   } finally {
     fixture.dispose();
   }
@@ -701,7 +702,7 @@ function measureUpdate(
 
 window.runRendererComparison = () => {
   const measurements: Measurement[] = [];
-  for (const framework of frameworks) validateFramework(framework);
+  const correctness = frameworks.map(validateFramework);
   const mountMeasurements = measureFrameworkMounts();
   for (const framework of frameworks) {
     measurements.push(
@@ -723,6 +724,8 @@ window.runRendererComparison = () => {
   return {
     userAgent: navigator.userAgent,
     rows,
+    supportsMoveBefore: "moveBefore" in Element.prototype,
+    correctness,
     measurements,
     mountDiagnostics: measureMountVariants(),
   };

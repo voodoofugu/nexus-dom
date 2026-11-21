@@ -3,20 +3,29 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium, firefox, webkit } from "playwright-core";
 import { build, preview } from "vite";
 
 const configFile = fileURLToPath(new URL("./vite.config.ts", import.meta.url));
-const knownBrowsers = [
+const browserName = process.env.NEXUS_DOM_BROWSER ?? "chromium";
+const browserTypes = { chromium, firefox, webkit };
+const browserType = browserTypes[browserName];
+if (!browserType) {
+  throw new Error(
+    `Unknown NEXUS_DOM_BROWSER "${browserName}". Use chromium, firefox or webkit.`
+  );
+}
+
+const knownChromiumBrowsers = [
   process.env.CHROME_PATH,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
   "/usr/bin/google-chrome",
   "/usr/bin/chromium",
 ].filter(Boolean);
-const executablePath = knownBrowsers.find((path) => existsSync(path));
+const executablePath = knownChromiumBrowsers.find((path) => existsSync(path));
 
-if (!executablePath) {
+if (browserName === "chromium" && !executablePath) {
   throw new Error(
     "Chrome or Chromium was not found. Set CHROME_PATH to its executable."
   );
@@ -37,7 +46,10 @@ try {
   const url = server.resolvedUrls?.local[0];
   if (!url) throw new Error("Vite did not expose a comparison URL.");
 
-  browser = await chromium.launch({ executablePath, headless: true });
+  browser = await browserType.launch({
+    ...(browserName === "chromium" ? { executablePath } : {}),
+    headless: true,
+  });
   const frameworkNames = ["nexus-dom", "React", "Solid", "Preact Signals"];
   const coldSamples = new Map(frameworkNames.map((name) => [name, []]));
   for (let round = 0; round < 8; round++) {
@@ -88,6 +100,8 @@ try {
 
   console.log(`Browser: ${report.userAgent}`);
   console.log(`Rows: ${report.rows}`);
+  console.log(`ParentNode.moveBefore: ${report.supportsMoveBefore ? "yes" : "no"}`);
+  console.table(report.correctness);
   console.table(
     report.measurements.map((measurement) => ({
       framework: measurement.framework,
@@ -107,59 +121,66 @@ try {
     }))
   );
 
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Performance.enable");
-  const collectMemory = async () => {
-    await cdp.send("HeapProfiler.collectGarbage");
-    await cdp.send("HeapProfiler.collectGarbage");
-    const [metrics, dom] = await Promise.all([
-      cdp.send("Performance.getMetrics"),
-      cdp.send("Memory.getDOMCounters"),
-    ]);
-    return {
-      heap:
-        metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")
-          ?.value ?? 0,
-      nodes: dom.nodes,
-      listeners: dom.jsEventListeners,
+  if (browserName === "chromium") {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Performance.enable");
+    const collectMemory = async () => {
+      await cdp.send("HeapProfiler.collectGarbage");
+      await cdp.send("HeapProfiler.collectGarbage");
+      const [metrics, dom] = await Promise.all([
+        cdp.send("Performance.getMetrics"),
+        cdp.send("Memory.getDOMCounters"),
+      ]);
+      return {
+        heap:
+          metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")
+            ?.value ?? 0,
+        nodes: dom.nodes,
+        listeners: dom.jsEventListeners,
+      };
     };
-  };
-  const memoryResults = [];
-  for (const count of [1_000, 10_000]) {
-    for (const variant of [
-      "direct DOM",
-      "static JSX",
-      "reactive keyed (1 field)",
-      "reactive keyed (2 fields)",
-      "React",
-      "Solid",
-      "Preact Signals",
-    ]) {
-      await page.evaluate(() => window.disposeMemoryFixture());
-      const before = await collectMemory();
-      await page.evaluate(
-        ({ variant, count }) => window.mountMemoryFixture(variant, count),
-        { variant, count }
-      );
-      const mounted = await collectMemory();
-      await page.evaluate(() => window.disposeMemoryFixture());
-      await page.evaluate(
-        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      );
-      const disposed = await collectMemory();
-      memoryResults.push({
-        variant,
-        rows: count,
-        mounted_kib: ((mounted.heap - before.heap) / 1024).toFixed(1),
-        bytes_per_row: ((mounted.heap - before.heap) / count).toFixed(1),
-        retained_kib: ((disposed.heap - before.heap) / 1024).toFixed(1),
-        dom_nodes: mounted.nodes - before.nodes,
-        listeners: mounted.listeners - before.listeners,
-      });
+    const memoryResults = [];
+    for (const count of [1_000, 10_000]) {
+      for (const variant of [
+        "direct DOM",
+        "static JSX",
+        "reactive keyed (1 field)",
+        "reactive keyed (2 fields)",
+        "React",
+        "Solid",
+        "Preact Signals",
+      ]) {
+        await page.evaluate(() => window.disposeMemoryFixture());
+        const before = await collectMemory();
+        await page.evaluate(
+          ({ variant, count }) => window.mountMemoryFixture(variant, count),
+          { variant, count }
+        );
+        const mounted = await collectMemory();
+        await page.evaluate(() => window.disposeMemoryFixture());
+        await page.evaluate(
+          () =>
+            new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve))
+            )
+        );
+        const disposed = await collectMemory();
+        memoryResults.push({
+          variant,
+          rows: count,
+          mounted_kib: ((mounted.heap - before.heap) / 1024).toFixed(1),
+          bytes_per_row: ((mounted.heap - before.heap) / count).toFixed(1),
+          retained_kib: ((disposed.heap - before.heap) / 1024).toFixed(1),
+          dom_nodes: mounted.nodes - before.nodes,
+          listeners: mounted.listeners - before.listeners,
+        });
+      }
     }
+    console.log("Heap diagnostics after forced GC:");
+    console.table(memoryResults);
+  } else {
+    console.log("Heap diagnostics: skipped (requires Chromium CDP).");
   }
-  console.log("Heap diagnostics after forced GC:");
-  console.table(memoryResults);
 } finally {
   await browser?.close();
   server?.httpServer.close();

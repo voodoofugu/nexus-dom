@@ -46,6 +46,9 @@
     "benchmark:browser": "node benchmarks/browser/run.mjs",
     "benchmark:browser:dev": "vite --config benchmarks/browser/vite.config.ts",
     "benchmark:compare": "node benchmarks/compare/run.mjs",
+    "benchmark:compare:firefox": "NEXUS_DOM_BROWSER=firefox node benchmarks/compare/run.mjs",
+    "benchmark:compare:webkit": "NEXUS_DOM_BROWSER=webkit node benchmarks/compare/run.mjs",
+    "benchmark:compare:matrix": "npm run benchmark:compare && npm run benchmark:compare:firefox && npm run benchmark:compare:webkit",
     "benchmark:bundle": "node benchmarks/bundle/run.mjs",
     "check": "npm run test && npm run build && npm run smoke:dist && npm run example:build"
   },
