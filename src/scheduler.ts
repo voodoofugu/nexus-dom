@@ -30,13 +30,20 @@ export function createScheduler<C>(
       pending.clear();
 
       for (const update of batch) {
-        update.run();
-        updates++;
-        if (update.context !== undefined) contexts.push(update.context);
+        try {
+          update.run();
+          updates++;
+          if (update.context !== undefined) contexts.push(update.context);
+        } catch (error) {
+          if (!options.onError) throw error;
+          options.onError(error);
+        }
       }
     }
 
-    options.onCommit?.({ updates, contexts } satisfies CommitEvent<C>);
+    if (updates > 0) {
+      options.onCommit?.({ updates, contexts } satisfies CommitEvent<C>);
+    }
   };
 
   return {

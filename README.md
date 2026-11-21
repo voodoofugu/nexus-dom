@@ -220,6 +220,21 @@ Visual workloads can opt into frame batching:
 app.render(<CanvasView />, "#app", { schedule: "animationFrame" });
 ```
 
+Scheduled binding or structural errors can be observed without aborting the
+remaining bindings in the same commit:
+
+```tsx
+app.render(<App />, "#app", {
+  onError(error) {
+    report(error);
+  },
+});
+```
+
+Initial mount errors remain synchronous, but the renderer disposes the partial
+owner before rethrowing. A failed dynamic replacement is prepared off-DOM, so
+the previous working branch remains mounted.
+
 `npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
 
 The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.
@@ -232,6 +247,12 @@ current local Headless Chrome run, an exact last-to-first move measured about
 `0.5 ms` median versus `1.4 ms` for rebuilding 1,000 rows; a full reversal was
 roughly equal to rebuilding. Results are printed with browser identity and must
 be treated as machine-specific evidence, not general performance claims.
+
+The Chrome runner also performs a coarse retention probe: it repeatedly mounts,
+updates and disposes 1,000-row apps, forces garbage collection through CDP and
+reports both remaining fixture nodes and heap delta. The first 20-cycle run left
+zero fixture nodes and roughly `7 KiB` of heap delta after warm-up; this is a
+regression signal, not proof that every user graph is leak-free.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately

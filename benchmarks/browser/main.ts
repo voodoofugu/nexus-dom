@@ -24,8 +24,24 @@ interface BenchmarkReport {
 declare global {
   interface Window {
     runNexusDOMBenchmarks(): Promise<BenchmarkReport>;
+    runNexusDOMRetentionCycle(rounds?: number): number;
   }
 }
+
+window.runNexusDOMRetentionCycle = (rounds = 20) => {
+  for (let round = 0; round < rounds; round++) {
+    const fixture = createKeyedFixture();
+    const item = fixture.app.nexus.get("items")[500]!;
+    fixture.app.list("items").replace(500, {
+      ...item,
+      label: `Retention ${round}`,
+    });
+    fixture.flush();
+    fixture.app.dispose();
+    fixture.host.remove();
+  }
+  return fixtures.childNodes.length;
+};
 
 const size = 1_000;
 const initial = Array.from({ length: size }, (_, id) => ({

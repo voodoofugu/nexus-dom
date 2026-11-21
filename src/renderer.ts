@@ -122,10 +122,18 @@ export function createDOMRenderer<C = unknown>(
     };
 
     const mountBranch = () => {
-      branchOwner = new Owner(owner);
+      const nextOwner = new Owner(owner);
       const fragment = document.createDocumentFragment();
-      renderInto(project(nextValue), fragment, branchOwner);
-      branchNodes = Array.from(fragment.childNodes);
+      try {
+        renderInto(project(nextValue), fragment, nextOwner);
+      } catch (error) {
+        nextOwner.dispose();
+        throw error;
+      }
+      const nextNodes = Array.from(fragment.childNodes);
+      clearBranch();
+      branchOwner = nextOwner;
+      branchNodes = nextNodes;
       end.parentNode?.insertBefore(fragment, end);
     };
 
@@ -142,7 +150,6 @@ export function createDOMRenderer<C = unknown>(
         token,
         () => {
           if (!active) return;
-          clearBranch();
           mountBranch();
         },
         context as C | undefined
@@ -260,7 +267,12 @@ export function createDOMRenderer<C = unknown>(
       const owner = new Owner();
       const document = container.ownerDocument ?? (container as Document);
       const fragment = document.createDocumentFragment();
-      renderInto(view, fragment, owner);
+      try {
+        renderInto(view, fragment, owner);
+      } catch (error) {
+        owner.dispose();
+        throw error;
+      }
       const nodes = Array.from(fragment.childNodes);
       container.appendChild(fragment);
 

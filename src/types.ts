@@ -133,6 +133,8 @@ export interface RendererOptions<C = unknown> {
   /** Microtask batches by default; animationFrame aligns visual work to paint. */
   schedule?: "microtask" | "animationFrame" | "manual";
   onCommit?: (event: CommitEvent<C>) => void;
+  /** Handles errors thrown by scheduled bindings or structural updates. */
+  onError?: (error: unknown) => void;
 }
 
 export interface MountedRoot {

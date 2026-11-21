@@ -64,6 +64,10 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
   provides lifecycle for sockets and other user runtime refs.
 - SVG elements use their native namespace, and `animationFrame` scheduling is
   available for paint-aligned canvas/scroll-style workloads.
+- Initial mount failures dispose partial owners before rethrowing. Dynamic
+  branches are prepared off-DOM and retain the previous branch on failure;
+  scheduled errors can be observed through renderer `onError` without blocking
+  unrelated bindings in the same commit.
 
 ## Validation questions
 
@@ -93,3 +97,7 @@ The isolated Rollup/Terser ESM benchmark currently measures roughly `3.89 KB
 gzip` for core, `4.73 KB` for `createApp`, and `4.89 KB` for the full main entry
 with `nexus-state` externalized. Track these separately from the playground
 bundle.
+
+The browser runner includes a forced-GC retention probe. The first warm 20-cycle
+mount/update/dispose run left zero fixture nodes and about `7 KiB` heap delta;
+use it only as a regression baseline because browser heap measurements vary.

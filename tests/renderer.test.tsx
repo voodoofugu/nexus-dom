@@ -418,6 +418,49 @@ describe("nexus-dom rendering model", () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
+  it("cleans an owner when initial component mounting throws", () => {
+    const cleanup = vi.fn();
+    const renderer = createDOMRenderer();
+    const host = document.createElement("div");
+
+    function Broken(): never {
+      onCleanup(cleanup);
+      throw new Error("mount failed");
+    }
+
+    expect(() => renderer.mount(<Broken />, host)).toThrow("mount failed");
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(host.childNodes).toHaveLength(0);
+  });
+
+  it("keeps the previous branch and continues a commit after an update error", () => {
+    const store = createNexus({ state: { branch: 1, sibling: "before" } });
+    const $ = bind(store);
+    const onError = vi.fn();
+    const renderer = createDOMRenderer({ schedule: "manual", onError });
+    const host = document.createElement("div");
+
+    renderer.mount(
+      [
+        $.branch.render((value) => {
+          if (value < 0) throw new Error("branch failed");
+          return <strong>{value}</strong>;
+        }),
+        <span>{$.sibling}</span>,
+      ],
+      host
+    );
+    const previousBranch = host.querySelector("strong");
+
+    store.set({ branch: -1, sibling: "after" });
+    renderer.flush();
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(host.querySelector("strong")).toBe(previousBranch);
+    expect(previousBranch?.textContent).toBe("1");
+    expect(host.querySelector("span")?.textContent).toBe("after");
+  });
+
   it("replaces an owned Show branch and cleans up the removed component", () => {
     const store = createNexus({ state: { visible: true } });
     const $ = bind(store);

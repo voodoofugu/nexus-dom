@@ -44,6 +44,31 @@ try {
       p95_ms: measurement.p95Ms.toFixed(3),
     }))
   );
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Performance.enable");
+  const heapUsed = async () => {
+    await cdp.send("HeapProfiler.collectGarbage");
+    const metrics = await cdp.send("Performance.getMetrics");
+    return metrics.metrics.find((metric) => metric.name === "JSHeapUsedSize")
+      ?.value;
+  };
+
+  await page.evaluate(() => window.runNexusDOMRetentionCycle(3));
+  const heapBefore = await heapUsed();
+  const remainingFixtureNodes = await page.evaluate(() =>
+    window.runNexusDOMRetentionCycle(20)
+  );
+  const heapAfter = await heapUsed();
+  const heapDelta =
+    heapBefore === undefined || heapAfter === undefined
+      ? undefined
+      : heapAfter - heapBefore;
+  console.log(
+    `Retention probe: fixtures=${remainingFixtureNodes}, heap delta=${
+      heapDelta === undefined ? "unavailable" : `${Math.round(heapDelta / 1024)} KiB`
+    }`
+  );
 } finally {
   await browser?.close();
   await server.close();

@@ -117,12 +117,18 @@ export function mountKeyedRegion<C>({
       live: mutable.live,
       setItem: mutable.set,
     };
-    const rendered = renderNodes(
-      document,
-      vnode.project(block.live),
-      block.owner,
-      renderInto
-    );
+    let rendered;
+    try {
+      rendered = renderNodes(
+        document,
+        vnode.project(block.live),
+        block.owner,
+        renderInto
+      );
+    } catch (error) {
+      block.owner.dispose();
+      throw error;
+    }
     block.nodes = rendered.nodes;
     end.parentNode?.insertBefore(rendered.fragment, end);
     return block;
