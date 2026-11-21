@@ -28,7 +28,7 @@ The renderer preserves the Nexus update context so tooling can explain which sta
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
 - No Virtual DOM or whole-tree reconciliation in the first experiment.
 - No claim of being universally faster: subscriptions, binding objects and cleanup have their own costs.
-- Structural reactivity (`Show`, keyed `For`) is deferred until the basic binding API is validated.
+- `Show` is the first structural experiment; keyed `For` remains deferred until branch ownership is validated.
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
 
 ## Validation questions
@@ -39,6 +39,8 @@ The renderer preserves the Nexus update context so tooling can explain which sta
 4. Does provenance remain useful at the DOM commit boundary?
 5. What are the memory and update costs per binding?
 6. At what point is local rerender/reconciliation simpler than more bindings?
+7. Can ordinary JSX ternaries become reactive without an intrusive compiler, or
+   is a small build transform preferable to an explicit `Show`/reactive block?
 
 ## Benchmark policy
 

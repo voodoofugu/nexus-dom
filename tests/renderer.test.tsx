@@ -5,6 +5,7 @@ import {
   bind,
   createDOMRenderer,
   onCleanup,
+  Show,
   type CommitEvent,
 } from "nexus-dom";
 
@@ -176,5 +177,44 @@ describe("nexus-dom rendering model", () => {
     expect(host.childNodes).toHaveLength(0);
     expect(event).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("replaces an owned Show branch and cleans up the removed component", () => {
+    const store = createNexus({ state: { visible: true } });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+    const cleanup = vi.fn();
+    let visibleRuns = 0;
+
+    function Visible() {
+      visibleRuns++;
+      onCleanup(cleanup);
+      return <strong>Visible branch</strong>;
+    }
+
+    renderer.mount(
+      <Show when={$.visible} fallback={<em>Hidden branch</em>}>
+        <Visible />
+      </Show>,
+      host
+    );
+
+    const visibleNode = host.querySelector("strong");
+    expect(visibleNode?.textContent).toBe("Visible branch");
+
+    store.set({ visible: false }, "hide");
+    renderer.flush();
+
+    expect(host.querySelector("strong")).toBeNull();
+    expect(host.querySelector("em")?.textContent).toBe("Hidden branch");
+    expect(cleanup).toHaveBeenCalledOnce();
+
+    store.set({ visible: true }, "show");
+    renderer.flush();
+
+    expect(host.querySelector("strong")?.textContent).toBe("Visible branch");
+    expect(host.querySelector("strong")).not.toBe(visibleNode);
+    expect(visibleRuns).toBe(2);
   });
 });

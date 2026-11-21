@@ -215,6 +215,68 @@ export function createDOMRenderer<C = unknown>(
   };
 
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
+    if (vnode.kind === "show") {
+      const document = target.ownerDocument ?? (target as Document);
+      const start = document.createComment("nexus-show");
+      const end = document.createComment("/nexus-show");
+      target.appendChild(start);
+      target.appendChild(end);
+
+      let active = true;
+      let visible = Boolean(vnode.when.get());
+      let nextVisible = visible;
+      let branchOwner: Owner | undefined;
+      const token = {};
+
+      const clearBranch = () => {
+        branchOwner?.dispose();
+        branchOwner = undefined;
+        let node = start.nextSibling;
+        while (node && node !== end) {
+          const next = node.nextSibling;
+          node.parentNode?.removeChild(node);
+          node = next;
+        }
+      };
+
+      const mountBranch = () => {
+        branchOwner = new Owner(owner);
+        const fragment = document.createDocumentFragment();
+        renderInto(
+          visible ? vnode.children : vnode.fallback,
+          fragment,
+          branchOwner
+        );
+        end.parentNode?.insertBefore(fragment, end);
+      };
+
+      mountBranch();
+
+      const unsubscribe = vnode.when.subscribe((value, context) => {
+        nextVisible = Boolean(value);
+        if (nextVisible === visible) return;
+
+        enqueue(
+          token,
+          () => {
+            if (!active || nextVisible === visible) return;
+            clearBranch();
+            visible = nextVisible;
+            mountBranch();
+          },
+          context as C | undefined
+        );
+      });
+
+      owner.addCleanup(() => {
+        active = false;
+        cancel(token);
+        unsubscribe();
+        clearBranch();
+      });
+      return;
+    }
+
     if (vnode.kind === "fragment") {
       renderInto(vnode.props.children as Renderable, target, owner);
       return;

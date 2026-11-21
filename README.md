@@ -50,6 +50,24 @@ renderer.mount(<p>Total: {total}</p>, document.body);
 
 Selectors dynamically resubscribe when the set of keys they read changes.
 
+### Structural syntax is not settled
+
+The prototype currently includes `Show` only to test branch ownership, replacement and cleanup:
+
+```tsx
+<Show when={$.authorized} fallback={<Login />}>
+  <Profile />
+</Show>
+```
+
+The desired user-facing syntax is an ordinary JSX ternary:
+
+```tsx
+{authorized ? <Profile /> : <Login />}
+```
+
+Plain JavaScript evaluates that expression once when a one-shot component mounts. Making it reactive requires either a small JSX transform, an explicit reactive expression, or a different component execution model. The project does not choose between them yet; `Show` is a correctness baseline, not the intended final API.
+
 ## Implemented
 
 - automatic JSX runtime;
@@ -61,10 +79,10 @@ Selectors dynamically resubscribe when the set of keys they read changes.
 - manual flushing for deterministic tests and measurements;
 - owner-based subscription, event and component cleanup;
 - update contexts carried into renderer commit events.
+- an experimental owned `Show` branch with deterministic cleanup.
 
 ## Deliberately missing
 
-- reactive conditional branches;
 - keyed list reconciliation;
 - SSR and hydration;
 - portals, boundaries, suspense or transitions;
@@ -78,8 +96,11 @@ These should only be added after the basic binding model proves understandable a
 
 ```bash
 npm install
+npm run dev
 npm run check
 npm run benchmark
 ```
+
+`npm run dev` opens a small counter playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
 
 The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.

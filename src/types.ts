@@ -40,7 +40,7 @@ export interface ElementVNode {
 
 export interface ComponentVNode {
   readonly kind: "component";
-  readonly type: Component<Record<string, unknown>>;
+  readonly type: Component<any>;
   readonly props: Record<string, unknown>;
   readonly key?: PropertyKey;
 }
@@ -51,7 +51,14 @@ export interface FragmentVNode {
   readonly key?: PropertyKey;
 }
 
-export type VNode = ElementVNode | ComponentVNode | FragmentVNode;
+export interface ShowVNode {
+  readonly kind: "show";
+  readonly when: LiveValue<unknown, unknown>;
+  readonly children?: Renderable;
+  readonly fallback?: Renderable;
+}
+
+export type VNode = ElementVNode | ComponentVNode | FragmentVNode | ShowVNode;
 
 export type Renderable =
   | VNode
@@ -74,7 +81,7 @@ export const FRAGMENT: unique symbol = Symbol.for(
 
 export type FragmentType = typeof FRAGMENT;
 
-export type JSXType = string | FragmentType | Component<Record<string, unknown>>;
+export type JSXType = string | FragmentType | Component<any>;
 
 export interface CommitEvent<C = unknown> {
   updates: number;
