@@ -206,6 +206,7 @@ npm run dev
 npm run check
 npm run benchmark
 npm run benchmark:browser
+npm run benchmark:bundle
 ```
 
 Visual workloads can opt into frame batching:
@@ -226,3 +227,9 @@ current local Headless Chrome run, an exact last-to-first move measured about
 `0.5 ms` median versus `1.4 ms` for rebuilding 1,000 rows; a full reversal was
 roughly equal to rebuilding. Results are printed with browser identity and must
 be treated as machine-specific evidence, not general performance claims.
+
+The bundle benchmark builds isolated, minified ESM entries with `nexus-state`
+externalized. The current local measurement is approximately `4.44 KB gzip`
+for low-level core exports, `5.45 KB` for `createApp`, and `5.61 KB` for the
+complete main entry. The larger playground bundle also contains the example UI
+and diagnostics, so it is not a library-size measurement.

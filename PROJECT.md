@@ -88,3 +88,7 @@ dynamic branches with forced layout. Exact move is currently around `0.5 ms`
 median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
+
+The isolated ESM bundle benchmark currently measures roughly `4.44 KB gzip`
+for core, `5.45 KB` for `createApp`, and `5.61 KB` for the full main entry with
+`nexus-state` externalized. Track these separately from the playground bundle.
