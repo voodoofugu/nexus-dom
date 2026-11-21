@@ -55,6 +55,15 @@ try {
       p95_ms: measurement.p95Ms.toFixed(3),
     }))
   );
+  console.log("Mount diagnostics:");
+  console.table(
+    report.mountDiagnostics.map((measurement) => ({
+      variant: measurement.scenario,
+      iterations: measurement.iterations,
+      median_ms: measurement.medianMs.toFixed(3),
+      p95_ms: measurement.p95Ms.toFixed(3),
+    }))
+  );
 } finally {
   await browser?.close();
   server?.httpServer.close();

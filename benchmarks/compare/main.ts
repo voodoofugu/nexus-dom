@@ -1,7 +1,7 @@
 import { signal, type Signal } from "@preact/signals";
 import { For, createSignal, flush as flushSolid } from "solid-js";
 import { insert, render as renderSolid } from "@solidjs/web";
-import { createApp } from "nexus-dom";
+import { createApp, render as renderNexus } from "nexus-dom";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { createElement, Fragment, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -40,6 +40,7 @@ interface ComparisonReport {
   userAgent: string;
   rows: number;
   measurements: Measurement[];
+  mountDiagnostics: Measurement[];
 }
 
 declare global {
@@ -72,6 +73,15 @@ const move = <T,>(items: readonly T[], from: number, to: number) => {
   next.splice(to, 0, item!);
   return next;
 };
+
+const permutations = <T,>(values: readonly T[]): T[][] =>
+  values.length < 2
+    ? [[...values]]
+    : values.flatMap((value, index) =>
+        permutations([...values.slice(0, index), ...values.slice(index + 1)]).map(
+          (rest) => [value, ...rest]
+        )
+      );
 
 const createNexusFixture = (): Fixture => {
   const app = createApp({ state: { items: initial } });
@@ -120,6 +130,87 @@ const createNexusFixture = (): Fixture => {
     },
   };
 };
+
+interface MountVariant {
+  readonly name: string;
+  mount(): () => void;
+}
+
+const mountVariants: MountVariant[] = [
+  {
+    name: "direct DOM",
+    mount() {
+      const host = createHost();
+      const fragment = document.createDocumentFragment();
+      for (const item of initial) {
+        const span = document.createElement("span");
+        span.dataset.id = String(item.id);
+        if (item.id === 500) span.tabIndex = 0;
+        span.textContent = item.label;
+        fragment.appendChild(span);
+      }
+      host.appendChild(fragment);
+      forceLayout(host);
+      return () => host.remove();
+    },
+  },
+  {
+    name: "nexus static JSX",
+    mount() {
+      const host = createHost();
+      const root = renderNexus(
+        initial.map((item) =>
+          jsx("span", {
+            "data-id": item.id,
+            tabIndex: item.id === 500 ? 0 : undefined,
+            children: item.label,
+          })
+        ),
+        host,
+        { schedule: "manual" }
+      );
+      forceLayout(host);
+      return () => {
+        root.dispose();
+        host.remove();
+      };
+    },
+  },
+  {
+    name: "nexus keyed static fields",
+    mount() {
+      const app = createApp({ state: { items: initial } });
+      const host = createHost();
+      app.render(
+        app.$.items.each(
+          (item) => item.id,
+          ($item) => {
+            const item = $item.get();
+            return jsx("span", {
+              "data-id": item.id,
+              tabIndex: item.id === 500 ? 0 : undefined,
+              children: item.label,
+            });
+          }
+        ),
+        host,
+        { schedule: "manual" }
+      );
+      forceLayout(host);
+      return () => {
+        app.dispose();
+        host.remove();
+      };
+    },
+  },
+  {
+    name: "nexus keyed reactive fields",
+    mount() {
+      const fixture = createNexusFixture();
+      return fixture.dispose;
+    },
+  },
+];
 
 const createReactFixture = (): Fixture => {
   const host = createHost();
@@ -385,16 +476,45 @@ function summarize(
   };
 }
 
-function measureMount(framework: Framework): Measurement {
-  for (let index = 0; index < 3; index++) framework.create().dispose();
-  const samples: number[] = [];
-  for (let index = 0; index < 20; index++) {
-    const start = performance.now();
-    const fixture = framework.create();
-    samples.push(performance.now() - start);
-    fixture.dispose();
+function measureFrameworkMounts(): Map<Framework, Measurement> {
+  const samples = new Map(frameworks.map((framework) => [framework, [] as number[]]));
+  for (const framework of frameworks) {
+    for (let index = 0; index < 10; index++) framework.create().dispose();
   }
-  return summarize(framework.name, "mount 1,000 rows", samples);
+  const orders = permutations(frameworks);
+  for (const order of [...orders, ...orders]) {
+    for (const framework of order) {
+      const start = performance.now();
+      const fixture = framework.create();
+      samples.get(framework)!.push(performance.now() - start);
+      fixture.dispose();
+    }
+  }
+  return new Map(
+    frameworks.map((framework) => [
+      framework,
+      summarize(framework.name, "mount 1,000 rows", samples.get(framework)!),
+    ])
+  );
+}
+
+function measureMountVariants(): Measurement[] {
+  const samples = new Map(mountVariants.map((variant) => [variant, [] as number[]]));
+  for (const variant of mountVariants) {
+    for (let index = 0; index < 40; index++) variant.mount()();
+  }
+  const orders = permutations(mountVariants);
+  for (const order of [...orders, ...orders]) {
+    for (const variant of order) {
+      const start = performance.now();
+      const dispose = variant.mount();
+      samples.get(variant)!.push(performance.now() - start);
+      dispose();
+    }
+  }
+  return mountVariants.map((variant) =>
+    summarize("mount diagnostic", variant.name, samples.get(variant)!)
+  );
 }
 
 function measureUpdate(
@@ -417,10 +537,11 @@ function measureUpdate(
 
 window.runRendererComparison = () => {
   const measurements: Measurement[] = [];
+  for (const framework of frameworks) validateFramework(framework);
+  const mountMeasurements = measureFrameworkMounts();
   for (const framework of frameworks) {
-    validateFramework(framework);
     measurements.push(
-      measureMount(framework),
+      mountMeasurements.get(framework)!,
       measureUpdate(framework, "replace one row", 80, (fixture, version) =>
         fixture.replaceMiddle(version)
       ),
@@ -435,7 +556,12 @@ window.runRendererComparison = () => {
       )
     );
   }
-  return { userAgent: navigator.userAgent, rows, measurements };
+  return {
+    userAgent: navigator.userAgent,
+    rows,
+    measurements,
+    mountDiagnostics: measureMountVariants(),
+  };
 };
 
 output.textContent = "Ready. Run with npm run benchmark:compare.";
