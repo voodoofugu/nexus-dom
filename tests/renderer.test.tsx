@@ -146,6 +146,40 @@ describe("nexus-dom rendering model", () => {
     expect(batchContext?.meta?.nexusDOM.list.operations).toHaveLength(3);
   });
 
+  it("dispatches row and changed-field subscriptions independently", () => {
+    const app = createApp({
+      state: { items: [{ id: 1, label: "First" }] },
+    });
+    const host = document.createElement("div");
+    const rowListener = vi.fn();
+    const idListener = vi.fn();
+    const labelListener = vi.fn();
+
+    function Subscribed({ item }: { item: LiveItem<{ id: number; label: string }> }) {
+      onCleanup(item.subscribe(rowListener));
+      onCleanup(item.id.subscribe(idListener));
+      onCleanup(item.label.subscribe(labelListener));
+      return <span>{item.label}</span>;
+    }
+
+    const root = app.render(
+      app.$.items.each(
+        (item) => item.id,
+        ($item) => <Subscribed item={$item} />
+      ),
+      host,
+      { schedule: "manual" }
+    );
+
+    app.list("items").replace(0, { id: 1, label: "Updated" });
+    root.flush();
+
+    expect(rowListener).toHaveBeenCalledOnce();
+    expect(idListener).not.toHaveBeenCalled();
+    expect(labelListener).toHaveBeenCalledOnce();
+    expect(host.textContent).toBe("Updated");
+  });
+
   it("uses a longest increasing subsequence to minimize keyed moves", () => {
     const store = createNexus({
       state: {

@@ -112,6 +112,7 @@ const readField = (value: unknown, property: PropertyKey) =>
 
 class FieldLiveValue<T, C> implements LiveValue<unknown, C> {
   readonly [LIVE_VALUE] = true as const;
+  private listeners: MutableListeners<unknown, C>;
 
   constructor(
     private readonly source: LiveValue<T, C>,
@@ -123,13 +124,40 @@ class FieldLiveValue<T, C> implements LiveValue<unknown, C> {
   }
 
   subscribe(listener: LiveListener<unknown, C>) {
-    let current = this.get();
-    return this.source.subscribe((value, context) => {
-      const next = readField(value, this.property);
-      if (Object.is(current, next)) return;
-      current = next;
-      listener(next, context);
-    });
+    const current = this.listeners;
+    if (!current) this.listeners = listener;
+    else if (current instanceof Set) current.add(listener);
+    else this.listeners = new Set([current, listener]);
+
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      const listeners = this.listeners;
+      if (listeners === listener) {
+        this.listeners = undefined;
+      } else if (listeners instanceof Set) {
+        listeners.delete(listener);
+        if (listeners.size === 1) {
+          this.listeners = listeners.values().next().value;
+        }
+      }
+    };
+  }
+
+  update(previous: unknown, next: unknown, context?: C) {
+    const previousField = readField(previous, this.property);
+    const nextField = readField(next, this.property);
+    if (Object.is(previousField, nextField)) return;
+    const listeners = this.listeners;
+    if (!listeners) return;
+    if (listeners instanceof Set) {
+      for (const listener of Array.from(listeners)) {
+        listener(nextField, context);
+      }
+    } else {
+      listeners(nextField, context);
+    }
   }
 
   map<U>(
@@ -174,12 +202,12 @@ type MutableListeners<T, C> =
 
 interface FieldEntry<C> {
   property: PropertyKey;
-  value: LiveValue<unknown, C>;
+  value: FieldLiveValue<unknown, C>;
 }
 
 type MutableFields<C> =
   | FieldEntry<C>
-  | Map<PropertyKey, LiveValue<unknown, C>>
+  | Map<PropertyKey, FieldLiveValue<unknown, C>>
   | undefined;
 
 class MutableLiveValue<T, C> implements LiveValue<T, C> {
@@ -266,14 +294,24 @@ class MutableLiveValue<T, C> implements LiveValue<T, C> {
   }
 
   set(value: T, context?: C) {
-    if (Object.is(this[MUTABLE_CURRENT], value)) return;
+    const previous = this[MUTABLE_CURRENT];
+    if (Object.is(previous, value)) return;
     this[MUTABLE_CURRENT] = value;
     const listeners = this[MUTABLE_LISTENERS];
-    if (!listeners) return;
     if (listeners instanceof Set) {
       for (const listener of Array.from(listeners)) listener(value, context);
-    } else {
+    } else if (listeners) {
       listeners(value, context);
+    }
+
+    const fields = this[MUTABLE_FIELDS];
+    if (!fields) return;
+    if (fields instanceof Map) {
+      for (const field of fields.values()) {
+        field.update(previous, value, context);
+      }
+    } else {
+      fields.value.update(previous, value, context);
     }
   }
 }
