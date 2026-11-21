@@ -137,7 +137,7 @@ export function mountKeyedRegion<C>({
     const block: KeyedBlock = {
       key,
       item,
-      owner: new Owner(owner),
+      owner: new Owner(),
       nodes: [],
       live: mutable.live,
       setItem: mutable.set,
@@ -358,7 +358,14 @@ export function mountKeyedRegion<C>({
     return false;
   };
 
-  reconcile();
+  try {
+    reconcile();
+  } catch (error) {
+    for (const block of blocks.values()) removeBlock(block);
+    blocks.clear();
+    end.parentNode?.removeChild(end);
+    throw error;
+  }
 
   const unsubscribe = vnode.source.subscribe((items, context) => {
     nextItems = items;

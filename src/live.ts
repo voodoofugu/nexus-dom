@@ -59,101 +59,239 @@ function sameDependencies<S extends object>(
   return (left as (keyof S)[]).every((key) => rightKeys.includes(key));
 }
 
+class MappedLiveValue<T, U, C> implements LiveValue<U, C> {
+  readonly [LIVE_VALUE] = true as const;
+
+  constructor(
+    private readonly source: LiveValue<T, C>,
+    private readonly project: (value: T) => U,
+    private readonly isEqual: EqualityFn<U>
+  ) {}
+
+  get() {
+    return this.project(this.source.get());
+  }
+
+  subscribe(listener: LiveListener<U, C>) {
+    let current = this.project(this.source.get());
+    return this.source.subscribe((value, context) => {
+      const next = this.project(value);
+      if (this.isEqual(current, next)) return;
+      current = next;
+      listener(next, context);
+    });
+  }
+
+  map<V>(
+    nextProject: (value: U) => V,
+    nextEqual?: EqualityFn<V>
+  ): LiveValue<V, C> {
+    return mapLive(this, nextProject, nextEqual);
+  }
+
+  render(
+    project: (value: U) => Renderable,
+    options?: { key?: (value: U) => unknown }
+  ): DynamicVNode {
+    return renderLive(this, project, options);
+  }
+
+  each<Item, Key extends PropertyKey>(
+    this: LiveValue<readonly Item[], C>,
+    key: (item: Item) => Key,
+    project: (item: LiveItem<Item, C>) => Renderable
+  ): KeyedVNode {
+    return eachLive(this, key, project);
+  }
+}
+
+const readField = (value: unknown, property: PropertyKey) =>
+  value === null || value === undefined
+    ? undefined
+    : (value as Record<PropertyKey, unknown>)[property];
+
+class FieldLiveValue<T, C> implements LiveValue<unknown, C> {
+  readonly [LIVE_VALUE] = true as const;
+
+  constructor(
+    private readonly source: LiveValue<T, C>,
+    private readonly property: PropertyKey
+  ) {}
+
+  get() {
+    return readField(this.source.get(), this.property);
+  }
+
+  subscribe(listener: LiveListener<unknown, C>) {
+    let current = this.get();
+    return this.source.subscribe((value, context) => {
+      const next = readField(value, this.property);
+      if (Object.is(current, next)) return;
+      current = next;
+      listener(next, context);
+    });
+  }
+
+  map<U>(
+    project: (value: unknown) => U,
+    isEqual?: EqualityFn<U>
+  ): LiveValue<U, C> {
+    return mapLive(this, project, isEqual);
+  }
+
+  render(
+    project: (value: unknown) => Renderable,
+    options?: { key?: (value: unknown) => unknown }
+  ): DynamicVNode {
+    return renderLive(this, project, options);
+  }
+
+  each<Item, Key extends PropertyKey>(
+    this: LiveValue<readonly Item[], C>,
+    key: (item: Item) => Key,
+    project: (item: LiveItem<Item, C>) => Renderable
+  ): KeyedVNode {
+    return eachLive(this, key, project);
+  }
+}
+
 function mapLive<T, U, C>(
   source: LiveValue<T, C>,
   project: (value: T) => U,
   isEqual: EqualityFn<U> = Object.is
 ): LiveValue<U, C> {
-  return {
-    [LIVE_VALUE]: true,
-    get: () => project(source.get()),
-    subscribe(listener) {
-      let current = project(source.get());
-      return source.subscribe((value, context) => {
-        const next = project(value);
-        if (isEqual(current, next)) return;
-        current = next;
-        listener(next, context);
-      });
-    },
-    map<V>(nextProject: (value: U) => V, nextEqual?: EqualityFn<V>) {
-      return mapLive(this, nextProject, nextEqual);
-    },
-    render(
-      project: (value: U) => Renderable,
-      options?: { key?: (value: U) => unknown }
-    ) {
-      return renderLive(this, project, options);
-    },
-    each<Item, Key extends PropertyKey>(
-      this: LiveValue<readonly Item[], C>,
-      key: (item: Item) => Key,
-      project: (item: LiveItem<Item, C>) => Renderable
-    ) {
-      return eachLive(this, key, project);
-    },
-  };
+  return new MappedLiveValue(source, project, isEqual);
+}
+
+const MUTABLE_CURRENT = Symbol("nexus-dom.mutable-current");
+const MUTABLE_LISTENERS = Symbol("nexus-dom.mutable-listeners");
+const MUTABLE_FIELDS = Symbol("nexus-dom.mutable-fields");
+
+type MutableListeners<T, C> =
+  | LiveListener<T, C>
+  | Set<LiveListener<T, C>>
+  | undefined;
+
+interface FieldEntry<C> {
+  property: PropertyKey;
+  value: LiveValue<unknown, C>;
+}
+
+type MutableFields<C> =
+  | FieldEntry<C>
+  | Map<PropertyKey, LiveValue<unknown, C>>
+  | undefined;
+
+class MutableLiveValue<T, C> implements LiveValue<T, C> {
+  readonly [LIVE_VALUE] = true as const;
+  private [MUTABLE_CURRENT]: T;
+  private [MUTABLE_LISTENERS]: MutableListeners<T, C>;
+  private [MUTABLE_FIELDS]: MutableFields<C>;
+
+  constructor(initial: T) {
+    this[MUTABLE_CURRENT] = initial;
+  }
+
+  get() {
+    return this[MUTABLE_CURRENT];
+  }
+
+  subscribe(listener: LiveListener<T, C>) {
+    const current = this[MUTABLE_LISTENERS];
+    if (!current) this[MUTABLE_LISTENERS] = listener;
+    else if (current instanceof Set) current.add(listener);
+    else this[MUTABLE_LISTENERS] = new Set([current, listener]);
+
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      const listeners = this[MUTABLE_LISTENERS];
+      if (listeners === listener) {
+        this[MUTABLE_LISTENERS] = undefined;
+      } else if (listeners instanceof Set) {
+        listeners.delete(listener);
+        if (listeners.size === 1) {
+          this[MUTABLE_LISTENERS] = listeners.values().next().value;
+        }
+      }
+    };
+  }
+
+  map<U>(
+    project: (value: T) => U,
+    isEqual?: EqualityFn<U>
+  ): LiveValue<U, C> {
+    return mapLive(this, project, isEqual);
+  }
+
+  render(
+    project: (value: T) => Renderable,
+    options?: { key?: (value: T) => unknown }
+  ): DynamicVNode {
+    return renderLive(this, project, options);
+  }
+
+  each<Item, Key extends PropertyKey>(
+    this: LiveValue<readonly Item[], C>,
+    key: (item: Item) => Key,
+    project: (item: LiveItem<Item, C>) => Renderable
+  ): KeyedVNode {
+    return eachLive(this, key, project);
+  }
+
+  $field(property: PropertyKey): LiveValue<unknown, C> {
+    const fields = this[MUTABLE_FIELDS];
+    if (!fields) {
+      const field = new FieldLiveValue(this, property);
+      this[MUTABLE_FIELDS] = { property, value: field };
+      return field;
+    }
+    if (fields instanceof Map) {
+      let field = fields.get(property);
+      if (!field) {
+        field = new FieldLiveValue(this, property);
+        fields.set(property, field);
+      }
+      return field;
+    }
+    if (fields.property === property) return fields.value;
+
+    const field = new FieldLiveValue(this, property);
+    this[MUTABLE_FIELDS] = new Map([
+      [fields.property, fields.value],
+      [property, field],
+    ]);
+    return field;
+  }
+
+  set(value: T, context?: C) {
+    if (Object.is(this[MUTABLE_CURRENT], value)) return;
+    this[MUTABLE_CURRENT] = value;
+    const listeners = this[MUTABLE_LISTENERS];
+    if (!listeners) return;
+    if (listeners instanceof Set) {
+      for (const listener of Array.from(listeners)) listener(value, context);
+    } else {
+      listeners(value, context);
+    }
+  }
 }
 
 export function createMutableLiveItem<T, C>(initial: T) {
-  let current = initial;
-  const listeners = new Set<LiveListener<T, C>>();
-  const fields = new Map<PropertyKey, LiveValue<unknown, C>>();
-  const getField = (property: PropertyKey) => {
-    let field = fields.get(property);
-    if (!field) {
-      field = mapLive(live, (value) =>
-        value === null || value === undefined
-          ? undefined
-          : (value as Record<PropertyKey, unknown>)[property]
-      );
-      fields.set(property, field);
-    }
-    return field;
-  };
+  const mutable = new MutableLiveValue<T, C>(initial);
 
-  const live: LiveValue<T, C> = {
-    [LIVE_VALUE]: true,
-    get: () => current,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    map<U>(project: (value: T) => U, isEqual?: EqualityFn<U>) {
-      return mapLive(this, project, isEqual);
-    },
-    render(
-      project: (value: T) => Renderable,
-      options?: { key?: (value: T) => unknown }
-    ) {
-      return renderLive(this, project, options);
-    },
-    each<Item, Key extends PropertyKey>(
-      this: LiveValue<readonly Item[], C>,
-      key: (item: Item) => Key,
-      project: (item: LiveItem<Item, C>) => Renderable
-    ) {
-      return eachLive(this, key, project);
-    },
-  };
-
-  Object.defineProperty(live, "$field", {
-    value: (property: PropertyKey) => getField(property),
-  });
-
-  const item = new Proxy(live as LiveItem<T, C>, {
+  const item = new Proxy(mutable, {
     get(target, property, receiver) {
       if (property in target) return Reflect.get(target, property, receiver);
-      return getField(property);
+      return target.$field(property);
     },
-  });
+  }) as unknown as LiveItem<T, C>;
 
   return {
     live: item,
     set(value: T, context?: C) {
-      if (Object.is(current, value)) return;
-      current = value;
-      for (const listener of Array.from(listeners)) listener(value, context);
+      mutable.set(value, context);
     },
   };
 }

@@ -3,12 +3,12 @@ import { nexusDOMError } from "./errors.js";
 type Cleanup = () => void;
 
 export class Owner {
-  readonly children = new Set<Owner>();
-  readonly cleanups: Cleanup[] = [];
+  private children: Set<Owner> | undefined;
+  private cleanups: Cleanup[] | undefined;
   private disposed = false;
 
   constructor(readonly parent?: Owner) {
-    parent?.children.add(this);
+    if (parent) (parent.children ??= new Set()).add(this);
   }
 
   addCleanup(cleanup: Cleanup) {
@@ -16,21 +16,28 @@ export class Owner {
       cleanup();
       return;
     }
-    this.cleanups.push(cleanup);
+    (this.cleanups ??= []).push(cleanup);
   }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
 
-    for (const child of Array.from(this.children)) child.dispose();
-    this.children.clear();
-
-    for (let index = this.cleanups.length - 1; index >= 0; index--) {
-      this.cleanups[index]?.();
+    if (this.children) {
+      for (const child of Array.from(this.children)) child.dispose();
+      this.children.clear();
+      this.children = undefined;
     }
-    this.cleanups.length = 0;
-    this.parent?.children.delete(this);
+
+    const cleanups = this.cleanups;
+    if (cleanups) {
+      for (let index = cleanups.length - 1; index >= 0; index--) {
+        cleanups[index]?.();
+      }
+      cleanups.length = 0;
+      this.cleanups = undefined;
+    }
+    this.parent?.children?.delete(this);
   }
 }
 

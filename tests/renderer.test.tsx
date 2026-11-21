@@ -445,6 +445,39 @@ describe("nexus-dom rendering model", () => {
     expect(host.childNodes).toHaveLength(0);
   });
 
+  it("cleans completed keyed rows when a later initial row throws", () => {
+    const firstCleanup = vi.fn();
+    const app = createApp({
+      state: {
+        items: [
+          { id: 1, broken: false },
+          { id: 2, broken: true },
+        ],
+      },
+    });
+    const host = document.createElement("div");
+
+    function Row({ id, broken }: { id: number; broken: boolean }) {
+      if (id === 1) onCleanup(firstCleanup);
+      if (broken) throw new Error("keyed mount failed");
+      return <span>{id}</span>;
+    }
+
+    expect(() =>
+      app.render(
+        app.$.items.each(
+          (item) => item.id,
+          ($item) => (
+            <Row id={$item.id.get()} broken={$item.broken.get()} />
+          )
+        ),
+        host
+      )
+    ).toThrow("keyed mount failed");
+    expect(firstCleanup).toHaveBeenCalledOnce();
+    expect(host.childNodes).toHaveLength(0);
+  });
+
   it("keeps the previous branch and continues a commit after an update error", () => {
     const store = createNexus({ state: { branch: 1, sibling: "before" } });
     const $ = bind(store);
