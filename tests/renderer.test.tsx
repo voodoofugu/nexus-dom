@@ -926,6 +926,50 @@ describe("nexus-dom rendering model", () => {
     host.remove();
   });
 
+  it("moves and removes keyed rows with multiple root nodes", () => {
+    const app = createApp({
+      state: {
+        items: [
+          { id: 1, label: "First" },
+          { id: 2, label: "Second" },
+        ],
+      },
+    });
+    const host = document.createElement("div");
+    const root = app.render(
+      app.$.items.each(
+        (item) => item.id,
+        ($item) => (
+          <>
+            <span data-id={$item.id}>{$item.label}</span>
+            <i data-tail={$item.id}>tail</i>
+          </>
+        )
+      ),
+      host,
+      { schedule: "manual" }
+    );
+    const secondHead = host.querySelector('[data-id="2"]');
+    const secondTail = host.querySelector('[data-tail="2"]');
+
+    app.list("items").move(1, 0);
+    root.flush();
+
+    expect(Array.from(host.children)).toEqual([
+      secondHead,
+      secondTail,
+      host.querySelector('[data-id="1"]'),
+      host.querySelector('[data-tail="1"]'),
+    ]);
+
+    app.list("items").remove(0);
+    root.flush();
+
+    expect(secondHead?.isConnected).toBe(false);
+    expect(secondTail?.isConnected).toBe(false);
+    expect(host.children).toHaveLength(2);
+  });
+
   it("reads item fields that collide with LiveValue methods", () => {
     const app = createApp({
       state: { items: [{ id: 1, get: "Initial" }] },

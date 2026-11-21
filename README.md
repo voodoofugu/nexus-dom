@@ -252,6 +252,7 @@ npm run benchmark:browser
 npm run benchmark:compare
 npm run benchmark:compare:mobile
 npm run benchmark:compare:matrix
+npm run benchmark:heap
 npm run benchmark:bundle
 ```
 
@@ -333,6 +334,11 @@ WebKit exercises the `insertBefore()` fallback. All three preserve nexus-dom row
 identity, keyed order and focus in the tested reorder sequence. Heap diagnostics
 remain Chromium-only because they use CDP.
 
+`npm run benchmark:heap` runs a focused CDP sampling heap profile for static,
+keyed-static and one-/two-field keyed rows. It keeps source function names and
+reports retained sampled allocations per row, making it useful for locating
+the structures behind changes in the forced-GC totals.
+
 `npm run benchmark:compare:mobile` repeats the Chromium comparison with 4x CDP
 CPU throttling. This is a stable low-CPU regression workload, not a substitute
 for a real phone: it does not emulate mobile memory, thermals, GPU or network
@@ -345,8 +351,8 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `5.13 KB gzip` for
-low-level core exports, `6.06 KB` for `createApp`, `6.30 KB` for the complete
-main entry, and `7.92 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `5.21 KB gzip` for
+low-level core exports, `6.15 KB` for `createApp`, `6.39 KB` for the complete
+main entry, and `8.01 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

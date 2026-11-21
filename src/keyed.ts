@@ -12,12 +12,16 @@ import type { KeyedVNode, LiveItem, Renderable } from "./types.js";
 
 interface KeyedBlock {
   readonly key: PropertyKey;
-  nodes: Node[];
+  nodes: BlockNodes;
   owner: Owner;
-  item: unknown;
   live: LiveItem<unknown, unknown>;
-  setItem(item: unknown, context?: unknown): void;
+  controller: {
+    get(): unknown;
+    set(item: unknown, context?: unknown): void;
+  };
 }
+
+type BlockNodes = Node | Node[];
 
 interface MountKeyedOptions<C> {
   target: Node;
@@ -27,7 +31,19 @@ interface MountKeyedOptions<C> {
   renderInto(view: Renderable, target: Node, owner: Owner): void;
 }
 
-function removeNodes(nodes: readonly Node[]) {
+function firstNode(nodes: BlockNodes) {
+  return Array.isArray(nodes) ? nodes[0]! : nodes;
+}
+
+function lastNode(nodes: BlockNodes) {
+  return Array.isArray(nodes) ? nodes.at(-1)! : nodes;
+}
+
+function removeNodes(nodes: BlockNodes) {
+  if (!Array.isArray(nodes)) {
+    nodes.parentNode?.removeChild(nodes);
+    return;
+  }
   for (const node of nodes) node.parentNode?.removeChild(node);
 }
 
@@ -41,10 +57,11 @@ type StatefulParentNode = ParentNode & {
 };
 
 function moveBlockBefore(block: KeyedBlock, reference: Node) {
-  if (block.nodes.at(-1)?.nextSibling === reference) return;
+  if (lastNode(block.nodes).nextSibling === reference) return;
   const parent = reference.parentNode as StatefulParentNode | null;
   if (!parent) return;
-  for (const node of block.nodes) {
+  const nodes = Array.isArray(block.nodes) ? block.nodes : [block.nodes];
+  for (const node of nodes) {
     if (parent.moveBefore) parent.moveBefore(node, reference);
     else parent.insertBefore(node, reference);
   }
@@ -110,7 +127,8 @@ function longestIncreasingPositions(
 
 function blockContains(block: KeyedBlock, node: Node | null) {
   if (!node) return false;
-  return block.nodes.some(
+  const nodes = Array.isArray(block.nodes) ? block.nodes : [block.nodes];
+  return nodes.some(
     (root) =>
       root === node ||
       (root.nodeType === Node.ELEMENT_NODE && (root as Element).contains(node))
@@ -126,9 +144,13 @@ function renderNodes(
   const fragment = document.createDocumentFragment();
   renderInto(view, fragment, owner);
   if (fragment.childNodes.length === 0) fragment.appendChild(document.createTextNode(""));
+  const nodes =
+    fragment.childNodes.length === 1
+      ? fragment.firstChild!
+      : Array.from(fragment.childNodes);
   return {
     fragment,
-    nodes: Array.from(fragment.childNodes),
+    nodes,
   };
 }
 
@@ -159,8 +181,10 @@ export function mountKeyedRegion<C>({
     if (fragment.lastChild === previousLast) {
       fragment.appendChild(document.createTextNode(""));
     }
+    const first = (previousLast ? previousLast.nextSibling : fragment.firstChild)!;
+    if (!first.nextSibling) return first;
     const nodes: Node[] = [];
-    let node = previousLast ? previousLast.nextSibling : fragment.firstChild;
+    let node: Node | null = first;
     while (node) {
       nodes.push(node);
       node = node.nextSibling;
@@ -172,12 +196,11 @@ export function mountKeyedRegion<C>({
     const mutable = createMutableLiveItem<unknown, unknown>(item);
     const block: KeyedBlock = {
       key,
-      item,
       // Blocks are disposed by the keyed region, but retain its error scope.
       owner: new Owner(owner, false),
-      nodes: [],
+      nodes: end,
       live: mutable.live,
-      setItem: mutable.set,
+      controller: mutable.controller,
     };
     try {
       const view = vnode.project(block.live);
@@ -218,9 +241,8 @@ export function mountKeyedRegion<C>({
       if (!block) {
         block = createBlock(key, item);
         blocks.set(key, block);
-      } else if (!Object.is(block.item, item)) {
-        block.item = item;
-        block.setItem(item, context);
+      } else if (!Object.is(block.controller.get(), item)) {
+        block.controller.set(item, context);
       }
       nextBlocks.push(block);
     });
@@ -254,7 +276,9 @@ export function mountKeyedRegion<C>({
     for (let index = nextBlocks.length - 1; index >= 0; index--) {
       const block = nextBlocks[index];
       if (!block) continue;
-      const reference = nextBlocks[index + 1]?.nodes[0] ?? end;
+      const reference = nextBlocks[index + 1]
+        ? firstNode(nextBlocks[index + 1]!.nodes)
+        : end;
       if (positions[index] === -1 || !stablePositions.has(index)) {
         moveBlockBefore(block, reference);
       }
@@ -308,12 +332,14 @@ export function mountKeyedRegion<C>({
         inserted.push(block);
       }
       currentBlocks.splice(operation.index, 0, ...inserted);
-      let reference = currentBlocks[operation.index + inserted.length]?.nodes[0] ?? end;
+      let reference = currentBlocks[operation.index + inserted.length]
+        ? firstNode(currentBlocks[operation.index + inserted.length]!.nodes)
+        : end;
       for (let index = inserted.length - 1; index >= 0; index--) {
         const block = inserted[index];
         if (!block) continue;
         moveBlockBefore(block, reference);
-        reference = block.nodes[0] ?? reference;
+        reference = firstNode(block.nodes);
       }
       return true;
     }
@@ -367,7 +393,9 @@ export function mountKeyedRegion<C>({
       const activeElement = document.activeElement;
       if (!parent?.moveBefore && blockContains(block, activeElement)) {
         if (operation.from > operation.to) {
-          let reference = currentBlocks[operation.from + 1]?.nodes[0] ?? end;
+          let reference = currentBlocks[operation.from + 1]
+            ? firstNode(currentBlocks[operation.from + 1]!.nodes)
+            : end;
           for (
             let index = operation.from - 1;
             index >= operation.to;
@@ -376,10 +404,10 @@ export function mountKeyedRegion<C>({
             const shifted = currentBlocks[index];
             if (!shifted) continue;
             moveBlockBefore(shifted, reference);
-            reference = shifted.nodes[0] ?? reference;
+            reference = firstNode(shifted.nodes);
           }
         } else {
-          const reference = block.nodes[0] ?? end;
+          const reference = firstNode(block.nodes);
           for (
             let index = operation.from + 1;
             index <= operation.to;
@@ -395,7 +423,9 @@ export function mountKeyedRegion<C>({
       }
       currentBlocks.splice(operation.from, 1);
       currentBlocks.splice(operation.to, 0, block);
-      const reference = currentBlocks[operation.to + 1]?.nodes[0] ?? end;
+      const reference = currentBlocks[operation.to + 1]
+        ? firstNode(currentBlocks[operation.to + 1]!.nodes)
+        : end;
       moveBlockBefore(block, reference);
       return true;
     }
@@ -414,8 +444,7 @@ export function mountKeyedRegion<C>({
       if (!previous || !hasListOperationPayload(operation)) return false;
       const key = vnode.key(item);
       if (key === previous.key) {
-        previous.item = item;
-        previous.setItem(item, context);
+        previous.controller.set(item, context);
         return true;
       }
       if (blocks.has(key)) return false;
@@ -425,7 +454,9 @@ export function mountKeyedRegion<C>({
       const replacement = createBlock(key, item);
       blocks.set(key, replacement);
       currentBlocks[operation.index] = replacement;
-      const reference = currentBlocks[operation.index + 1]?.nodes[0] ?? end;
+      const reference = currentBlocks[operation.index + 1]
+        ? firstNode(currentBlocks[operation.index + 1]!.nodes)
+        : end;
       moveBlockBefore(replacement, reference);
       return true;
     }

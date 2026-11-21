@@ -160,6 +160,7 @@ try {
       for (const variant of [
         "direct DOM",
         "static JSX",
+        "keyed static fields",
         "reactive keyed (1 field)",
         "reactive keyed (2 fields)",
         "React",

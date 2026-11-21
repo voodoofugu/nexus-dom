@@ -53,6 +53,7 @@ declare global {
       variant:
         | "direct DOM"
         | "static JSX"
+        | "keyed static fields"
         | "reactive keyed (1 field)"
         | "reactive keyed (2 fields)"
         | "React"
@@ -454,6 +455,26 @@ window.mountMemoryFixture = (variant, count) => {
     );
     disposeMemoryFixture = () => {
       root.dispose();
+      host.remove();
+    };
+  } else if (variant === "keyed static fields") {
+    const app = createApp({ state: { items } });
+    app.render(
+      app.$.items.each(
+        (item) => item.id,
+        ($item) => {
+          const item = $item.get();
+          return jsx("span", {
+            "data-id": item.id,
+            children: item.label,
+          });
+        }
+      ),
+      host,
+      { schedule: "manual" }
+    );
+    disposeMemoryFixture = () => {
+      app.dispose();
       host.remove();
     };
   } else if (

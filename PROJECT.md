@@ -144,7 +144,7 @@ lifecycle instead of another reactive runtime to coordinate.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `7.92 KB gzip`; actual application cost still depends on imported APIs
+  about `8.01 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -155,12 +155,15 @@ lifecycle instead of another reactive runtime to coordinate.
    Solid and `16.0 ms` for Preact Signals. This excludes network loading and is
    not a full cold-navigation metric; p95 and other browsers still matter.
 2. **Per-row allocation.** Every keyed row owns an Owner, mutable LiveItem,
-   Proxy, field storage and subscriptions. Lazy Owner storage, shared LiveValue
-   prototypes, specialized field values and single-entry listener/field storage
-   plus direct field dispatch reduced two-field rows from roughly `2,247` to
-   `1,287 B/row`; one-field rows use about `979 B/row`. This remains above
-   Preact Signals (`~755 B`) and Solid (`~557 B`), so binding cleanup structures
-   are the next profiling target.
+   Proxy, field storage and subscriptions. A focused sampling heap benchmark now
+   separates keyed-static infrastructure from one and two DOM bindings. Single
+   cleanup/field storage, a shared Proxy handler and scheduler token, a
+   prototype row controller, and scalar storage for single-node rows reduced
+   one-field rows from roughly `979` to `682 B/row` and two-field rows from
+   `1,287` to `992 B/row`. The same run measured keyed-static infrastructure at
+   `308 B/row`, Preact Signals at `755 B/row` and Solid at `557 B/row`. The
+   remaining gap to Solid is primarily binding/subscription state rather than
+   retained leaks; disposal still returns to baseline.
 3. **Control-flow ergonomics.** The plain `when(...)` helper now covers boolean
    branches without a component-like primitive. Test it and `.render(...)` in a
    real application before deciding whether an optional transform or controlled
@@ -187,9 +190,9 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `5.13 KB
-gzip` for core, `6.06 KB` for `createApp`, and `6.30 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `7.92 KB gzip` when the
+The isolated Rollup/Terser ESM benchmark currently measures roughly `5.21 KB
+gzip` for core, `6.15 KB` for `createApp`, and `6.39 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `8.01 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

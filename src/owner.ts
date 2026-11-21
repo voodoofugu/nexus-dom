@@ -5,7 +5,7 @@ type ErrorHandler = (error: unknown) => void;
 
 export class Owner {
   private children: Set<Owner> | undefined;
-  private cleanups: Cleanup[] | undefined;
+  private cleanups: Cleanup | Cleanup[] | undefined;
   private disposed = false;
   private errorHandler: ErrorHandler | undefined;
 
@@ -18,7 +18,10 @@ export class Owner {
       cleanup();
       return;
     }
-    (this.cleanups ??= []).push(cleanup);
+    const cleanups = this.cleanups;
+    if (!cleanups) this.cleanups = cleanup;
+    else if (Array.isArray(cleanups)) cleanups.push(cleanup);
+    else this.cleanups = [cleanups, cleanup];
   }
 
   setErrorHandler(handler: ErrorHandler) {
@@ -49,13 +52,13 @@ export class Owner {
     }
 
     const cleanups = this.cleanups;
-    if (cleanups) {
+    if (Array.isArray(cleanups)) {
       for (let index = cleanups.length - 1; index >= 0; index--) {
         cleanups[index]?.();
       }
       cleanups.length = 0;
-      this.cleanups = undefined;
-    }
+    } else cleanups?.();
+    this.cleanups = undefined;
     this.parent?.children?.delete(this);
   }
 }

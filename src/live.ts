@@ -116,7 +116,7 @@ class FieldLiveValue<T, C> implements LiveValue<unknown, C> {
 
   constructor(
     private readonly source: LiveValue<T, C>,
-    private readonly property: PropertyKey
+    readonly property: PropertyKey
   ) {}
 
   get() {
@@ -200,13 +200,8 @@ type MutableListeners<T, C> =
   | Set<LiveListener<T, C>>
   | undefined;
 
-interface FieldEntry<C> {
-  property: PropertyKey;
-  value: FieldLiveValue<unknown, C>;
-}
-
 type MutableFields<C> =
-  | FieldEntry<C>
+  | FieldLiveValue<unknown, C>
   | Map<PropertyKey, FieldLiveValue<unknown, C>>
   | undefined;
 
@@ -272,7 +267,7 @@ class MutableLiveValue<T, C> implements LiveValue<T, C> {
     const fields = this[MUTABLE_FIELDS];
     if (!fields) {
       const field = new FieldLiveValue(this, property);
-      this[MUTABLE_FIELDS] = { property, value: field };
+      this[MUTABLE_FIELDS] = field;
       return field;
     }
     if (fields instanceof Map) {
@@ -283,11 +278,11 @@ class MutableLiveValue<T, C> implements LiveValue<T, C> {
       }
       return field;
     }
-    if (fields.property === property) return fields.value;
+    if (fields.property === property) return fields;
 
     const field = new FieldLiveValue(this, property);
     this[MUTABLE_FIELDS] = new Map([
-      [fields.property, fields.value],
+      [fields.property, fields],
       [property, field],
     ]);
     return field;
@@ -311,26 +306,31 @@ class MutableLiveValue<T, C> implements LiveValue<T, C> {
         field.update(previous, value, context);
       }
     } else {
-      fields.value.update(previous, value, context);
+      fields.update(previous, value, context);
     }
   }
 }
 
+const mutableItemProxyHandler: ProxyHandler<
+  MutableLiveValue<unknown, unknown>
+> = {
+  get(target, property, receiver) {
+    if (property in target) return Reflect.get(target, property, receiver);
+    return target.$field(property);
+  },
+};
+
 export function createMutableLiveItem<T, C>(initial: T) {
   const mutable = new MutableLiveValue<T, C>(initial);
 
-  const item = new Proxy(mutable, {
-    get(target, property, receiver) {
-      if (property in target) return Reflect.get(target, property, receiver);
-      return target.$field(property);
-    },
-  }) as unknown as LiveItem<T, C>;
+  const item = new Proxy(
+    mutable,
+    mutableItemProxyHandler as ProxyHandler<MutableLiveValue<T, C>>
+  ) as unknown as LiveItem<T, C>;
 
   return {
     live: item,
-    set(value: T, context?: C) {
-      mutable.set(value, context);
-    },
+    controller: mutable,
   };
 }
 

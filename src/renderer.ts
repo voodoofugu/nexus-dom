@@ -40,16 +40,15 @@ export function createDOMRenderer<C = unknown>(
     owner: Owner,
     write: (value: unknown, previous: unknown) => void
   ) => {
-    const token = {};
     let active = true;
     let current = live.get();
     let next = current;
     write(current, undefined);
 
-    const unsubscribe = live.subscribe((value, context) => {
+    const listener = (value: unknown, context?: unknown) => {
       next = value;
       scheduler.enqueue(
-        token,
+        listener,
         () => {
           if (!active) return;
           const previous = current;
@@ -59,11 +58,12 @@ export function createDOMRenderer<C = unknown>(
         context as C | undefined,
         (error) => owner.handleError(error)
       );
-    });
+    };
+    const unsubscribe = live.subscribe(listener);
 
     owner.addCleanup(() => {
       active = false;
-      scheduler.cancel(token);
+      scheduler.cancel(listener);
       unsubscribe();
     });
   };
