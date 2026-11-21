@@ -16,6 +16,13 @@ export type {
   Source,
   UpdateContext,
 } from "nexus-state";
+export { createApp } from "./app.js";
+export type {
+  AppActsCreate,
+  AppRefs,
+  NexusDOMApp,
+  RefValue,
+} from "./app.js";
 export { bind, createLiveSelector, isLiveValue } from "./live.js";
 export { onCleanup } from "./owner.js";
 export { render } from "./render.js";

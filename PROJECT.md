@@ -26,6 +26,11 @@ caches) the reactive view of Nexus state, while `render(view, target)` owns the
 renderer instance. `createDOMRenderer` is a low-level escape hatch rather than a
 required setup step.
 
+`createApp({ state, refs, acts })` is the primary integrated facade. It creates
+Nexus and bindings internally, exposes reactive values under `$`, non-reactive
+`{ current }` cells under `refs`, actions under `acts`, and owns the convenient
+`app.render(...)` entry point.
+
 ## Current boundaries
 
 - Browser DOM only.
@@ -38,6 +43,11 @@ required setup step.
 - Keyed arrays use `liveArray.each(key, project)` rather than a component-like
   `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
   changed values rerender only their keyed row.
+- Keyed blocks retain their actual top-level nodes. No item comments, wrapper
+  elements or custom Nexus attributes are injected into user markup.
+- DOM block references remain private renderer ownership. They are not stored in
+  Nexus state, because one store may feed several roots and DOM resources must
+  follow root disposal. `app.refs` is reserved for explicit user runtime values.
 - `nexus-state` is a regular dependency and the default data model. Its core API
   is re-exported so applications can install and import only `nexus-dom`; the
   small structural `NexusSource` contract remains available for future adapters.
@@ -60,7 +70,9 @@ required setup step.
 
 Microbenchmarks are regression tools, not marketing evidence. Meaningful comparisons must use production browser builds and equal behavior. Measure initial mount, one-of-many updates, bulk updates, structural list changes, branch replacement, event storms, cleanup, heap retention and bundle size. Direct DOM is the lower bound; React, Preact Signals and Solid are comparison points once the model supports equivalent structural behavior.
 
-The first jsdom list benchmark strongly favors keyed updates when one row changes,
-but favors naive rebuilding for a complete 1,000-row reversal. Preserve this
-result as a design constraint and verify it in a real browser before optimizing
-around jsdom behavior.
+The first automated Headless Chrome benchmark covers one-row updates, adjacent
+swap, last-to-first and full reverse with forced layout. Keyed rendering won the
+targeted and small reorder cases; after removing per-item comment anchors, full
+reverse was roughly equal to naive rebuilding on the first local run. Keep the
+jsdom discrepancy as evidence that browser measurements, identity semantics and
+multiple reorder shapes all matter.

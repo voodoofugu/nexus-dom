@@ -36,6 +36,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "benchmark": "vitest bench --run",
+    "benchmark:browser": "node benchmarks/browser/run.mjs",
+    "benchmark:browser:dev": "vite --config benchmarks/browser/vite.config.ts",
     "check": "npm run typecheck && npm run test && npm run build && npm run example:build"
   },
   "dependencies": {
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "jsdom": "^29.1.1",
+    "playwright-core": "^1.65.1",
     "typescript": "^5.6.2",
     "vite": "^8.0.0",
     "vitest": "4.1.12"

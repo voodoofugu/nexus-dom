@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { bind, createNexus, render } from "nexus-dom";
+import { createApp } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 import "./style.css";
 
@@ -9,7 +9,7 @@ interface Task {
   done: boolean;
 }
 
-const counter = createNexus({
+const app = createApp({
   state: {
     count: 0,
     step: 1,
@@ -20,7 +20,10 @@ const counter = createNexus({
     ] as Task[],
     nextTaskId: 3,
   },
-  acts: (get, set) => ({
+  refs: {
+    lastChangedTask: null as number | null,
+  },
+  acts: (get, set, refs) => ({
     increment() {
       set({ count: get("count") + get("step") });
     },
@@ -47,6 +50,7 @@ const counter = createNexus({
       set({ tasks: [...get("tasks")].reverse() });
     },
     toggleTask(id: number) {
+      refs.lastChangedTask.current = id;
       set({
         tasks: get("tasks").map((task) =>
           task.id === id ? { ...task, done: !task.done } : task
@@ -54,12 +58,16 @@ const counter = createNexus({
       });
     },
     removeTask(id: number) {
+      refs.lastChangedTask.current = id;
       set({ tasks: get("tasks").filter((task) => task.id !== id) });
+    },
+    changeStep(step: number) {
+      set({ step }, "changeStep");
     },
   }),
 });
 
-const $ = bind(counter);
+const { $, acts } = app;
 const doubled = $.count.map((count) => count * 2);
 const parity = $.count.map((count) => (count % 2 === 0 ? "even" : "odd"));
 const positive = $.count.map((count) => count >= 0);
@@ -91,18 +99,18 @@ function App() {
         <div class="controls">
           <button
             disabled={$.enabled.map((enabled) => !enabled)}
-            onClick={counter.acts.decrement}
+            onClick={acts.decrement}
           >
             Decrease
           </button>
           <button
             class="primary"
             disabled={$.enabled.map((enabled) => !enabled)}
-            onClick={counter.acts.increment}
+            onClick={acts.increment}
           >
             Increase
           </button>
-          <button onClick={counter.acts.reset}>Reset</button>
+          <button onClick={acts.reset}>Reset</button>
         </div>
 
         <label class="step-control">
@@ -114,7 +122,7 @@ function App() {
             value={$.step}
             onInput={(event) => {
               const input = event.currentTarget as HTMLInputElement;
-              counter.set({ step: Number(input.value) }, "changeStep");
+              acts.changeStep(Number(input.value));
             }}
           />
           <output>{$.step}</output>
@@ -139,7 +147,7 @@ function App() {
           ),
         )}
 
-        <button class="toggle" onClick={counter.acts.toggle}>
+        <button class="toggle" onClick={acts.toggle}>
           Toggle counter controls
         </button>
       </section>
@@ -151,8 +159,8 @@ function App() {
             <h2>Reactive task list</h2>
           </div>
           <div class="controls">
-            <button onClick={counter.acts.addTask}>Add task</button>
-            <button onClick={counter.acts.reverseTasks}>Reverse</button>
+            <button onClick={acts.addTask}>Add task</button>
+            <button onClick={acts.reverseTasks}>Reverse</button>
           </div>
         </div>
 
@@ -163,12 +171,12 @@ function App() {
               <li data-task={task.id} class={task.done ? "is-done" : ""}>
                 <button
                   class="task-toggle"
-                  onClick={() => counter.acts.toggleTask(task.id)}
+                  onClick={() => acts.toggleTask(task.id)}
                 >
                   {task.done ? "Restore" : "Complete"}
                 </button>
                 <span>{task.title}</span>
-                <button onClick={() => counter.acts.removeTask(task.id)}>
+                <button onClick={() => acts.removeTask(task.id)}>
                   Remove
                 </button>
               </li>
@@ -189,4 +197,4 @@ function App() {
   );
 }
 
-render(<App />, "#app", { onCommit: diagnostics.onCommit });
+app.render(<App />, "#app", { onCommit: diagnostics.onCommit });

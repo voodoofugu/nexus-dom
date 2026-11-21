@@ -4,8 +4,7 @@ import type { KeyedVNode, Renderable } from "./types.js";
 
 interface KeyedBlock {
   readonly key: PropertyKey;
-  readonly start: Comment;
-  readonly end: Comment;
+  nodes: Node[];
   owner: Owner;
   item: unknown;
 }
@@ -18,40 +17,36 @@ interface MountKeyedOptions<C> {
   renderInto(view: Renderable, target: Node, owner: Owner): void;
 }
 
-function removeBetween(start: Node, end: Node) {
-  let node = start.nextSibling;
-  while (node && node !== end) {
-    const next = node.nextSibling;
-    node.parentNode?.removeChild(node);
-    node = next;
-  }
+function removeNodes(nodes: readonly Node[]) {
+  for (const node of nodes) node.parentNode?.removeChild(node);
 }
 
 function removeBlock(block: KeyedBlock) {
   block.owner.dispose();
-  let node: Node | null = block.start;
-  while (node) {
-    const next: Node | null = node.nextSibling;
-    node.parentNode?.removeChild(node);
-    if (node === block.end) break;
-    node = next;
-  }
+  removeNodes(block.nodes);
 }
 
 function moveBlockBefore(block: KeyedBlock, reference: Node) {
-  if (block.end.nextSibling === reference) return;
+  if (block.nodes.at(-1)?.nextSibling === reference) return;
   const document = reference.ownerDocument ?? (reference as Document);
   const fragment = document.createDocumentFragment();
-  let node: Node | null = block.start;
-
-  while (node) {
-    const next: Node | null = node.nextSibling;
-    fragment.appendChild(node);
-    if (node === block.end) break;
-    node = next;
-  }
-
+  for (const node of block.nodes) fragment.appendChild(node);
   reference.parentNode?.insertBefore(fragment, reference);
+}
+
+function renderNodes(
+  document: Document,
+  view: Renderable,
+  owner: Owner,
+  renderInto: MountKeyedOptions<unknown>["renderInto"]
+) {
+  const fragment = document.createDocumentFragment();
+  renderInto(view, fragment, owner);
+  if (fragment.childNodes.length === 0) fragment.appendChild(document.createTextNode(""));
+  return {
+    fragment,
+    nodes: Array.from(fragment.childNodes),
+  };
 }
 
 export function mountKeyedRegion<C>({
@@ -62,9 +57,7 @@ export function mountKeyedRegion<C>({
   renderInto,
 }: MountKeyedOptions<C>) {
   const document = target.ownerDocument ?? (target as Document);
-  const start = document.createComment("nexus-each");
-  const end = document.createComment("/nexus-each");
-  target.appendChild(start);
+  const end = document.createTextNode("");
   target.appendChild(end);
 
   const token = {};
@@ -73,12 +66,18 @@ export function mountKeyedRegion<C>({
   let nextItems = vnode.source.get();
 
   const renderBlock = (block: KeyedBlock) => {
+    const reference = block.nodes.at(-1)?.nextSibling ?? end;
     block.owner.dispose();
-    removeBetween(block.start, block.end);
+    removeNodes(block.nodes);
     block.owner = new Owner(owner);
-    const fragment = document.createDocumentFragment();
-    renderInto(vnode.project(block.item), fragment, block.owner);
-    block.end.parentNode?.insertBefore(fragment, block.end);
+    const rendered = renderNodes(
+      document,
+      vnode.project(block.item),
+      block.owner,
+      renderInto
+    );
+    block.nodes = rendered.nodes;
+    reference.parentNode?.insertBefore(rendered.fragment, reference);
   };
 
   const createBlock = (
@@ -89,14 +88,16 @@ export function mountKeyedRegion<C>({
       key,
       item,
       owner: new Owner(owner),
-      start: document.createComment(`nexus-item:${String(key)}`),
-      end: document.createComment(`/nexus-item:${String(key)}`),
+      nodes: [],
     };
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(block.start);
-    renderInto(vnode.project(item), fragment, block.owner);
-    fragment.appendChild(block.end);
-    end.parentNode?.insertBefore(fragment, end);
+    const rendered = renderNodes(
+      document,
+      vnode.project(item),
+      block.owner,
+      renderInto
+    );
+    block.nodes = rendered.nodes;
+    end.parentNode?.insertBefore(rendered.fragment, end);
     return block;
   };
 
@@ -135,7 +136,7 @@ export function mountKeyedRegion<C>({
       const block = nextBlocks[index];
       if (!block) continue;
       moveBlockBefore(block, reference);
-      reference = block.start;
+      reference = block.nodes[0] ?? reference;
     }
   };
 

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nexus-dom browser benchmark</title>
+    <style>
+      :root { font-family: ui-monospace, monospace; color-scheme: dark; }
+      body { max-width: 72rem; margin: 0 auto; padding: 2rem; background: #0b0e14; color: #e5e9f0; }
+      button { padding: 0.7rem 1rem; font: inherit; }
+      pre { overflow: auto; padding: 1rem; background: #141923; border-radius: 0.5rem; }
+      #fixtures { position: fixed; left: -100000px; top: 0; width: 800px; }
+    </style>
+  </head>
+  <body>
+    <h1>nexus-dom browser benchmark</h1>
+    <p>Runs equivalent DOM workloads in the current browser. Results are not marketing claims.</p>
+    <button id="run">Run benchmarks</button>
+    <pre id="results">Waiting to run.</pre>
+    <div id="fixtures" aria-hidden="true"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

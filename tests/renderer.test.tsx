@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   bind,
+  createApp,
   createNexus,
   createDOMRenderer,
   onCleanup,
@@ -11,6 +12,37 @@ import {
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
+  it("creates a complete app with reactive state and non-reactive refs", () => {
+    const app = createApp({
+      state: { count: 0 },
+      refs: { runtimeCount: 0 },
+      acts: (get, set, refs) => ({
+        increment() {
+          refs.runtimeCount.current++;
+          set({ count: get("count") + 1 });
+        },
+      }),
+    });
+    const host = document.createElement("div");
+    const commits = vi.fn();
+    const root = app.render(<p>{app.$.count}</p>, host, {
+      schedule: "manual",
+      onCommit: commits,
+    });
+
+    app.refs.runtimeCount.current = 10;
+    root.flush();
+    expect(host.textContent).toBe("0");
+    expect(commits).not.toHaveBeenCalled();
+
+    app.acts.increment();
+    root.flush();
+
+    expect(host.textContent).toBe("1");
+    expect(app.refs.runtimeCount.current).toBe(11);
+    expect(app.nexus.get("count")).toBe(1);
+  });
+
   it("returns one stable binding for the same Nexus store", () => {
     const store = createNexus({ state: { count: 0 } });
 
@@ -341,6 +373,8 @@ describe("nexus-dom rendering model", () => {
 
     const firstNode = host.querySelector('[data-id="1"]');
     const secondNode = host.querySelector('[data-id="2"]');
+    const comments = document.createTreeWalker(host, NodeFilter.SHOW_COMMENT);
+    expect(comments.nextNode()).toBeNull();
     const [storedFirst, storedSecond] = store.get("items");
 
     store.set({ items: [storedSecond!, storedFirst!] });

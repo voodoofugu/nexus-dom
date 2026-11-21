@@ -9,32 +9,40 @@ The hypothesis is intentionally replaceable. The project may move toward compone
 ## Current experiment
 
 ```tsx
-import { bind, createNexus, render } from "nexus-dom";
+import { createApp } from "nexus-dom";
 
-const counter = createNexus({
+const app = createApp({
   state: { count: 0 },
-  acts: (get, set) => ({
+  refs: { canvas: null as HTMLCanvasElement | null },
+  acts: (get, set, refs) => ({
     increment() {
       set({ count: get("count") + 1 });
     },
   }),
 });
 
-const $ = bind(counter);
+const { $, acts, refs } = app;
 
 function Counter() {
   return (
-    <button onClick={counter.acts.increment}>
+    <button onClick={acts.increment}>
       Clicks: {$.count}
     </button>
   );
 }
 
-const root = render(<Counter />, "#app");
+const root = app.render(<Counter />, "#app");
 
 // Later:
 root.dispose();
 ```
+
+`createApp` creates Nexus state, stable bindings, non-reactive refs and the root
+render facade together. State under `$` updates attached DOM bindings. Values in
+`refs` are ordinary `{ current }` cells: changing them does not schedule DOM
+work, which makes them suitable for elements, canvas contexts, sockets and other
+runtime resources. The lower-level `createNexus`, `bind` and `render` exports
+remain available independently.
 
 `$.count` is a stable `LiveValue<number>`, not the current number. The renderer attaches it to one text node and subscribes that binding to the `count` key. The `Counter` function runs only during mounting.
 
@@ -43,7 +51,7 @@ Derived bindings use the existing top-level dependency model of `nexus-state`:
 ```tsx
 const total = $.$select((state) => state.price * state.quantity);
 
-render(<p>Total: {total}</p>, document.body);
+app.render(<p>Total: {total}</p>, document.body);
 ```
 
 Selectors dynamically resubscribe when the set of keys they read changes.
@@ -98,6 +106,11 @@ rerenders only that row. Items should be derived from the current Nexus state;
 `createNexus` clones its initial state, so external pre-construction object
 references are intentionally not treated as the stored values.
 
+Keyed blocks store their actual top-level nodes internally. They do not add
+`nexus-item` comments, wrappers or custom attributes to user markup. An empty
+text node is used only when a rendered row has no nodes and as the list's final
+insertion anchor.
+
 ## Implemented
 
 - automatic JSX runtime;
@@ -130,14 +143,17 @@ npm install
 npm run dev
 npm run check
 npm run benchmark
+npm run benchmark:browser
 ```
 
 `npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
 
 The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.
 
-The first keyed-list measurement exposes both sides of the trade-off: replacing
-one row among 1,000 is substantially cheaper than rebuilding all rows, while a
-worst-case reversal of all 1,000 owned regions is slower than a naive jsdom
-rebuild. The latter does not preserve DOM identity, events or ownership, so this
-is a useful implementation signal rather than an equal-semantics conclusion.
+The automated browser benchmark launches an installed Chrome/Chromium through
+`playwright-core` (set `CHROME_PATH` when it is not in a known location). It
+measures a targeted row update, adjacent swap, last-to-first move and complete
+reversal with forced layout. On the first local Headless Chrome run, keyed
+updates won the targeted and small-reorder cases while a full reversal was
+roughly equal to rebuilding. Results are printed with browser identity and must
+be treated as machine-specific evidence, not general performance claims.
