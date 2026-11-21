@@ -3,10 +3,16 @@ import type { CommitEvent, RendererOptions } from "./types.js";
 interface PendingUpdate<C> {
   run: () => void;
   context?: C;
+  handleError?: (error: unknown) => boolean;
 }
 
 export interface Scheduler<C> {
-  enqueue(token: object, run: () => void, context?: C): void;
+  enqueue(
+    token: object,
+    run: () => void,
+    context?: C,
+    handleError?: (error: unknown) => boolean
+  ): void;
   cancel(token: object): void;
   flush(): void;
 }
@@ -35,8 +41,18 @@ export function createScheduler<C>(
           updates++;
           if (update.context !== undefined) contexts.push(update.context);
         } catch (error) {
-          if (!options.onError) throw error;
-          options.onError(error);
+          let unhandled = error;
+          try {
+            if (update.handleError?.(error)) {
+              updates++;
+              if (update.context !== undefined) contexts.push(update.context);
+              continue;
+            }
+          } catch (boundaryError) {
+            unhandled = boundaryError;
+          }
+          if (options.onError) options.onError(unhandled);
+          else throw unhandled;
         }
       }
     }
@@ -47,10 +63,11 @@ export function createScheduler<C>(
   };
 
   return {
-    enqueue(token, run, context) {
+    enqueue(token, run, context, handleError) {
       pending.set(token, {
         run,
         ...(context === undefined ? {} : { context }),
+        ...(handleError === undefined ? {} : { handleError }),
       });
 
       if (schedule === "manual" || scheduled) return;

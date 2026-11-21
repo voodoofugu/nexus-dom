@@ -5,6 +5,7 @@ import {
   createApp,
   createNexus,
   createDOMRenderer,
+  ErrorBoundary,
   NexusDOMError,
   onCleanup,
   render,
@@ -511,6 +512,127 @@ describe("nexus-dom rendering model", () => {
     ).toThrow("keyed mount failed");
     expect(firstCleanup).toHaveBeenCalledOnce();
     expect(host.childNodes).toHaveLength(0);
+  });
+
+  it("renders a local fallback and cleans a failed initial subtree", () => {
+    const cleanup = vi.fn();
+    const onError = vi.fn();
+    const renderer = createDOMRenderer({ onError });
+    const host = document.createElement("div");
+
+    function Broken(): never {
+      onCleanup(cleanup);
+      throw new Error("initial boundary failure");
+    }
+
+    renderer.mount(
+      <ErrorBoundary
+        fallback={(error) => <p role="alert">{(error as Error).message}</p>}
+      >
+        <Broken />
+      </ErrorBoundary>,
+      host
+    );
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+      "initial boundary failure"
+    );
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("recovers a failed reactive subtree through the boundary reset", () => {
+    const store = createNexus({ state: { value: 1, sibling: "before" } });
+    const $ = bind(store);
+    const onError = vi.fn();
+    const renderer = createDOMRenderer({ schedule: "manual", onError });
+    const host = document.createElement("div");
+
+    renderer.mount(
+      [
+        <ErrorBoundary
+          fallback={(error, reset) => (
+            <button onClick={reset}>{(error as Error).message}</button>
+          )}
+        >
+          {$.value.render((value) => {
+            if (value < 0) throw new Error("reactive boundary failure");
+            return <strong>{value}</strong>;
+          })}
+        </ErrorBoundary>,
+        <span>{$.sibling}</span>,
+      ],
+      host
+    );
+
+    store.set({ value: -1, sibling: "after" });
+    renderer.flush();
+
+    expect(host.querySelector("strong")).toBeNull();
+    expect(host.querySelector("button")?.textContent).toBe(
+      "reactive boundary failure"
+    );
+    expect(host.querySelector("span")?.textContent).toBe("after");
+    expect(onError).not.toHaveBeenCalled();
+
+    store.set({ value: 2 });
+    renderer.flush();
+    host.querySelector("button")?.click();
+
+    expect(host.querySelector("button")).toBeNull();
+    expect(host.querySelector("strong")?.textContent).toBe("2");
+  });
+
+  it("propagates a failed fallback to the next boundary", () => {
+    const renderer = createDOMRenderer();
+    const host = document.createElement("div");
+
+    function Broken(): never {
+      throw new Error("child failed");
+    }
+
+    renderer.mount(
+      <ErrorBoundary
+        fallback={(error) => <p>Outer: {(error as Error).message}</p>}
+      >
+        <ErrorBoundary
+          fallback={() => {
+            throw new Error("fallback failed");
+          }}
+        >
+          <Broken />
+        </ErrorBoundary>
+      </ErrorBoundary>,
+      host
+    );
+
+    expect(host.textContent).toBe("Outer: fallback failed");
+  });
+
+  it("routes keyed row update errors through the surrounding boundary", () => {
+    const app = createApp({
+      state: { items: [{ id: 1, value: 1 }] },
+    });
+    const host = document.createElement("div");
+    const root = app.render(
+      <ErrorBoundary fallback={<p>List failed</p>}>
+        {app.$.items.each(
+          (item) => item.id,
+          (item) =>
+            item.render((value) => {
+              if (value.value < 0) throw new Error("row failed");
+              return <strong>{value.value}</strong>;
+            })
+        )}
+      </ErrorBoundary>,
+      host,
+      { schedule: "manual" }
+    );
+
+    app.list("items").replace(0, { id: 1, value: -1 });
+    root.flush();
+
+    expect(host.textContent).toBe("List failed");
   });
 
   it("keeps the previous branch and continues a commit after an update error", () => {

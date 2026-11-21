@@ -17,6 +17,8 @@ export type {
   UpdateContext,
 } from "nexus-state";
 export { createApp } from "./app.js";
+export { ErrorBoundary } from "./error-boundary.js";
+export type { ErrorBoundaryProps } from "./error-boundary.js";
 export { NexusDOMError } from "./errors.js";
 export type { NexusDOMErrorCode } from "./errors.js";
 export type {
@@ -44,6 +46,8 @@ export type {
   Component,
   DOMRenderer,
   DynamicVNode,
+  ErrorBoundaryFallback,
+  ErrorBoundaryVNode,
   EqualityFn,
   LiveListener,
   LiveItem,

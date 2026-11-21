@@ -10,6 +10,7 @@ import { Owner, withOwner } from "./owner.js";
 import { createScheduler } from "./scheduler.js";
 import type {
   DOMRenderer,
+  ErrorBoundaryFallback,
   LiveValue,
   MountedRoot,
   Renderable,
@@ -55,7 +56,8 @@ export function createDOMRenderer<C = unknown>(
           current = next;
           write(current, previous);
         },
-        context as C | undefined
+        context as C | undefined,
+        (error) => owner.handleError(error)
       );
     });
 
@@ -63,6 +65,74 @@ export function createDOMRenderer<C = unknown>(
       active = false;
       scheduler.cancel(token);
       unsubscribe();
+    });
+  };
+
+  const renderBoundary = (
+    target: Node,
+    owner: Owner,
+    children: Renderable,
+    fallback: ErrorBoundaryFallback
+  ) => {
+    const document = target.ownerDocument ?? (target as Document);
+    const boundaryOwner = new Owner(owner);
+    const end = document.createTextNode("");
+    target.appendChild(end);
+    let active = true;
+    let mounted = false;
+    let branchOwner: Owner | undefined;
+    let branchNodes: Node[] = [];
+
+    const replaceBranch = (view: Renderable, catchesErrors: boolean) => {
+      const nextOwner = new Owner(boundaryOwner);
+      const fragment = document.createDocumentFragment();
+      if (catchesErrors) nextOwner.setErrorHandler(showFallback);
+      try {
+        renderInto(view, fragment, nextOwner);
+      } catch (error) {
+        nextOwner.dispose();
+        throw error;
+      }
+
+      const nextNodes = Array.from(fragment.childNodes);
+      branchOwner?.dispose();
+      for (const node of branchNodes) node.parentNode?.removeChild(node);
+      branchOwner = nextOwner;
+      branchNodes = nextNodes;
+      end.parentNode?.insertBefore(fragment, end);
+    };
+
+    const reset = () => {
+      if (!active) return;
+      try {
+        replaceBranch(children, true);
+      } catch (error) {
+        try {
+          showFallback(error);
+        } catch (fallbackError) {
+          if (mounted && boundaryOwner.parent?.handleError(fallbackError)) return;
+          throw fallbackError;
+        }
+      }
+    };
+
+    function showFallback(error: unknown) {
+      if (!active) return;
+      const view =
+        typeof fallback === "function" ? fallback(error, reset) : fallback;
+      replaceBranch(view, false);
+    }
+
+    reset();
+    mounted = true;
+
+    boundaryOwner.addCleanup(() => {
+      active = false;
+      branchOwner?.dispose();
+      branchOwner = undefined;
+      for (const node of branchNodes) node.parentNode?.removeChild(node);
+      branchNodes = [];
+      end.parentNode?.removeChild(end);
     });
   };
 
@@ -152,7 +222,8 @@ export function createDOMRenderer<C = unknown>(
           if (!active) return;
           mountBranch();
         },
-        context as C | undefined
+        context as C | undefined,
+        (error) => owner.handleError(error)
       );
     });
 
@@ -165,6 +236,10 @@ export function createDOMRenderer<C = unknown>(
   };
 
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
+    if (vnode.kind === "error-boundary") {
+      renderBoundary(target, owner, vnode.children, vnode.fallback);
+      return;
+    }
     if (vnode.kind === "keyed") {
       mountKeyedRegion({ target, owner, vnode, scheduler, renderInto });
       return;

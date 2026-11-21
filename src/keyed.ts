@@ -173,7 +173,8 @@ export function mountKeyedRegion<C>({
     const block: KeyedBlock = {
       key,
       item,
-      owner: new Owner(),
+      // Blocks are disposed by the keyed region, but retain its error scope.
+      owner: new Owner(owner, false),
       nodes: [],
       live: mutable.live,
       setItem: mutable.set,
@@ -452,7 +453,8 @@ export function mountKeyedRegion<C>({
         nextOperation = undefined;
         if (!operation || !applyOperation(operation, context)) reconcile(context);
       },
-      context as C | undefined
+      context as C | undefined,
+      (error) => owner.handleError(error)
     );
   });
 

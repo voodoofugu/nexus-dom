@@ -93,12 +93,23 @@ export interface KeyedVNode {
   readonly project: (item: LiveItem<unknown, unknown>) => Renderable;
 }
 
+export type ErrorBoundaryFallback =
+  | Renderable
+  | ((error: unknown, reset: () => void) => Renderable);
+
+export interface ErrorBoundaryVNode {
+  readonly kind: "error-boundary";
+  readonly fallback: ErrorBoundaryFallback;
+  readonly children?: Renderable;
+}
+
 export type VNode =
   | ElementVNode
   | ComponentVNode
   | FragmentVNode
   | ShowVNode
   | DynamicVNode
+  | ErrorBoundaryVNode
   | KeyedVNode;
 
 export type Renderable =

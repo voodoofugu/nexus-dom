@@ -1,14 +1,16 @@
 import { nexusDOMError } from "./errors.js";
 
 type Cleanup = () => void;
+type ErrorHandler = (error: unknown) => void;
 
 export class Owner {
   private children: Set<Owner> | undefined;
   private cleanups: Cleanup[] | undefined;
   private disposed = false;
+  private errorHandler: ErrorHandler | undefined;
 
-  constructor(readonly parent?: Owner) {
-    if (parent) (parent.children ??= new Set()).add(this);
+  constructor(readonly parent?: Owner, tracked = true) {
+    if (parent && tracked) (parent.children ??= new Set()).add(this);
   }
 
   addCleanup(cleanup: Cleanup) {
@@ -17,6 +19,23 @@ export class Owner {
       return;
     }
     (this.cleanups ??= []).push(cleanup);
+  }
+
+  setErrorHandler(handler: ErrorHandler) {
+    this.errorHandler = handler;
+  }
+
+  handleError(error: unknown): boolean {
+    if (this.errorHandler) {
+      try {
+        this.errorHandler(error);
+        return true;
+      } catch (nextError) {
+        if (this.parent) return this.parent.handleError(nextError);
+        throw nextError;
+      }
+    }
+    return this.parent?.handleError(error) ?? false;
   }
 
   dispose() {
