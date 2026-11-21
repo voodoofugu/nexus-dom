@@ -142,13 +142,17 @@ lifecycle instead of another reactive runtime to coordinate.
 
 ### Current problems and likely solutions
 
-1. **Cold mount and tail latency.** Warm mount is now competitive, but first-run
-   cost and p95 need separate pages and allocation/GC profiling. Keep static JSX,
-   keyed ownership and field subscriptions as separate diagnostic layers.
+1. **Cold mount and tail latency.** A fresh-page, first-call measurement now
+   runs each renderer in a new page with balanced order. The current Chrome
+   median is about `13.2 ms` for nexus-dom, `15.4 ms` for React, `14.4 ms` for
+   Solid and `16.0 ms` for Preact Signals. This excludes network loading and is
+   not a full cold-navigation metric; p95 and other browsers still matter.
 2. **Per-row allocation.** Every keyed row owns an Owner, mutable LiveItem,
-   Proxy, field map and subscriptions. Measure retained bytes per 1,000/10,000
-   rows before considering lazy owners, flatter cleanup records or fewer wrapper
-   objects; do not pool mutable ownership without evidence.
+   Proxy, field storage and subscriptions. Lazy Owner storage, shared LiveValue
+   prototypes, specialized field values and single-entry listener/field storage
+   reduced two-field rows from roughly `2,247` to `1,506 B/row`; one-field rows
+   use about `1,027 B/row`. This remains above Preact Signals (`~755 B`) and
+   Solid (`~566 B`), so binding cleanup structures are the next profiling target.
 3. **Control-flow ergonomics.** Test `.render(...)` in a real application before
    deciding between the current compiler-free API, a small optional transform or
    a controlled component-rerun mode.
@@ -172,8 +176,8 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `4.16 KB
-gzip` for core, `5.07 KB` for `createApp`, and `5.27 KB` for the full main entry
+The isolated Rollup/Terser ESM benchmark currently measures roughly `4.49 KB
+gzip` for core, `5.42 KB` for `createApp`, and `5.61 KB` for the full main entry
 with `nexus-state` externalized. Track these separately from the playground
 bundle.
 
@@ -194,3 +198,9 @@ Initial keyed rows now share one staging `DocumentFragment` instead of creating
 and transferring one fragment per row. On the balanced Chrome mount benchmark,
 the A/B median improved from roughly `2.0 ms` to `1.6 ms` for 1,000 reactive
 rows at a cost of about `0.11 KB gzip`.
+
+The comparison runner also measures JS heap after forced GC at 1,000 and 10,000
+rows, and again after disposal. The current optimized one-field keyed model uses
+about `10 MB` for 10,000 mounted rows and returns to baseline after disposal;
+native DOM memory is not represented by `JSHeapUsedSize`, so direct-DOM values
+are only a JS-object baseline.

@@ -279,9 +279,14 @@ layout. Mount samples use equal warm-up and balanced execution orders; cold
 first mount is intentionally treated as a separate future measurement. The
 comparison is intended to expose trade-offs, not produce a single winner.
 
+The same runner measures the first mount in fresh pages and compares JS heap at
+1,000 and 10,000 mounted rows after forced garbage collection. It separates
+one-field and two-field keyed rows, then measures again after disposal. These
+heap values cover JavaScript objects, not complete native DOM memory.
+
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized. The current local measurement is approximately
-`4.16 KB gzip` for low-level core exports, `5.07 KB` for `createApp`, and
-`5.27 KB` for the complete main entry. The larger playground bundle also
+`4.49 KB gzip` for low-level core exports, `5.42 KB` for `createApp`, and
+`5.61 KB` for the complete main entry. The larger playground bundle also
 contains the example UI and diagnostics, so it is not a library-size
 measurement.
