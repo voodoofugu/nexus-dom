@@ -85,6 +85,12 @@ export interface DynamicVNode {
   readonly key?: (value: unknown) => unknown;
 }
 
+export interface TrackedViewVNode {
+  readonly kind: "tracked-view";
+  readonly source: NexusSource<Record<string, unknown>, unknown>;
+  readonly project: (state: Record<string, unknown>) => Renderable;
+}
+
 export interface KeyedVNode {
   readonly kind: "keyed";
   readonly source: LiveValue<readonly unknown[], unknown>;
@@ -109,6 +115,7 @@ export type VNode =
   | FragmentVNode
   | ShowVNode
   | DynamicVNode
+  | TrackedViewVNode
   | ErrorBoundaryVNode
   | KeyedVNode;
 

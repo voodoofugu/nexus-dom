@@ -75,6 +75,43 @@ code can safely expose or reuse it without creating duplicate wrappers.
 available for tests, custom scheduling and advanced integrations that need to
 mount several roots through the same renderer.
 
+### Tracked views with ordinary expressions
+
+`app.view(...)` creates an owned reactive region and passes the complete app
+scope into its callback. Reads from `state` are plain values and determine the
+region's top-level Nexus subscriptions dynamically:
+
+```tsx
+function Inspector() {
+  return app.view(({ state, $, acts, refs }) => {
+    const issue = state.issues.find(
+      (candidate) => candidate.id === state.selectedIssueId
+    );
+
+    return issue ? (
+      <aside ref={(node) => (refs.inspector.current = node)}>
+        <h2>{issue.title}</h2>
+        <button onClick={() => acts.closeIssue(issue.id)}>Close</button>
+      </aside>
+    ) : (
+      <p>Select an issue</p>
+    );
+  });
+}
+```
+
+The callback reruns through the renderer scheduler only when a state key it
+read changes. Dependency sets can change between runs. `$` remains available
+for direct text/property bindings and `.each(...)` remains the keyed collection
+path, so one region can mix ordinary expressions with fine-grained updates.
+Reading `acts` or `refs` does not subscribe the view.
+
+The current experiment atomically replaces the view's local DOM region after a
+rerun; it does not reconcile two arbitrary JSX results yet. Keep views small
+when DOM identity, selection or input state must survive, and use `$` or keyed
+rows for those hot paths. Update errors still follow owner cleanup and local
+`ErrorBoundary` propagation.
+
 `nexus-state` is a regular dependency and its framework-agnostic API is
 re-exported by `nexus-dom`, so applications only need to install and import from
 `nexus-dom`. `bind` still accepts the small structural `NexusSource` contract,
@@ -229,6 +266,8 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 - LIS-based general keyed reordering and exact context-driven list operations;
 - integrated app root and resource disposal through `app.dispose()`.
 - local owned error boundaries with fallback propagation and manual reset;
+- tracked `app.view(...)` regions with plain state expressions and injected
+  bindings, actions and refs;
 - SVG namespace support, including HTML descendants of `foreignObject`;
 - animation-frame scheduling for paint-aligned updates.
 
@@ -351,8 +390,8 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `5.21 KB gzip` for
-low-level core exports, `6.15 KB` for `createApp`, `6.39 KB` for the complete
-main entry, and `8.01 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `5.54 KB gzip` for
+low-level core exports, `6.53 KB` for `createApp`, `6.77 KB` for the complete
+main entry, and `8.34 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

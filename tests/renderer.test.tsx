@@ -47,6 +47,122 @@ describe("nexus-dom rendering model", () => {
     expect(app.nexus.get("count")).toBe(1);
   });
 
+  it("renders tracked views with plain state and the complete app scope", () => {
+    const app = createApp({
+      state: {
+        useCount: true,
+        count: 1,
+        label: "Ready",
+        unrelated: 0,
+      },
+      refs: { marker: "runtime" },
+      acts: (get, set) => ({
+        increment() {
+          set({ count: get("count") + 1 });
+        },
+      }),
+    });
+    const host = document.createElement("div");
+    let runs = 0;
+    const root = app.render(
+      app.view(({ state, $, acts, refs }) => {
+        runs++;
+        expect($).toBe(app.$);
+        expect(acts).toBe(app.acts);
+        expect(refs).toBe(app.refs);
+        return (
+          <button onClick={acts.increment} data-marker={refs.marker.current}>
+            {state.useCount ? state.count : state.label}
+          </button>
+        );
+      }),
+      host,
+      { schedule: "manual" }
+    );
+
+    expect(runs).toBe(1);
+    expect(host.textContent).toBe("1");
+    expect(host.querySelector("button")?.dataset.marker).toBe("runtime");
+
+    app.nexus.set({ unrelated: 1 });
+    root.flush();
+    expect(runs).toBe(1);
+
+    host.querySelector("button")?.click();
+    root.flush();
+    expect(runs).toBe(2);
+    expect(host.textContent).toBe("2");
+
+    app.nexus.set({ useCount: false });
+    app.nexus.set({ label: "Latest" });
+    root.flush();
+    expect(runs).toBe(3);
+    expect(host.textContent).toBe("Latest");
+
+    app.nexus.set({ count: 3 });
+    root.flush();
+    expect(runs).toBe(3);
+
+    app.nexus.set({ label: "Updated" });
+    root.flush();
+    expect(runs).toBe(4);
+    expect(host.textContent).toBe("Updated");
+  });
+
+  it("routes tracked view update errors through the surrounding boundary", () => {
+    const app = createApp({ state: { broken: false } });
+    const host = document.createElement("div");
+    const root = app.render(
+      <ErrorBoundary fallback={<p role="alert">View failed</p>}>
+        {app.view(({ state }) => {
+          if (state.broken) throw new Error("broken view");
+          return <strong>Working</strong>;
+        })}
+      </ErrorBoundary>,
+      host,
+      { schedule: "manual" }
+    );
+
+    app.nexus.set({ broken: true });
+    root.flush();
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+      "View failed"
+    );
+    expect(host.querySelector("strong")).toBeNull();
+  });
+
+  it("commits callback refs after replacing a tracked view branch", () => {
+    const app = createApp({
+      state: { selected: 1 },
+      refs: { button: null as HTMLButtonElement | null },
+    });
+    const host = document.createElement("div");
+    const root = app.render(
+      app.view(({ state, refs }) => (
+        <button
+          data-selected={state.selected}
+          ref={(node) => (refs.button.current = node as HTMLButtonElement | null)}
+        >
+          {state.selected}
+        </button>
+      )),
+      host,
+      { schedule: "manual" }
+    );
+    const first = host.querySelector("button");
+
+    expect(app.refs.button.current).toBe(first);
+
+    app.nexus.set({ selected: 2 });
+    root.flush();
+
+    const second = host.querySelector("button");
+    expect(second).not.toBe(first);
+    expect(app.refs.button.current).toBe(second);
+    expect(second?.dataset.selected).toBe("2");
+  });
+
   it("disposes every app root and setup resource", () => {
     const cleanup = vi.fn();
     const app = createApp({

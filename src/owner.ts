@@ -2,12 +2,14 @@ import { nexusDOMError } from "./errors.js";
 
 type Cleanup = () => void;
 type ErrorHandler = (error: unknown) => void;
+const MOUNTED = Symbol("nexus-dom.owner-mounted");
 
 export class Owner {
   private children: Set<Owner> | undefined;
   private cleanups: Cleanup | Cleanup[] | undefined;
   private disposed = false;
   private errorHandler: ErrorHandler | undefined;
+  private mounts: Cleanup | Cleanup[] | typeof MOUNTED | undefined;
 
   constructor(readonly parent?: Owner, tracked = true) {
     if (parent && tracked) (parent.children ??= new Set()).add(this);
@@ -22,6 +24,34 @@ export class Owner {
     if (!cleanups) this.cleanups = cleanup;
     else if (Array.isArray(cleanups)) cleanups.push(cleanup);
     else this.cleanups = [cleanups, cleanup];
+  }
+
+  addMount(mount: Cleanup) {
+    if (this.disposed) return;
+    if (this.mounts === MOUNTED) {
+      mount();
+      return;
+    }
+    const mounts = this.mounts;
+    if (!mounts) this.mounts = mount;
+    else if (Array.isArray(mounts)) mounts.push(mount);
+    else this.mounts = [mounts, mount];
+  }
+
+  isMounted() {
+    return this.mounts === MOUNTED;
+  }
+
+  mount() {
+    if (this.disposed || this.mounts === MOUNTED) return;
+    const mounts = this.mounts;
+    this.mounts = MOUNTED;
+    if (Array.isArray(mounts)) {
+      for (const mount of mounts) mount();
+    } else mounts?.();
+    if (this.children) {
+      for (const child of this.children) child.mount();
+    }
   }
 
   setErrorHandler(handler: ErrorHandler) {
@@ -44,6 +74,7 @@ export class Owner {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.mounts = undefined;
 
     if (this.children) {
       for (const child of Array.from(this.children)) child.dispose();

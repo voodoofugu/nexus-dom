@@ -210,6 +210,7 @@ export function mountKeyedRegion<C>({
         const rendered = renderNodes(document, view, block.owner, renderInto);
         block.nodes = rendered.nodes;
         end.parentNode?.insertBefore(rendered.fragment, end);
+        if (owner.isMounted()) block.owner.mount();
       }
     } catch (error) {
       block.owner.dispose();
@@ -217,6 +218,10 @@ export function mountKeyedRegion<C>({
     }
     return block;
   };
+
+  owner.addMount(() => {
+    for (const block of currentBlocks) block.owner.mount();
+  });
 
   const reconcile = (context?: unknown) => {
     const nextBlocks: KeyedBlock[] = [];

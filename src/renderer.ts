@@ -8,6 +8,7 @@ import {
 } from "./dom.js";
 import { Owner, withOwner } from "./owner.js";
 import { createScheduler } from "./scheduler.js";
+import { mountTrackedView } from "./view.js";
 import type {
   DOMRenderer,
   ErrorBoundaryFallback,
@@ -100,6 +101,7 @@ export function createDOMRenderer<C = unknown>(
       branchOwner = nextOwner;
       branchNodes = nextNodes;
       end.parentNode?.insertBefore(fragment, end);
+      if (boundaryOwner.isMounted()) nextOwner.mount();
     };
 
     const reset = () => {
@@ -205,6 +207,7 @@ export function createDOMRenderer<C = unknown>(
       branchOwner = nextOwner;
       branchNodes = nextNodes;
       end.parentNode?.insertBefore(fragment, end);
+      if (owner.isMounted()) nextOwner.mount();
     };
 
     mountBranch();
@@ -245,6 +248,11 @@ export function createDOMRenderer<C = unknown>(
       return;
     }
 
+    if (vnode.kind === "tracked-view") {
+      mountTrackedView({ target, owner, vnode, scheduler, renderInto });
+      return;
+    }
+
     if (vnode.kind === "dynamic") {
       renderRegion(target, owner, vnode.source, vnode.project, vnode.key);
       return;
@@ -280,8 +288,14 @@ export function createDOMRenderer<C = unknown>(
       if (property === "children" || property === "key") continue;
 
       if (property === "ref" && typeof value === "function") {
-        value(element);
-        owner.addCleanup(() => value(null));
+        let attached = false;
+        owner.addMount(() => {
+          attached = true;
+          value(element);
+        });
+        owner.addCleanup(() => {
+          if (attached) value(null);
+        });
         continue;
       }
 
@@ -350,6 +364,7 @@ export function createDOMRenderer<C = unknown>(
       }
       const nodes = Array.from(fragment.childNodes);
       container.appendChild(fragment);
+      owner.mount();
 
       let disposed = false;
       return {

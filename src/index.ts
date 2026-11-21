@@ -25,6 +25,7 @@ export type {
   AppActsCreate,
   AppRefs,
   AppSetupContext,
+  AppViewContext,
   NexusDOMApp,
   RefValue,
 } from "./app.js";
@@ -59,5 +60,6 @@ export type {
   RenderRoot,
   RendererOptions,
   ShowVNode,
+  TrackedViewVNode,
   VNode,
 } from "./types.js";

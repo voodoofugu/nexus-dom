@@ -31,6 +31,14 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 `{ current }` cells under `refs`, actions under `acts`, and owns the convenient
 `app.render(...)` entry point.
 
+`app.view(({ state, $, acts, refs }) => JSX)` is the first hybrid-rendering
+experiment. It tracks ordinary top-level state reads, reruns only the owned
+region through the renderer scheduler, and injects the complete application
+scope so the component tree does not have to transport state, actions or
+runtime refs. The current implementation replaces the local region atomically;
+fine-grained `$` bindings and keyed `.each(...)` remain the identity-preserving
+paths until local reconciliation is justified by dogfood evidence.
+
 ## Current boundaries
 
 - Browser DOM only.
@@ -97,6 +105,10 @@ memoization, but they do not reduce the physical work of a full reverse.
    or is a small transform/component rerun worth supporting bare JSX ternaries?
 8. Can keyed reordering preserve identity without making worst-case full-list
    permutations disproportionately expensive?
+9. Does `app.view(...)` make ordinary application code clear enough without a
+   compiler, and what is the smallest useful reconciliation boundary?
+10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
+    commands such as focus, rather than relying on scheduler timing?
 
 ## Current assessment
 
@@ -126,6 +138,9 @@ It is especially useful when focus, selection, element identity or explicit
 update provenance matters more than recreating component trees. `createApp`
 also gives existing Nexus users one integrated state, action, ref and render
 lifecycle instead of another reactive runtime to coordinate.
+`app.view(...)` makes that scope available at the rendering boundary, so plain
+tracked state, actions, fine-grained bindings and runtime refs do not need prop
+drilling or a provider hierarchy.
 
 ### Limitations
 
@@ -133,6 +148,9 @@ lifecycle instead of another reactive runtime to coordinate.
   value-dependent branches still require `.render(...)`. Bare reactive JSX
   expressions cannot work with one-shot components without a compiler or
   component reruns.
+- Tracked views support ordinary expressions but currently replace their whole
+  local branch after a relevant update. They need local reconciliation before
+  they can safely own focus-sensitive editor trees.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
   operations require `app.list(...)` metadata.
 - SSR, hydration, portals, suspense, transitions,
@@ -144,7 +162,7 @@ lifecycle instead of another reactive runtime to coordinate.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `8.01 KB gzip`; actual application cost still depends on imported APIs
+  about `8.34 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -159,15 +177,16 @@ lifecycle instead of another reactive runtime to coordinate.
    separates keyed-static infrastructure from one and two DOM bindings. Single
    cleanup/field storage, a shared Proxy handler and scheduler token, a
    prototype row controller, and scalar storage for single-node rows reduced
-   one-field rows from roughly `979` to `682 B/row` and two-field rows from
-   `1,287` to `992 B/row`. The same run measured keyed-static infrastructure at
-   `308 B/row`, Preact Signals at `755 B/row` and Solid at `557 B/row`. The
-   remaining gap to Solid is primarily binding/subscription state rather than
-   retained leaks; disposal still returns to baseline.
-3. **Control-flow ergonomics.** The plain `when(...)` helper now covers boolean
-   branches without a component-like primitive. Test it and `.render(...)` in a
-   real application before deciding whether an optional transform or controlled
-   component-rerun mode is still justified.
+   one-field rows from roughly `979` to `686 B/row` and two-field rows from
+   `1,287` to `996 B/row`. The current ref-mount lifecycle measures keyed-static
+   infrastructure at `313 B/row`, Preact Signals at `755 B/row` and Solid at
+   `566 B/row`. The remaining gap to Solid is primarily binding/subscription
+   state rather than retained leaks; disposal still returns to baseline.
+3. **Control-flow ergonomics.** The first dogfood workspace now uses tracked
+   `app.view(...)` regions for plain conditionals, array methods and derived
+   summaries while retaining `$` and `.each(...)` for hot identity-sensitive
+   paths. The next question is whether small local reconciliation can preserve
+   inputs and focus without turning the runtime into a general VDOM renderer.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -190,9 +209,9 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `5.21 KB
-gzip` for core, `6.15 KB` for `createApp`, and `6.39 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `8.01 KB gzip` when the
+The isolated Rollup/Terser ESM benchmark currently measures roughly `5.54 KB
+gzip` for core, `6.53 KB` for `createApp`, and `6.77 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `8.34 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 
@@ -217,7 +236,7 @@ rows at a cost of about `0.11 KB gzip`.
 
 The comparison runner also measures JS heap after forced GC at 1,000 and 10,000
 rows, and again after disposal. The current optimized one-field keyed model uses
-about `10 MB` for 10,000 mounted rows and returns to baseline after disposal;
+about `6.5 MiB` for 10,000 mounted rows and returns to baseline after disposal;
 native DOM memory is not represented by `JSHeapUsedSize`, so direct-DOM values
 are only a JS-object baseline.
 
