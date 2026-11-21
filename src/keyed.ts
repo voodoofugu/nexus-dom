@@ -113,6 +113,24 @@ export function mountKeyedRegion<C>({
   let active = true;
   let nextItems = vnode.source.get();
   let nextOperation: ListOperation | undefined;
+  let initialFragment: DocumentFragment | undefined =
+    document.createDocumentFragment();
+
+  const renderInitialNodes = (view: Renderable, blockOwner: Owner) => {
+    const fragment = initialFragment!;
+    const previousLast = fragment.lastChild;
+    renderInto(view, fragment, blockOwner);
+    if (fragment.lastChild === previousLast) {
+      fragment.appendChild(document.createTextNode(""));
+    }
+    const nodes: Node[] = [];
+    let node = previousLast ? previousLast.nextSibling : fragment.firstChild;
+    while (node) {
+      nodes.push(node);
+      node = node.nextSibling;
+    }
+    return nodes;
+  };
 
   const createBlock = (key: PropertyKey, item: unknown): KeyedBlock => {
     const mutable = createMutableLiveItem<unknown, unknown>(item);
@@ -124,20 +142,19 @@ export function mountKeyedRegion<C>({
       live: mutable.live,
       setItem: mutable.set,
     };
-    let rendered;
     try {
-      rendered = renderNodes(
-        document,
-        vnode.project(block.live),
-        block.owner,
-        renderInto
-      );
+      const view = vnode.project(block.live);
+      if (initialFragment) {
+        block.nodes = renderInitialNodes(view, block.owner);
+      } else {
+        const rendered = renderNodes(document, view, block.owner, renderInto);
+        block.nodes = rendered.nodes;
+        end.parentNode?.insertBefore(rendered.fragment, end);
+      }
     } catch (error) {
       block.owner.dispose();
       throw error;
     }
-    block.nodes = rendered.nodes;
-    end.parentNode?.insertBefore(rendered.fragment, end);
     return block;
   };
 
@@ -175,6 +192,13 @@ export function mountKeyedRegion<C>({
       if (nextKeys.has(key)) continue;
       removeBlock(block);
       blocks.delete(key);
+    }
+
+    if (initialFragment) {
+      end.parentNode?.insertBefore(initialFragment, end);
+      initialFragment = undefined;
+      currentBlocks = nextBlocks;
+      return;
     }
 
     const positions = nextBlocks.map(
