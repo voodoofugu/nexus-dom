@@ -33,7 +33,14 @@ required setup step.
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
 - No Virtual DOM or whole-tree reconciliation in the first experiment.
 - No claim of being universally faster: subscriptions, binding objects and cleanup have their own costs.
-- `Show` is the first structural experiment; keyed `For` remains deferred until branch ownership is validated.
+- `Show` established branch ownership; keyed lists now reuse the same owner and
+  cleanup model without introducing a component-like `<For>` primitive.
+- Keyed arrays use `liveArray.each(key, project)` rather than a component-like
+  `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
+  changed values rerender only their keyed row.
+- `nexus-state` is a regular dependency and the default data model. Its core API
+  is re-exported so applications can install and import only `nexus-dom`; the
+  small structural `NexusSource` contract remains available for future adapters.
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
 
 ## Validation questions
@@ -46,7 +53,14 @@ required setup step.
 6. At what point is local rerender/reconciliation simpler than more bindings?
 7. Is compiler-free `LiveValue.render(value => value ? A : B)` intuitive enough,
    or is a small transform/component rerun worth supporting bare JSX ternaries?
+8. Can keyed reordering preserve identity without making worst-case full-list
+   permutations disproportionately expensive?
 
 ## Benchmark policy
 
 Microbenchmarks are regression tools, not marketing evidence. Meaningful comparisons must use production browser builds and equal behavior. Measure initial mount, one-of-many updates, bulk updates, structural list changes, branch replacement, event storms, cleanup, heap retention and bundle size. Direct DOM is the lower bound; React, Preact Signals and Solid are comparison points once the model supports equivalent structural behavior.
+
+The first jsdom list benchmark strongly favors keyed updates when one row changes,
+but favors naive rebuilding for a complete 1,000-row reversal. Preserve this
+result as a design constraint and verify it in a real browser before optimizing
+around jsdom behavior.

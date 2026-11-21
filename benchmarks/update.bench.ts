@@ -1,6 +1,5 @@
-import { createNexus } from "nexus-state";
 import { bench, describe } from "vitest";
-import { bind, createDOMRenderer } from "nexus-dom";
+import { bind, createDOMRenderer, createNexus } from "nexus-dom";
 import { jsx } from "nexus-dom/jsx-runtime";
 
 describe("single binding update", () => {
@@ -61,6 +60,89 @@ describe("one update in 1,000 text nodes", () => {
     for (let index = 0; index < 1_000; index++) {
       const span = document.createElement("span");
       span.textContent = String(index === 500 ? ++rebuildValue : index);
+      fragment.appendChild(span);
+    }
+    rebuildHost.replaceChildren(fragment);
+  });
+});
+
+describe("reverse 1,000 keyed rows", () => {
+  const initial = Array.from({ length: 1_000 }, (_, id) => ({
+    id,
+    label: `Row ${id}`,
+  }));
+  const store = createNexus({ state: { items: initial } });
+  const $ = bind(store);
+  const renderer = createDOMRenderer({ schedule: "manual" });
+  const host = document.createElement("div");
+  renderer.mount(
+    $.items.each(
+      (item) => item.id,
+      (item) => jsx("span", { children: item.label })
+    ),
+    host
+  );
+
+  const forward = [...store.get("items")];
+  const backward = [...forward].reverse();
+  let reversed = false;
+
+  const rebuildHost = document.createElement("div");
+  let rebuildReversed = false;
+
+  bench("nexus-dom keyed reorder", () => {
+    reversed = !reversed;
+    store.set({ items: reversed ? backward : forward });
+    renderer.flush();
+  });
+
+  bench("naive rebuild of 1,000 rows", () => {
+    rebuildReversed = !rebuildReversed;
+    const source = rebuildReversed ? backward : forward;
+    const fragment = document.createDocumentFragment();
+    for (const item of source) {
+      const span = document.createElement("span");
+      span.textContent = item.label;
+      fragment.appendChild(span);
+    }
+    rebuildHost.replaceChildren(fragment);
+  });
+});
+
+describe("replace one keyed row among 1,000", () => {
+  const initial = Array.from({ length: 1_000 }, (_, id) => ({
+    id,
+    label: `Row ${id}`,
+  }));
+  const store = createNexus({ state: { items: initial } });
+  const $ = bind(store);
+  const renderer = createDOMRenderer({ schedule: "manual" });
+  const host = document.createElement("div");
+  renderer.mount(
+    $.items.each(
+      (item) => item.id,
+      (item) => jsx("span", { children: item.label })
+    ),
+    host
+  );
+  let version = 0;
+
+  const rebuildHost = document.createElement("div");
+  let rebuildVersion = 0;
+
+  bench("nexus-dom keyed row update", () => {
+    const items = [...store.get("items")];
+    items[500] = { ...items[500]!, label: `Updated ${++version}` };
+    store.set({ items });
+    renderer.flush();
+  });
+
+  bench("naive rebuild after one row update", () => {
+    const fragment = document.createDocumentFragment();
+    for (const item of store.get("items")) {
+      const span = document.createElement("span");
+      span.textContent =
+        item.id === 500 ? `Updated ${++rebuildVersion}` : item.label;
       fragment.appendChild(span);
     }
     rebuildHost.replaceChildren(fragment);

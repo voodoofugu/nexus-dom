@@ -1,5 +1,4 @@
-import type { CommitEvent } from "nexus-dom";
-import type { UpdateContext } from "nexus-state";
+import type { CommitEvent, UpdateContext } from "nexus-dom";
 
 export function createPlaygroundDiagnostics() {
   let commits = 0;

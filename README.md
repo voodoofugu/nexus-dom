@@ -9,8 +9,7 @@ The hypothesis is intentionally replaceable. The project may move toward compone
 ## Current experiment
 
 ```tsx
-import { createNexus } from "nexus-state";
-import { bind, render } from "nexus-dom";
+import { bind, createNexus, render } from "nexus-dom";
 
 const counter = createNexus({
   state: { count: 0 },
@@ -55,6 +54,11 @@ code can safely expose or reuse it without creating duplicate wrappers.
 available for tests, custom scheduling and advanced integrations that need to
 mount several roots through the same renderer.
 
+`nexus-state` is a regular dependency and its framework-agnostic API is
+re-exported by `nexus-dom`, so applications only need to install and import from
+`nexus-dom`. `bind` still accepts the small structural `NexusSource` contract,
+leaving room for explicit adapters without making them the primary design.
+
 ### Runtime ternaries without a compiler
 
 An ordinary ternary can run inside a live structural region without an extra compiler:
@@ -77,6 +81,23 @@ const positive = $.count.map((count) => count >= 0);
 
 The prototype still includes `Show` as a correctness baseline for branch ownership. A literally bare `{authorized ? A : B}` would require a JSX transform or component rerun because plain JavaScript evaluates it once during a one-shot component mount. Whether `.render(...)` is sufficiently intuitive remains an explicit usability question rather than a settled API decision.
 
+### Keyed lists without a control-flow component
+
+Reactive arrays own a keyed DOM region through `.each(...)`:
+
+```tsx
+{$.tasks.each(
+  (task) => task.id,
+  (task) => <Task task={task} />
+)}
+```
+
+Rows with unchanged keys and values keep their DOM and owner when reordered.
+Removing a key disposes its row, while replacing an item under the same key
+rerenders only that row. Items should be derived from the current Nexus state;
+`createNexus` clones its initial state, so external pre-construction object
+references are intentionally not treated as the stored values.
+
 ## Implemented
 
 - automatic JSX runtime;
@@ -90,10 +111,10 @@ The prototype still includes `Show` as a correctness baseline for branch ownersh
 - update contexts carried into renderer commit events.
 - an experimental owned `Show` branch with deterministic cleanup.
 - compiler-free `LiveValue.render(...)` regions with normal ternary expressions.
+- compiler-free keyed list regions through `LiveValue.each(...)`.
 
 ## Deliberately missing
 
-- keyed list reconciliation;
 - SSR and hydration;
 - portals, boundaries, suspense or transitions;
 - a style adapter;
@@ -111,6 +132,12 @@ npm run check
 npm run benchmark
 ```
 
-`npm run dev` opens a small counter playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
+`npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
 
 The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.
+
+The first keyed-list measurement exposes both sides of the trade-off: replacing
+one row among 1,000 is substantially cheaper than rebuilding all rows, while a
+worst-case reversal of all 1,000 owned regions is slower than a naive jsdom
+rebuild. The latter does not preserve DOM identity, events or ownership, so this
+is a useful implementation signal rather than an equal-semantics conclusion.

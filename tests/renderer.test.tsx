@@ -1,8 +1,8 @@
 /** @jsxImportSource nexus-dom */
-import { createNexus } from "nexus-state";
 import { describe, expect, it, vi } from "vitest";
 import {
   bind,
+  createNexus,
   createDOMRenderer,
   onCleanup,
   render,
@@ -311,5 +311,82 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("strong")).toBeNull();
     expect(host.querySelector("em")?.textContent).toBe("Negative");
     expect(commits).toHaveBeenCalledOnce();
+  });
+
+  it("preserves keyed rows while reordering and removes owned rows", () => {
+    const first = { id: 1, label: "First" };
+    const second = { id: 2, label: "Second" };
+    const store = createNexus({ state: { items: [first, second] } });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+    const cleanups = new Map<number, ReturnType<typeof vi.fn>>();
+
+    function Row({ item }: { item: { id: number; label: string } }) {
+      const cleanup = vi.fn();
+      cleanups.set(item.id, cleanup);
+      onCleanup(cleanup);
+      return <li data-id={item.id}>{item.label}</li>;
+    }
+
+    renderer.mount(
+      <ul>
+        {$.items.each(
+          (item) => item.id,
+          (item) => <Row item={item} />
+        )}
+      </ul>,
+      host
+    );
+
+    const firstNode = host.querySelector('[data-id="1"]');
+    const secondNode = host.querySelector('[data-id="2"]');
+    const [storedFirst, storedSecond] = store.get("items");
+
+    store.set({ items: [storedSecond!, storedFirst!] });
+    renderer.flush();
+
+    expect(Array.from(host.querySelectorAll("li"))).toEqual([
+      secondNode,
+      firstNode,
+    ]);
+    expect(cleanups.get(1)).not.toHaveBeenCalled();
+    expect(cleanups.get(2)).not.toHaveBeenCalled();
+
+    store.set({ items: [storedSecond!] });
+    renderer.flush();
+
+    expect(host.querySelector('[data-id="1"]')).toBeNull();
+    expect(cleanups.get(1)).toHaveBeenCalledOnce();
+    expect(host.querySelector('[data-id="2"]')).toBe(secondNode);
+  });
+
+  it("rerenders only a keyed row whose item value changed", () => {
+    const first = { id: 1, label: "First" };
+    const second = { id: 2, label: "Second" };
+    const store = createNexus({ state: { items: [first, second] } });
+    const $ = bind(store);
+    const renderer = createDOMRenderer({ schedule: "manual" });
+    const host = document.createElement("div");
+
+    renderer.mount(
+      $.items.each(
+        (item) => item.id,
+        (item) => <p data-id={item.id}>{item.label}</p>
+      ),
+      host
+    );
+
+    const firstNode = host.querySelector('[data-id="1"]');
+    const secondNode = host.querySelector('[data-id="2"]');
+    const [storedFirst, storedSecond] = store.get("items");
+    store.set({
+      items: [storedFirst!, { ...storedSecond!, label: "Updated" }],
+    });
+    renderer.flush();
+
+    expect(host.querySelector('[data-id="1"]')).toBe(firstNode);
+    expect(host.querySelector('[data-id="2"]')).not.toBe(secondNode);
+    expect(host.querySelector('[data-id="2"]')?.textContent).toBe("Updated");
   });
 });

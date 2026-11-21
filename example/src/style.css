@@ -95,6 +95,7 @@ h1 {
 }
 
 .counter-card,
+.task-card,
 .diagnostics {
   background: rgba(17, 21, 29, 0.88);
   border: 1px solid #242b38;
@@ -121,6 +122,67 @@ h1 {
 
 .counter-card {
   padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.task-card {
+  margin-top: 1rem;
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.task-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.task-heading h2 {
+  margin-bottom: 0;
+}
+
+.task-heading .controls {
+  margin: 0;
+}
+
+.task-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem;
+  background: #0e1219;
+  border: 1px solid #242c3a;
+  border-radius: 0.85rem;
+}
+
+.task-list li.is-done span {
+  color: #778195;
+  text-decoration: line-through;
+}
+
+.task-toggle {
+  min-width: 6.5rem;
+}
+
+.inline-syntax {
+  overflow-x: auto;
+  margin: 0;
+  padding: 1rem;
+  color: #cbd6ff;
+  background: #0b0f16;
+  border: 1px solid #252d3b;
+  border-radius: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.65;
 }
 
 .counter-readout {
@@ -293,5 +355,22 @@ h1 {
 
   .controls button {
     flex: 1 1 calc(50% - 0.75rem);
+  }
+
+  .task-heading {
+    display: block;
+  }
+
+  .task-heading .controls {
+    margin-top: 1rem;
+  }
+
+  .task-list li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .task-list li span {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 }

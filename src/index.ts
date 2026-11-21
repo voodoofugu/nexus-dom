@@ -1,3 +1,21 @@
+export { createActs, createNexus, persist } from "nexus-state";
+export type {
+  ActsCreate,
+  ActsCreateUnion,
+  ActsPart,
+  Dependencies,
+  Getter,
+  Middleware,
+  Nexus,
+  NexusOptions,
+  Observer,
+  PersistOptions,
+  PersistStorage,
+  SetContext,
+  Setter,
+  Source,
+  UpdateContext,
+} from "nexus-state";
 export { bind, createLiveSelector, isLiveValue } from "./live.js";
 export { onCleanup } from "./owner.js";
 export { render } from "./render.js";
@@ -12,6 +30,7 @@ export type {
   EqualityFn,
   LiveListener,
   LiveValue,
+  KeyedVNode,
   MountedRoot,
   NexusSource,
   Renderable,

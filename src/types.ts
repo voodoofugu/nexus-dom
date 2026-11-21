@@ -13,6 +13,11 @@ export interface LiveValue<T, C = unknown> {
   subscribe(listener: LiveListener<T, C>): () => void;
   map<U>(project: (value: T) => U, isEqual?: EqualityFn<U>): LiveValue<U, C>;
   render(project: (value: T) => Renderable): DynamicVNode;
+  each<Item, Key extends PropertyKey>(
+    this: LiveValue<readonly Item[], C>,
+    key: (item: Item) => Key,
+    project: (item: Item) => Renderable
+  ): KeyedVNode;
 }
 
 export interface NexusSource<S extends object, C = unknown> {
@@ -65,12 +70,20 @@ export interface DynamicVNode {
   readonly project: (value: unknown) => Renderable;
 }
 
+export interface KeyedVNode {
+  readonly kind: "keyed";
+  readonly source: LiveValue<readonly unknown[], unknown>;
+  readonly key: (item: unknown) => PropertyKey;
+  readonly project: (item: unknown) => Renderable;
+}
+
 export type VNode =
   | ElementVNode
   | ComponentVNode
   | FragmentVNode
   | ShowVNode
-  | DynamicVNode;
+  | DynamicVNode
+  | KeyedVNode;
 
 export type Renderable =
   | VNode

@@ -1,4 +1,5 @@
 import { isLiveValue } from "./live.js";
+import { mountKeyedRegion } from "./keyed.js";
 import {
   eventName,
   formatText,
@@ -143,6 +144,11 @@ export function createDOMRenderer<C = unknown>(
   };
 
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
+    if (vnode.kind === "keyed") {
+      mountKeyedRegion({ target, owner, vnode, scheduler, renderInto });
+      return;
+    }
+
     if (vnode.kind === "dynamic") {
       renderRegion(target, owner, vnode.source, vnode.project, "dynamic");
       return;

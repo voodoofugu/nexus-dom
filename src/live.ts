@@ -6,6 +6,7 @@ import {
   type EqualityFn,
   type LiveListener,
   type LiveValue,
+  type KeyedVNode,
   type NexusSource,
   type Renderable,
 } from "./types.js";
@@ -79,6 +80,13 @@ function mapLive<T, U, C>(
     render(project: (value: U) => Renderable) {
       return renderLive(this, project);
     },
+    each<Item, Key extends PropertyKey>(
+      this: LiveValue<readonly Item[], C>,
+      key: (item: Item) => Key,
+      project: (item: Item) => Renderable
+    ) {
+      return eachLive(this, key, project);
+    },
   };
 }
 
@@ -90,6 +98,19 @@ function renderLive<T, C>(
     kind: "dynamic",
     source: source as LiveValue<unknown, unknown>,
     project: project as (value: unknown) => Renderable,
+  };
+}
+
+function eachLive<Item, Key extends PropertyKey, C>(
+  source: LiveValue<readonly Item[], C>,
+  key: (item: Item) => Key,
+  project: (item: Item) => Renderable
+): KeyedVNode {
+  return {
+    kind: "keyed",
+    source: source as LiveValue<readonly unknown[], unknown>,
+    key: key as (item: unknown) => PropertyKey,
+    project: project as (item: unknown) => Renderable,
   };
 }
 
@@ -137,6 +158,13 @@ function selectorLive<S extends object, R, C>(
     },
     render(project: (value: R) => Renderable) {
       return renderLive(this, project);
+    },
+    each<Item, Key extends PropertyKey>(
+      this: LiveValue<readonly Item[], C>,
+      key: (item: Item) => Key,
+      project: (item: Item) => Renderable
+    ) {
+      return eachLive(this, key, project);
     },
   };
 }

@@ -38,13 +38,12 @@
     "benchmark": "vitest bench --run",
     "check": "npm run typecheck && npm run test && npm run build && npm run example:build"
   },
-  "peerDependencies": {
-    "nexus-state": ">=4.0.2 <5"
+  "dependencies": {
+    "nexus-state": "^4.0.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "jsdom": "^29.1.1",
-    "nexus-state": "file:../nexus-state",
     "typescript": "^5.6.2",
     "vite": "^8.0.0",
     "vitest": "4.1.12"

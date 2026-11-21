@@ -1,14 +1,24 @@
 /** @jsxImportSource nexus-dom */
-import { createNexus } from "nexus-state";
-import { bind, render } from "nexus-dom";
+import { bind, createNexus, render } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 import "./style.css";
+
+interface Task {
+  id: number;
+  title: string;
+  done: boolean;
+}
 
 const counter = createNexus({
   state: {
     count: 0,
     step: 1,
     enabled: true,
+    tasks: [
+      { id: 1, title: "Inspect DOM identity", done: false },
+      { id: 2, title: "Test keyed cleanup", done: false },
+    ] as Task[],
+    nextTaskId: 3,
   },
   acts: (get, set) => ({
     increment() {
@@ -22,6 +32,29 @@ const counter = createNexus({
     },
     toggle() {
       set({ enabled: !get("enabled") });
+    },
+    addTask() {
+      const id = get("nextTaskId");
+      set({
+        tasks: [
+          ...get("tasks"),
+          { id, title: `Experiment ${id}`, done: false },
+        ],
+        nextTaskId: id + 1,
+      });
+    },
+    reverseTasks() {
+      set({ tasks: [...get("tasks")].reverse() });
+    },
+    toggleTask(id: number) {
+      set({
+        tasks: get("tasks").map((task) =>
+          task.id === id ? { ...task, done: !task.done } : task
+        ),
+      });
+    },
+    removeTask(id: number) {
+      set({ tasks: get("tasks").filter((task) => task.id !== id) });
     },
   }),
 });
@@ -109,6 +142,46 @@ function App() {
         <button class="toggle" onClick={counter.acts.toggle}>
           Toggle counter controls
         </button>
+      </section>
+
+      <section class="task-card" aria-label="Keyed list example">
+        <div class="task-heading">
+          <div>
+            <p class="eyebrow">Keyed region</p>
+            <h2>Reactive task list</h2>
+          </div>
+          <div class="controls">
+            <button onClick={counter.acts.addTask}>Add task</button>
+            <button onClick={counter.acts.reverseTasks}>Reverse</button>
+          </div>
+        </div>
+
+        <ul class="task-list">
+          {$.tasks.each(
+            (task) => task.id,
+            (task) => (
+              <li data-task={task.id} class={task.done ? "is-done" : ""}>
+                <button
+                  class="task-toggle"
+                  onClick={() => counter.acts.toggleTask(task.id)}
+                >
+                  {task.done ? "Restore" : "Complete"}
+                </button>
+                <span>{task.title}</span>
+                <button onClick={() => counter.acts.removeTask(task.id)}>
+                  Remove
+                </button>
+              </li>
+            )
+          )}
+        </ul>
+
+        <pre class="inline-syntax">
+          <code>{`{$.tasks.each(
+  (task) => task.id,
+  (task) => <Task task={task} />
+)}`}</code>
+        </pre>
       </section>
 
       <diagnostics.Panel appExecutions={appExecutions} />
