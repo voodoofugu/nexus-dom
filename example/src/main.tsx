@@ -1,6 +1,7 @@
 /** @jsxImportSource nexus-dom */
-import { createNexus, type UpdateContext } from "nexus-state";
-import { bind, createDOMRenderer } from "nexus-dom";
+import { createNexus } from "nexus-state";
+import { bind, render } from "nexus-dom";
+import { createPlaygroundDiagnostics } from "./diagnostics.js";
 import "./style.css";
 
 const counter = createNexus({
@@ -31,40 +32,13 @@ const parity = $.count.map((count) => (count % 2 === 0 ? "even" : "odd"));
 const positive = $.count.map((count) => count >= 0);
 
 let appExecutions = 0;
-let commitCount = 0;
-let commitValue: HTMLOutputElement | null = null;
-let history: HTMLOListElement | null = null;
-let surface: HTMLElement | null = null;
-
-const renderer = createDOMRenderer<UpdateContext>({
-  onCommit(event) {
-    commitCount++;
-    if (commitValue) commitValue.value = String(commitCount);
-
-    const source = event.contexts.at(-1)?.source ?? "manual";
-    if (history) {
-      const entry = document.createElement("li");
-      entry.textContent = `${source} → ${event.updates} DOM update${
-        event.updates === 1 ? "" : "s"
-      }`;
-      history.prepend(entry);
-      while (history.children.length > 8) history.lastElementChild?.remove();
-    }
-
-    if (surface) {
-      surface.dataset.committed = "true";
-      requestAnimationFrame(() => {
-        if (surface) delete surface.dataset.committed;
-      });
-    }
-  },
-});
+const diagnostics = createPlaygroundDiagnostics();
 
 function App() {
   appExecutions++;
 
   return (
-    <main class="surface" ref={(node) => (surface = node as HTMLElement | null)}>
+    <main class="surface" ref={diagnostics.surfaceRef}>
       <header>
         <p class="eyebrow">Rendering experiment</p>
         <h1>nexus-dom playground</h1>
@@ -129,7 +103,7 @@ function App() {
             <p class="branch branch--positive">Positive branch is mounted</p>
           ) : (
             <p class="branch branch--negative">Negative branch is mounted</p>
-          )
+          ),
         )}
 
         <button class="toggle" onClick={counter.acts.toggle}>
@@ -137,48 +111,9 @@ function App() {
         </button>
       </section>
 
-      <aside class="diagnostics">
-        <div class="metrics">
-          <p>
-            <span>App executions</span>
-            <output>{appExecutions}</output>
-          </p>
-          <p>
-            <span>DOM commits</span>
-            <output
-              ref={(node) =>
-                (commitValue = node as HTMLOutputElement | null)
-              }
-            >
-              0
-            </output>
-          </p>
-        </div>
-
-        <div>
-          <h2>Commit provenance</h2>
-          <ol
-            class="history"
-            ref={(node) => (history = node as HTMLOListElement | null)}
-          >
-            <li>Waiting for an update</li>
-          </ol>
-        </div>
-
-        <div class="syntax">
-          <h2>Runtime ternary</h2>
-          <pre><code>{`{positive.render((isPositive) =>
-  isPositive
-    ? <Positive />
-    : <Negative />
-)}`}</code></pre>
-        </div>
-      </aside>
+      <diagnostics.Panel appExecutions={appExecutions} />
     </main>
   );
 }
 
-const host = document.querySelector("#app");
-if (!host) throw new Error("Playground root was not found.");
-
-renderer.mount(<App />, host);
+render(<App />, "#app", { onCommit: diagnostics.onCommit });

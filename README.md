@@ -10,7 +10,7 @@ The hypothesis is intentionally replaceable. The project may move toward compone
 
 ```tsx
 import { createNexus } from "nexus-state";
-import { bind, createDOMRenderer } from "nexus-dom";
+import { bind, render } from "nexus-dom";
 
 const counter = createNexus({
   state: { count: 0 },
@@ -22,7 +22,6 @@ const counter = createNexus({
 });
 
 const $ = bind(counter);
-const renderer = createDOMRenderer();
 
 function Counter() {
   return (
@@ -32,7 +31,7 @@ function Counter() {
   );
 }
 
-const root = renderer.mount(<Counter />, document.body);
+const root = render(<Counter />, "#app");
 
 // Later:
 root.dispose();
@@ -45,10 +44,16 @@ Derived bindings use the existing top-level dependency model of `nexus-state`:
 ```tsx
 const total = $.$select((state) => state.price * state.quantity);
 
-renderer.mount(<p>Total: {total}</p>, document.body);
+render(<p>Total: {total}</p>, document.body);
 ```
 
 Selectors dynamically resubscribe when the set of keys they read changes.
+Calling `bind` again with the same store returns the same binding, so integration
+code can safely expose or reuse it without creating duplicate wrappers.
+
+`render` is the normal application entry point. `createDOMRenderer` remains
+available for tests, custom scheduling and advanced integrations that need to
+mount several roots through the same renderer.
 
 ### Runtime ternaries without a compiler
 

@@ -21,6 +21,11 @@ nexus.set
 
 The renderer preserves the Nexus update context so tooling can explain which state transition caused each DOM commit.
 
+The public application path is deliberately small: `bind(store)` creates (and
+caches) the reactive view of Nexus state, while `render(view, target)` owns the
+renderer instance. `createDOMRenderer` is a low-level escape hatch rather than a
+required setup step.
+
 ## Current boundaries
 
 - Browser DOM only.

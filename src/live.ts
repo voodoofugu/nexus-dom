@@ -11,6 +11,7 @@ import {
 } from "./types.js";
 
 const sameValue: EqualityFn<unknown> = Object.is;
+const bindingCache = new WeakMap<object, object>();
 
 interface Tracked<R, S extends object> {
   value: R;
@@ -156,9 +157,12 @@ export function bind<S extends object, C = unknown>(
 export function bind<S extends object, C = unknown>(
   nexus: NexusSource<S, C>
 ): BoundState<S, C> {
+  const existing = bindingCache.get(nexus);
+  if (existing) return existing as BoundState<S, C>;
+
   const cache = new Map<PropertyKey, LiveValue<unknown, C>>();
 
-  return new Proxy(Object.create(null) as BoundState<S, C>, {
+  const binding = new Proxy(Object.create(null) as BoundState<S, C>, {
     get(_target, property) {
       if (property === "$select") {
         return <R>(selector: (state: S) => R, isEqual?: EqualityFn<R>) =>
@@ -173,6 +177,9 @@ export function bind<S extends object, C = unknown>(
       return value;
     },
   });
+
+  bindingCache.set(nexus, binding);
+  return binding;
 }
 
 export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown> {

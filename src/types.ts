@@ -110,6 +110,11 @@ export interface MountedRoot {
   dispose(): void;
 }
 
+export interface RenderRoot extends MountedRoot {
+  /** Immediately applies queued updates. Primarily useful for tests and tools. */
+  flush(): void;
+}
+
 export interface DOMRenderer<C = unknown> {
   mount(view: Renderable, container: ParentNode): MountedRoot;
   flush(): void;

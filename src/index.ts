@@ -1,5 +1,6 @@
 export { bind, createLiveSelector, isLiveValue } from "./live.js";
 export { onCleanup } from "./owner.js";
+export { render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";
 export { Show } from "./show.js";
 export type {
@@ -14,6 +15,7 @@ export type {
   MountedRoot,
   NexusSource,
   Renderable,
+  RenderRoot,
   RendererOptions,
   ShowVNode,
   VNode,

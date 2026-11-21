@@ -5,11 +5,40 @@ import {
   bind,
   createDOMRenderer,
   onCleanup,
+  render,
   Show,
   type CommitEvent,
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
+  it("returns one stable binding for the same Nexus store", () => {
+    const store = createNexus({ state: { count: 0 } });
+
+    const first = bind(store);
+    const second = bind(store);
+
+    expect(second).toBe(first);
+    expect(second.count).toBe(first.count);
+  });
+
+  it("mounts through the public render facade", () => {
+    const store = createNexus({ state: { count: 0 } });
+    const $ = bind(store);
+    const host = document.createElement("div");
+    host.id = "render-facade-test";
+    document.body.appendChild(host);
+
+    const root = render(<p>{$.count}</p>, "#render-facade-test", {
+      schedule: "manual",
+    });
+    store.set({ count: 1 });
+    root.flush();
+
+    expect(host.textContent).toBe("1");
+    root.dispose();
+    host.remove();
+  });
+
   it("updates one text binding without executing the component again", () => {
     const counter = createNexus({
       state: { count: 0 },
