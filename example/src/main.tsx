@@ -148,7 +148,7 @@ function Toolbar() {
         <label class="search-field">
           <span>Search issues</span>
           <input
-            ref={(node) => (refs.search.current = node as HTMLInputElement | null)}
+            ref={refs.search}
             type="search"
             placeholder="Title, code or owner"
             onInput={(event) => acts.setQuery((event.currentTarget as HTMLInputElement).value)}
@@ -275,7 +275,7 @@ function Inspector() {
     }
 
     return (
-      <aside class="inspector" tabIndex={-1} ref={(node) => (refs.inspector.current = node as HTMLElement | null)}>
+      <aside class="inspector" tabIndex={-1} ref={refs.inspector}>
         <div class="inspector-heading">
           <div><p class="eyebrow">{issue.code} · tracked view</p><h2>{issue.title}</h2></div>
           <button class="icon-button" aria-label="Close inspector" onClick={acts.closeInspector}>×</button>

@@ -106,11 +106,20 @@ for direct text/property bindings and `.each(...)` remains the keyed collection
 path, so one region can mix ordinary expressions with fine-grained updates.
 Reading `acts` or `refs` does not subscribe the view.
 
-The current experiment atomically replaces the view's local DOM region after a
-rerun; it does not reconcile two arbitrary JSX results yet. Keep views small
-when DOM identity, selection or input state must survive, and use `$` or keyed
-rows for those hot paths. Update errors still follow owner cleanup and local
-`ErrorBoundary` propagation.
+For a stable local shape made of ordinary DOM elements, text and the same
+`LiveValue` instances, the renderer patches text, properties, events and refs
+in place. Element identity, focus and uncontrolled DOM state survive these
+updates. A changed element type, key or child shape — or a component, keyed or
+dynamic subtree at the reconciliation boundary — falls back to atomic owned
+branch replacement. This is deliberately positional local reconciliation, not
+a general Virtual DOM or keyed/component diff. Update errors still follow owner
+cleanup and local `ErrorBoundary` propagation.
+
+Refs can use either callback form or the app's object cells directly:
+
+```tsx
+<input ref={refs.search} />
+```
 
 `nexus-state` is a regular dependency and its framework-agnostic API is
 re-exported by `nexus-dom`, so applications only need to install and import from
@@ -266,7 +275,8 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 - LIS-based general keyed reordering and exact context-driven list operations;
 - integrated app root and resource disposal through `app.dispose()`.
 - local owned error boundaries with fallback propagation and manual reset;
-- tracked `app.view(...)` regions with plain state expressions and injected
+- tracked `app.view(...)` regions with plain state expressions, bounded local
+  reconciliation and injected
   bindings, actions and refs;
 - SVG namespace support, including HTML descendants of `foreignObject`;
 - animation-frame scheduling for paint-aligned updates.
@@ -390,8 +400,8 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `5.54 KB gzip` for
-low-level core exports, `6.53 KB` for `createApp`, `6.77 KB` for the complete
-main entry, and `8.34 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `6.18 KB gzip` for
+low-level core exports, `7.17 KB` for `createApp`, `7.42 KB` for the complete
+main entry, and `9.02 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

@@ -9,6 +9,12 @@ interface MountTrackedViewOptions<C> {
   vnode: TrackedViewVNode;
   scheduler: Scheduler<C>;
   renderInto(view: Renderable, target: Node, owner: Owner): void;
+  reconcile(
+    previous: Renderable,
+    next: Renderable,
+    nodes: readonly Node[],
+    owner: Owner
+  ): boolean;
 }
 
 export function mountTrackedView<C>({
@@ -17,6 +23,7 @@ export function mountTrackedView<C>({
   vnode,
   scheduler,
   renderInto,
+  reconcile,
 }: MountTrackedViewOptions<C>) {
   const document = target.ownerDocument ?? (target as Document);
   const end = document.createTextNode("");
@@ -26,6 +33,7 @@ export function mountTrackedView<C>({
   let active = true;
   let branchOwner: Owner | undefined;
   let branchNodes: Node[] = [];
+  let branchView: Renderable = undefined;
   let dependencies: ["*"] | string[] | undefined;
   let unsubscribe = () => {};
 
@@ -55,10 +63,20 @@ export function mountTrackedView<C>({
 
   function mountBranch() {
     if (!active) return;
+    const tracked = trackSelector(vnode.source.get(), vnode.project);
+
+    if (
+      branchOwner &&
+      reconcile(branchView, tracked.value, branchNodes, branchOwner)
+    ) {
+      branchView = tracked.value;
+      updateSubscription(tracked.dependencies);
+      return;
+    }
+
     const nextOwner = new Owner(owner);
     const fragment = document.createDocumentFragment();
     try {
-      const tracked = trackSelector(vnode.source.get(), vnode.project);
       renderInto(tracked.value, fragment, nextOwner);
       updateSubscription(tracked.dependencies);
     } catch (error) {
@@ -70,6 +88,7 @@ export function mountTrackedView<C>({
     clearBranch();
     branchOwner = nextOwner;
     branchNodes = nextNodes;
+    branchView = tracked.value;
     end.parentNode?.insertBefore(fragment, end);
     if (owner.isMounted()) nextOwner.mount();
   }

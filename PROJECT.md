@@ -35,16 +35,20 @@ Nexus and bindings internally, exposes reactive values under `$`, non-reactive
 experiment. It tracks ordinary top-level state reads, reruns only the owned
 region through the renderer scheduler, and injects the complete application
 scope so the component tree does not have to transport state, actions or
-runtime refs. The current implementation replaces the local region atomically;
-fine-grained `$` bindings and keyed `.each(...)` remain the identity-preserving
-paths until local reconciliation is justified by dogfood evidence.
+runtime refs. Stable local trees of plain elements, text and unchanged live
+bindings are reconciled positionally in place; text, properties, events and
+refs update without losing element identity or focus. Structural changes and
+component, keyed or dynamic boundaries still use atomic owned replacement.
+This is intentionally smaller than a general Virtual DOM renderer; fine-grained
+`$` bindings and keyed `.each(...)` remain the primary hot paths.
 
 ## Current boundaries
 
 - Browser DOM only.
 - `nexus-state` is a regular dependency, not copied into the renderer runtime.
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
-- No Virtual DOM or whole-tree reconciliation in the first experiment.
+- No general Virtual DOM or whole-tree reconciliation; tracked views only have
+  a bounded positional fast path for stable plain-DOM shapes.
 - No claim of being universally faster: subscriptions, binding objects and cleanup have their own costs.
 - `Show` established branch ownership; keyed lists now reuse the same owner and
   cleanup model without introducing a component-like `<For>` primitive.
@@ -105,8 +109,8 @@ memoization, but they do not reduce the physical work of a full reverse.
    or is a small transform/component rerun worth supporting bare JSX ternaries?
 8. Can keyed reordering preserve identity without making worst-case full-list
    permutations disproportionately expensive?
-9. Does `app.view(...)` make ordinary application code clear enough without a
-   compiler, and what is the smallest useful reconciliation boundary?
+9. Is the current stable plain-DOM reconciliation boundary sufficient for
+   useful `app.view(...)` regions without growing into a general VDOM?
 10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
     commands such as focus, rather than relying on scheduler timing?
 
@@ -148,9 +152,10 @@ drilling or a provider hierarchy.
   value-dependent branches still require `.render(...)`. Bare reactive JSX
   expressions cannot work with one-shot components without a compiler or
   component reruns.
-- Tracked views support ordinary expressions but currently replace their whole
-  local branch after a relevant update. They need local reconciliation before
-  they can safely own focus-sensitive editor trees.
+- Tracked views preserve identity for stable plain-DOM shapes, but structural
+  changes and component, keyed or dynamic boundaries still replace their owned
+  branch. Larger focus-sensitive trees must keep stable boundaries or move hot
+  values into `$` bindings.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
   operations require `app.list(...)` metadata.
 - SSR, hydration, portals, suspense, transitions,
@@ -162,7 +167,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `8.34 KB gzip`; actual application cost still depends on imported APIs
+  about `9.02 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -185,8 +190,10 @@ drilling or a provider hierarchy.
 3. **Control-flow ergonomics.** The first dogfood workspace now uses tracked
    `app.view(...)` regions for plain conditionals, array methods and derived
    summaries while retaining `$` and `.each(...)` for hot identity-sensitive
-   paths. The next question is whether small local reconciliation can preserve
-   inputs and focus without turning the runtime into a general VDOM renderer.
+   paths. Bounded positional reconciliation now preserves the inspector, input,
+   focus, refs and current event closures while their plain-DOM shape remains
+   stable, and falls back to atomic replacement for structural changes. The
+   next question is whether that boundary stays understandable in a larger app.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -209,9 +216,9 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `5.54 KB
-gzip` for core, `6.53 KB` for `createApp`, and `6.77 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `8.34 KB gzip` when the
+The isolated Rollup/Terser ESM benchmark currently measures roughly `6.18 KB
+gzip` for core, `7.17 KB` for `createApp`, and `7.42 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `9.02 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

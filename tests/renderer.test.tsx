@@ -132,35 +132,92 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("strong")).toBeNull();
   });
 
-  it("commits callback refs after replacing a tracked view branch", () => {
+  it("locally reconciles stable view elements, events and refs", () => {
     const app = createApp({
-      state: { selected: 1 },
-      refs: { button: null as HTMLButtonElement | null },
+      state: { selected: 1, active: false },
+      refs: {
+        button: null as HTMLButtonElement | null,
+        input: null as HTMLInputElement | null,
+      },
     });
     const host = document.createElement("div");
+    document.body.appendChild(host);
+    const selections: number[] = [];
     const root = app.render(
       app.view(({ state, refs }) => (
-        <button
-          data-selected={state.selected}
-          ref={(node) => (refs.button.current = node as HTMLButtonElement | null)}
-        >
-          {state.selected}
-        </button>
+        <section class={state.active ? "active" : "idle"}>
+          <input ref={refs.input} value={`Value ${state.selected}`} />
+          <button
+            data-selected={state.selected}
+            ref={(node) => (refs.button.current = node as HTMLButtonElement | null)}
+            onClick={() => selections.push(state.selected)}
+          >
+            {state.selected}
+          </button>
+        </section>
       )),
       host,
       { schedule: "manual" }
     );
+    const section = host.querySelector("section");
+    const input = host.querySelector("input");
     const first = host.querySelector("button");
 
     expect(app.refs.button.current).toBe(first);
+    expect(app.refs.input.current).toBe(input);
+    input?.focus();
 
-    app.nexus.set({ selected: 2 });
+    app.nexus.set({ selected: 2, active: true });
     root.flush();
 
     const second = host.querySelector("button");
-    expect(second).not.toBe(first);
+    expect(host.querySelector("section")).toBe(section);
+    expect(host.querySelector("input")).toBe(input);
+    expect(second).toBe(first);
     expect(app.refs.button.current).toBe(second);
+    expect(app.refs.input.current).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input?.value).toBe("Value 2");
+    expect(section?.className).toBe("active");
     expect(second?.dataset.selected).toBe("2");
+    expect(second?.textContent).toBe("2");
+
+    second?.click();
+    expect(selections).toEqual([2]);
+    root.dispose();
+    expect(app.refs.button.current).toBeNull();
+    expect(app.refs.input.current).toBeNull();
+    host.remove();
+  });
+
+  it("replaces a tracked view when its local shape or key changes", () => {
+    const app = createApp({
+      state: { expanded: false, version: 1 },
+    });
+    const host = document.createElement("div");
+    const root = app.render(
+      app.view(({ state }) => (
+        <section key={state.version}>
+          <strong>Stable root</strong>
+          {state.expanded ? <span>Extra</span> : null}
+        </section>
+      )),
+      host,
+      { schedule: "manual" }
+    );
+    const collapsed = host.querySelector("section");
+
+    app.nexus.set({ expanded: true });
+    root.flush();
+    const expanded = host.querySelector("section");
+
+    expect(expanded).not.toBe(collapsed);
+    expect(expanded?.textContent).toBe("Stable rootExtra");
+
+    app.nexus.set({ version: 2 });
+    root.flush();
+
+    expect(host.querySelector("section")).not.toBe(expanded);
   });
 
   it("disposes every app root and setup resource", () => {

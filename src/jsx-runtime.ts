@@ -39,7 +39,9 @@ interface DOMAttributes {
   class?: unknown;
   className?: unknown;
   style?: unknown;
-  ref?: (element: Element | null) => void;
+  ref?:
+    | ((element: Element | null) => void)
+    | { current: Element | null };
   [name: `on${string}`]: DOMEventHandler | undefined;
   [name: string]: unknown;
 }

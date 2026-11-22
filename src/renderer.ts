@@ -11,6 +11,7 @@ import { createScheduler } from "./scheduler.js";
 import { mountTrackedView } from "./view.js";
 import type {
   DOMRenderer,
+  ElementVNode,
   ErrorBoundaryFallback,
   LiveValue,
   MountedRoot,
@@ -20,6 +21,21 @@ import type {
 } from "./types.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+
+type RefTarget =
+  | ((element: Element | null) => void)
+  | { current: unknown };
+
+interface EventRecord {
+  listener: EventListener | undefined;
+}
+
+interface RefRecord {
+  value: RefTarget | undefined;
+  attached: boolean;
+}
+
+type PatchValue = string | number | bigint | ElementVNode | LiveValue<unknown, unknown>;
 
 function createElement(document: Document, target: Node, type: string) {
   const parent = target instanceof Element ? target : undefined;
@@ -35,6 +51,8 @@ export function createDOMRenderer<C = unknown>(
   options: RendererOptions<C> = {}
 ): DOMRenderer<C> {
   const scheduler = createScheduler(options);
+  const eventRecords = new WeakMap<Element, Map<string, EventRecord>>();
+  const refRecords = new WeakMap<Element, RefRecord>();
 
   const attachLive = (
     live: LiveValue<unknown, unknown>,
@@ -160,12 +178,212 @@ export function createDOMRenderer<C = unknown>(
       return;
     }
 
-    if (typeof value !== "function") return;
-    const listener = value as EventListener;
-    element.addEventListener(eventName(property), listener);
-    owner.addCleanup(() =>
-      element.removeEventListener(eventName(property), listener)
+    const records = eventRecords.get(element) ?? new Map<string, EventRecord>();
+    eventRecords.set(element, records);
+    const record: EventRecord = {
+      listener: typeof value === "function" ? (value as EventListener) : undefined,
+    };
+    records.set(property, record);
+    if (record.listener) {
+      element.addEventListener(eventName(property), record.listener);
+    }
+    owner.addCleanup(() => {
+      if (record.listener) {
+        element.removeEventListener(eventName(property), record.listener);
+      }
+      if (records.get(property) === record) records.delete(property);
+    });
+  };
+
+  const writeRef = (ref: RefTarget | undefined, value: Element | null) => {
+    if (typeof ref === "function") ref(value);
+    else if (ref && typeof ref === "object") ref.current = value;
+  };
+
+  const isRefTarget = (value: unknown): value is RefTarget =>
+    typeof value === "function" ||
+    (typeof value === "object" && value !== null && "current" in value);
+
+  const attachRef = (element: Element, value: unknown, owner: Owner) => {
+    if (!isRefTarget(value)) return;
+    const record: RefRecord = { value, attached: false };
+    refRecords.set(element, record);
+    owner.addMount(() => {
+      record.attached = true;
+      writeRef(record.value, element);
+    });
+    owner.addCleanup(() => {
+      if (record.attached) writeRef(record.value, null);
+      if (refRecords.get(element) === record) refRecords.delete(element);
+    });
+  };
+
+  const flattenPatchValues = (
+    view: Renderable,
+    values: PatchValue[]
+  ): boolean => {
+    if (view === null || view === undefined || view === false || view === true) {
+      return true;
+    }
+    if (Array.isArray(view)) {
+      return view.every((child) => flattenPatchValues(child, values));
+    }
+    if (isLiveValue(view)) {
+      values.push(view);
+      return true;
+    }
+    if (typeof view !== "object") {
+      values.push(view);
+      return true;
+    }
+    const vnode = view as VNode;
+    if (vnode.kind === "fragment") {
+      return flattenPatchValues(vnode.props.children as Renderable, values);
+    }
+    if (vnode.kind !== "element") return false;
+    values.push(vnode);
+    return true;
+  };
+
+  const canPatchProperties = (
+    previous: Record<string, unknown>,
+    next: Record<string, unknown>
+  ) => {
+    const properties = new Set([...Object.keys(previous), ...Object.keys(next)]);
+    for (const property of properties) {
+      if (property === "children" || property === "key") continue;
+      const previousValue = previous[property];
+      const nextValue = next[property];
+      if (
+        (isLiveValue(previousValue) || isLiveValue(nextValue)) &&
+        previousValue !== nextValue
+      ) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const canPatchValue = (previous: PatchValue, next: PatchValue): boolean => {
+    if (isLiveValue(previous) || isLiveValue(next)) return previous === next;
+    if (typeof previous !== "object" || typeof next !== "object") {
+      return typeof previous !== "object" && typeof next !== "object";
+    }
+    if (
+      previous.type !== next.type ||
+      previous.key !== next.key ||
+      !canPatchProperties(previous.props, next.props)
+    ) {
+      return false;
+    }
+    const previousChildren: PatchValue[] = [];
+    const nextChildren: PatchValue[] = [];
+    return (
+      flattenPatchValues(previous.props.children as Renderable, previousChildren) &&
+      flattenPatchValues(next.props.children as Renderable, nextChildren) &&
+      previousChildren.length === nextChildren.length &&
+      previousChildren.every((child, index) =>
+        canPatchValue(child, nextChildren[index]!)
+      )
     );
+  };
+
+  const patchPlainEvent = (
+    element: Element,
+    property: string,
+    value: unknown,
+    owner: Owner
+  ) => {
+    let records = eventRecords.get(element);
+    let record = records?.get(property);
+    if (!record) {
+      attachEvent(element, property, value, owner);
+      return;
+    }
+    if (record.listener) {
+      element.removeEventListener(eventName(property), record.listener);
+    }
+    record.listener =
+      typeof value === "function" ? (value as EventListener) : undefined;
+    if (record.listener) {
+      element.addEventListener(eventName(property), record.listener);
+    }
+  };
+
+  const patchRef = (element: Element, value: unknown, owner: Owner) => {
+    const next = isRefTarget(value) ? value : undefined;
+    const record = refRecords.get(element);
+    if (!record) {
+      if (next) attachRef(element, next, owner);
+      return;
+    }
+    if (record.value === next) return;
+    if (record.attached) writeRef(record.value, null);
+    record.value = next;
+    if (record.attached) writeRef(record.value, element);
+  };
+
+  const patchValue = (
+    previous: PatchValue,
+    next: PatchValue,
+    node: Node,
+    owner: Owner
+  ) => {
+    if (isLiveValue(previous) || isLiveValue(next)) return;
+    if (typeof previous !== "object" || typeof next !== "object") {
+      if (node.nodeType === Node.TEXT_NODE) node.nodeValue = formatText(next);
+      return;
+    }
+    if (!(node instanceof Element)) return;
+    const properties = new Set([
+      ...Object.keys(previous.props),
+      ...Object.keys(next.props),
+    ]);
+    for (const property of properties) {
+      if (property === "children" || property === "key") continue;
+      const previousValue = previous.props[property];
+      const nextValue = next.props[property];
+      if (previousValue === nextValue) continue;
+      if (property === "ref") {
+        patchRef(node, nextValue, owner);
+      } else if (isEventProperty(property)) {
+        patchPlainEvent(node, property, nextValue, owner);
+      } else if (!isLiveValue(nextValue)) {
+        writeProperty(node, property, nextValue, previousValue);
+      }
+    }
+    const previousChildren: PatchValue[] = [];
+    const nextChildren: PatchValue[] = [];
+    flattenPatchValues(previous.props.children as Renderable, previousChildren);
+    flattenPatchValues(next.props.children as Renderable, nextChildren);
+    previousChildren.forEach((child, index) => {
+      patchValue(child, nextChildren[index]!, node.childNodes[index]!, owner);
+    });
+  };
+
+  const reconcileView = (
+    previous: Renderable,
+    next: Renderable,
+    nodes: readonly Node[],
+    owner: Owner
+  ) => {
+    const previousValues: PatchValue[] = [];
+    const nextValues: PatchValue[] = [];
+    if (
+      !flattenPatchValues(previous, previousValues) ||
+      !flattenPatchValues(next, nextValues) ||
+      previousValues.length !== nextValues.length ||
+      previousValues.length !== nodes.length ||
+      !previousValues.every((value, index) =>
+        canPatchValue(value, nextValues[index]!)
+      )
+    ) {
+      return false;
+    }
+    previousValues.forEach((value, index) => {
+      patchValue(value, nextValues[index]!, nodes[index]!, owner);
+    });
+    return true;
   };
 
   const renderRegion = (
@@ -249,7 +467,14 @@ export function createDOMRenderer<C = unknown>(
     }
 
     if (vnode.kind === "tracked-view") {
-      mountTrackedView({ target, owner, vnode, scheduler, renderInto });
+      mountTrackedView({
+        target,
+        owner,
+        vnode,
+        scheduler,
+        renderInto,
+        reconcile: reconcileView,
+      });
       return;
     }
 
@@ -287,15 +512,8 @@ export function createDOMRenderer<C = unknown>(
     for (const [property, value] of Object.entries(vnode.props)) {
       if (property === "children" || property === "key") continue;
 
-      if (property === "ref" && typeof value === "function") {
-        let attached = false;
-        owner.addMount(() => {
-          attached = true;
-          value(element);
-        });
-        owner.addCleanup(() => {
-          if (attached) value(null);
-        });
+      if (property === "ref") {
+        attachRef(element, value, owner);
         continue;
       }
 
