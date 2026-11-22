@@ -196,6 +196,7 @@ export function createApp<
       roots.clear();
       for (const cleanup of Array.from(cleanups).reverse()) cleanup();
       cleanups.clear();
+      storeViews.dispose();
     },
     render(view, target, rendererOptions) {
       if (disposed) {

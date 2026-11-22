@@ -47,7 +47,9 @@ export type {
   DependencyRefs,
   DependencyState,
   StoreDefinition,
+  StoreDependencyScope,
   StoreOptions,
+  StoreSetupContext,
   ViewScope,
 } from "./store-view.js";
 export type {

@@ -6,7 +6,8 @@ export type NexusDOMErrorCode =
   | "INVALID_LIST_REMOVE_COUNT"
   | "RENDER_TARGET_NOT_FOUND"
   | "STORE_VIEW_OUTSIDE_APP"
-  | "STORE_DEPENDENCY_CONFLICT";
+  | "STORE_DEPENDENCY_CONFLICT"
+  | "STORE_DEPENDENCY_CYCLE";
 
 /** An actionable error raised by nexus-dom itself, not by user render code. */
 export class NexusDOMError extends Error {

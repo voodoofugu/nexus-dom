@@ -83,6 +83,83 @@ describe("nexus-dom rendering model", () => {
     );
   });
 
+  it("supports store action dependencies and disposes lazy setup", () => {
+    const cleanup = vi.fn();
+    const session = store({
+      state: { currentUser: "Georg" },
+      acts: (_get, set) => ({
+        renameUser(currentUser: string) {
+          set({ currentUser });
+        },
+      }),
+    });
+    const issues = store(
+      {
+        state: { assignee: "Unassigned" },
+        acts: (_get, set, _refs, _helpers, dependencies) => ({
+          assignCurrentUser() {
+            set({ assignee: dependencies.get("currentUser") });
+          },
+        }),
+        setup() {
+          return cleanup;
+        },
+      },
+      [session]
+    );
+    const Panel = view(
+      ({ state, acts }) => (
+        <button onClick={acts.assignCurrentUser}>
+          {state.currentUser}: {state.assignee}
+        </button>
+      ),
+      [session, issues]
+    );
+    const app = createApp();
+    const host = document.createElement("div");
+    const root = app.render(<Panel />, host, { schedule: "manual" });
+
+    expect(host.textContent).toBe("Georg: Unassigned");
+    host.querySelector("button")?.click();
+    root.flush();
+    expect(host.textContent).toBe("Georg: Georg");
+    expect(cleanup).not.toHaveBeenCalled();
+
+    app.dispose();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("rejects cyclic store dependencies", () => {
+    const leftDependencies: any[] = [];
+    const left = store({ state: { left: true } }, leftDependencies);
+    const right = store({ state: { right: true } }, [left]);
+    leftDependencies.push(right);
+    const Cyclic = view(({ state }) => <p>{String(state.left)}</p>, [left]);
+
+    expect(() =>
+      createApp().render(<Cyclic />, document.createElement("div"))
+    ).toThrowError(
+      expect.objectContaining({ code: "STORE_DEPENDENCY_CYCLE" })
+    );
+  });
+
+  it("cleans partial store setup when initialization fails", () => {
+    const cleanup = vi.fn();
+    const broken = store({
+      state: { ready: false },
+      setup({ onCleanup }) {
+        onCleanup(cleanup);
+        throw new Error("setup failed");
+      },
+    });
+    const Broken = view(({ state }) => <p>{String(state.ready)}</p>, [broken]);
+
+    expect(() =>
+      createApp().render(<Broken />, document.createElement("div"))
+    ).toThrow("setup failed");
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it("creates a complete app with reactive state and non-reactive refs", () => {
     const app = createApp({
       state: { count: 0 },

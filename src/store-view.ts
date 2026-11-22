@@ -28,6 +28,7 @@ export interface StoreOptions<
   S extends RecordAny,
   A extends RecordAny,
   R extends RecordAny,
+  D extends readonly AnyStore[] = readonly [],
 > {
   state: S;
   refs?: R;
@@ -35,16 +36,22 @@ export interface StoreOptions<
     get: Getter<S>,
     set: Setter<S>,
     refs: AppRefs<R>,
-    helpers: AppHelpers<S>
+    helpers: AppHelpers<S>,
+    dependencies: StoreDependencyScope<D>
   ) => A;
+  setup?: (
+    context: StoreSetupContext<S, A, R, D>
+  ) => void | (() => void);
 }
 
 export interface StoreDefinition<
   S extends RecordAny,
   A extends RecordAny = EmptyRecord,
   R extends RecordAny = EmptyRecord,
+  D extends readonly AnyStore[] = readonly [],
 > {
-  readonly [STORE_OPTIONS]: StoreOptions<any, any, any>;
+  readonly [STORE_OPTIONS]: StoreOptions<any, any, any, any>;
+  readonly dependencies: D;
   readonly [STORE_TYPES]: {
     readonly state: S;
     readonly acts: A;
@@ -56,14 +63,24 @@ export function store<
   S extends RecordAny,
   R extends RecordAny = EmptyRecord,
   A extends RecordAny = EmptyRecord,
->(options: StoreOptions<S, A, R>): StoreDefinition<S, A, R> {
-  return { [STORE_OPTIONS]: options } as StoreDefinition<S, A, R>;
+  const D extends readonly AnyStore[] = readonly [],
+>(
+  options: StoreOptions<S, A, R, D>,
+  dependencies: D & ValidDependencies<D> = [] as unknown as D &
+    ValidDependencies<D>
+): StoreDefinition<S, A, R, D> {
+  return { [STORE_OPTIONS]: options, dependencies } as unknown as StoreDefinition<
+    S,
+    A,
+    R,
+    D
+  >;
 }
 
-type AnyStore = StoreDefinition<RecordAny, RecordAny, RecordAny>;
-type StoreState<T> = T extends StoreDefinition<infer S, any, any> ? S : never;
-type StoreActs<T> = T extends StoreDefinition<any, infer A, any> ? A : never;
-type StoreRefs<T> = T extends StoreDefinition<any, any, infer R> ? R : never;
+type AnyStore = StoreDefinition<RecordAny, RecordAny, RecordAny, any>;
+type StoreState<T> = T extends StoreDefinition<infer S, any, any, any> ? S : never;
+type StoreActs<T> = T extends StoreDefinition<any, infer A, any, any> ? A : never;
+type StoreRefs<T> = T extends StoreDefinition<any, any, infer R, any> ? R : never;
 type UnionToIntersection<U> = (
   U extends unknown ? (value: U) => void : never
 ) extends (value: infer I) => void
@@ -136,6 +153,27 @@ export interface ViewScope<D extends readonly AnyStore[]> {
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
+export interface StoreDependencyScope<D extends readonly AnyStore[]> {
+  readonly get: Getter<DependencyState<D>>;
+  readonly $: BoundState<DependencyState<D>, UpdateContext>;
+  readonly acts: DependencyActs<D>;
+  readonly refs: AppRefs<DependencyRefs<D>>;
+}
+
+export interface StoreSetupContext<
+  S extends RecordAny,
+  A extends RecordAny,
+  R extends RecordAny,
+  D extends readonly AnyStore[],
+> {
+  readonly nexus: Nexus<S, A>;
+  readonly $: BoundState<S, UpdateContext>;
+  readonly acts: A;
+  readonly refs: AppRefs<R>;
+  readonly dependencies: StoreDependencyScope<D>;
+  onCleanup(cleanup: () => void): () => void;
+}
+
 type ViewComponent<Input extends object = EmptyRecord> = (
   input: Input & { children?: Renderable }
 ) => VNode | null;
@@ -176,25 +214,83 @@ const createRefs = (values: RecordAny): AppRefs<RecordAny> =>
 export function createStoreViewRegistry(): StoreViewResolver {
   const stores = new Map<AnyStore, ResolvedStore>();
   const scopes = new WeakMap<readonly unknown[], ResolvedScope>();
+  const resolving = new Set<AnyStore>();
+  const cleanups: Array<() => void> = [];
+  let disposed = false;
 
   const resolveStore = (definition: AnyStore) => {
     const existing = stores.get(definition);
     if (existing) return existing;
+    if (resolving.has(definition)) {
+      throw nexusDOMError(
+        "STORE_DEPENDENCY_CYCLE",
+        "Store dependencies contain a cycle. Move shared state into a third store or remove one dependency."
+      );
+    }
+    resolving.add(definition);
     const options = definition[STORE_OPTIONS];
-    const refs = createRefs(options.refs ?? {});
-    const nexus = options.acts
-      ? createNexus({
-          state: options.state,
-          acts: (get, set) =>
-            options.acts!(get, set, refs, createListHelpers(get, set)),
-        })
-      : createNexus({ state: options.state });
-    const resolved = {
-      nexus: nexus as Nexus<RecordAny, RecordAny>,
-      refs,
-    };
-    stores.set(definition, resolved);
-    return resolved;
+    try {
+      const dependencyScope = resolveScope(definition.dependencies);
+      const dependencies = {
+        get: ((key?: string) => {
+          const state = dependencyScope.source.get();
+          return key === undefined ? state : state[key];
+        }) as Getter<RecordAny>,
+        $: dependencyScope.$,
+        acts: dependencyScope.acts,
+        refs: dependencyScope.refs,
+      };
+      const refs = createRefs(options.refs ?? {});
+      const nexus = options.acts
+        ? createNexus({
+            state: options.state,
+            acts: (get, set) =>
+              options.acts!(
+                get,
+                set,
+                refs,
+                createListHelpers(get, set),
+                dependencies
+              ),
+          })
+        : createNexus({ state: options.state });
+      const resolved = {
+        nexus: nexus as Nexus<RecordAny, RecordAny>,
+        refs,
+      };
+      stores.set(definition, resolved);
+
+      if (options.setup) {
+        const ownCleanups = new Set<() => void>();
+        const onCleanup = (cleanup: () => void) => {
+          ownCleanups.add(cleanup);
+          return () => ownCleanups.delete(cleanup);
+        };
+        const disposeSetup = () => {
+          for (const cleanup of Array.from(ownCleanups).reverse()) cleanup();
+          ownCleanups.clear();
+        };
+        try {
+          const setupCleanup = options.setup({
+            nexus,
+            $: bind(nexus),
+            acts: nexus.acts,
+            refs,
+            dependencies,
+            onCleanup,
+          });
+          if (setupCleanup) ownCleanups.add(setupCleanup);
+          cleanups.push(disposeSetup);
+        } catch (error) {
+          disposeSetup();
+          stores.delete(definition);
+          throw error;
+        }
+      }
+      return resolved;
+    } finally {
+      resolving.delete(definition);
+    }
   };
 
   const mergeDomain = (
@@ -271,6 +367,15 @@ export function createStoreViewRegistry(): StoreViewResolver {
             vnode.input
           ),
       };
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      for (let index = cleanups.length - 1; index >= 0; index--) {
+        cleanups[index]?.();
+      }
+      cleanups.length = 0;
+      stores.clear();
     },
   };
 }

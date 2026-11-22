@@ -170,7 +170,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `9.59 KB gzip`; actual application cost still depends on imported APIs
+  about `9.81 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -196,8 +196,10 @@ drilling or a provider hierarchy.
    values directly; shared state/actions/refs come from the explicit dependency
    tuple. Bounded positional reconciliation preserves stable plain DOM and
    falls back to atomic replacement for structural changes. The next design
-   questions are cross-store actions/batching and whether the flat merged scope
-   remains clear as the application grows.
+   questions are atomic cross-store batching and whether the flat merged scope
+   remains clear as the application grows. Store descriptors can now depend on
+   other descriptors for typed action access; cycles fail explicitly, and lazy
+   setup resources follow app disposal, including failed initialization.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -221,8 +223,8 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `6.28 KB
-gzip` for core, `7.70 KB` for `createApp`, and `7.99 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `9.59 KB gzip` when the
+gzip` for core, `7.93 KB` for `createApp`, and `8.21 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `9.81 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

@@ -110,6 +110,32 @@ gets an independent instance. Dependency tuples infer and merge `state`, `$`,
 runtime. JSX attributes remain per-instance input, while shared mutable data
 belongs to explicit store dependencies.
 
+Stores can depend on other descriptors when their actions need shared data:
+
+```tsx
+const assignments = store(
+  {
+    state: { assignee: "Unassigned" },
+    acts: (_get, set, _refs, _helpers, dependencies) => ({
+      assignCurrentUser() {
+        set({ assignee: dependencies.get("currentUser") });
+      },
+    }),
+    setup({ onCleanup }) {
+      const socket = connectAssignments();
+      onCleanup(() => socket.close());
+    },
+  },
+  [session]
+);
+```
+
+Dependency cycles fail during mount. Store setup runs once per app on first
+resolution and is disposed by `app.dispose()`. Updates across separate stores
+are not presented as one atomic Nexus transaction: each store keeps its own
+provenance, while synchronous DOM work is still coalesced by the renderer
+scheduler.
+
 ### Legacy app-scoped tracked regions
 
 `app.view(...)` creates an owned reactive region and passes the complete app
@@ -436,7 +462,7 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `6.28 KB gzip` for
-low-level core exports, `7.70 KB` for `createApp`, `7.99 KB` for the complete
-main entry, and `9.59 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `7.93 KB` for `createApp`, `8.21 KB` for the complete
+main entry, and `9.81 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

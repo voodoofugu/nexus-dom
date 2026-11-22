@@ -100,6 +100,7 @@ export interface StoreViewVNode {
 
 export interface StoreViewResolver {
   resolve(vnode: StoreViewVNode): TrackedViewVNode;
+  dispose(): void;
 }
 
 export interface KeyedVNode {
