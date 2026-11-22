@@ -51,6 +51,7 @@
     "benchmark:compare:webkit": "NEXUS_DOM_BROWSER=webkit node benchmarks/compare/run.mjs",
     "benchmark:compare:matrix": "npm run benchmark:compare && npm run benchmark:compare:firefox && npm run benchmark:compare:webkit",
     "benchmark:heap": "node benchmarks/heap/run.mjs",
+    "benchmark:density": "node benchmarks/density/run.mjs",
     "benchmark:bundle": "node benchmarks/bundle/run.mjs",
     "check": "npm run test && npm run build && npm run smoke:dist && npm run example:build"
   },

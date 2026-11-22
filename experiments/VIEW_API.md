@@ -6,7 +6,7 @@ configuration. The live playground uses the same public API.
 
 ```tsx
 const Summary = view(
-  ({ state, live, acts, refs }) => {
+  ({ state, $, acts, refs }) => {
     return <section>{state.issues.length}</section>;
   },
   [issuesStore, filtersStore]
@@ -18,7 +18,7 @@ const Summary = view(
 - `store(options)` declares state, actions and refs but does not create a
   module-global state instance.
 - `view(render, dependencies)` defines a component. Its dependency tuple is
-  static and supplies the complete types of `state`, `live`, `acts` and `refs`.
+  static and supplies the complete types of `state`, `$`, `acts` and `refs`.
 - On first mount in an app, a descriptor is resolved to a new app-scoped store.
   Later views requiring the same descriptor reuse that instance and its current
   values. Different apps get independent instances.

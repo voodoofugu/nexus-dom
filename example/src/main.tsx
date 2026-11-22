@@ -136,7 +136,7 @@ const statusLabel = (status: IssueStatus) =>
   status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
 
 const Toolbar = view(
-  ({ live, acts, refs }) => {
+  ({ $, acts, refs }) => {
     diagnostics.viewRun("toolbar");
     const filters: Array<{ value: IssueFilter; label: string }> = [
       { value: "all", label: "All issues" },
@@ -160,7 +160,7 @@ const Toolbar = view(
         <div class="filters" role="group" aria-label="Status">
           {filters.map(({ value, label }) => (
             <button
-              aria-pressed={live.filter.map((filter) => filter === value)}
+              aria-pressed={$.filter.map((filter) => filter === value)}
               onClick={() => acts.setFilter(value)}
             >
               {label}
@@ -168,7 +168,7 @@ const Toolbar = view(
           ))}
         </div>
         <button class="quiet-button" onClick={acts.toggleCompact}>
-          {live.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
+          {$.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
         </button>
       </section>
     );
@@ -214,9 +214,9 @@ const EmptyState = view(
 );
 
 const IssueList = view(
-  ({ live, acts }) => {
+  ({ $, acts }) => {
     diagnostics.viewRun("issue-list");
-    const visibleIssues = live.$select((state) => {
+    const visibleIssues = $.$select((state) => {
       const query = state.query.trim().toLowerCase();
       return state.issues.filter((issue) => {
         const matchesFilter = state.filter === "all" || issue.status === state.filter;
@@ -244,7 +244,7 @@ const IssueList = view(
                 <li data-status={$issue.status} data-priority={$issue.priority}>
                   <button
                     class="issue-main"
-                    aria-current={live.selectedIssueId.map((selected) => selected === id ? "true" : undefined)}
+                    aria-current={$.selectedIssueId.map((selected) => selected === id ? "true" : undefined)}
                     onClick={() => acts.selectIssue(id)}
                   >
                     <span class="issue-code">{$issue.code}</span>
@@ -316,10 +316,10 @@ const Inspector = view(
 );
 
 const App = view(
-  ({ live, acts }) => {
+  ({ $, acts }) => {
     diagnostics.viewRun("app-shell");
     return (
-      <main class={live.compact.map((compact) => compact ? "workspace is-compact" : "workspace")} ref={diagnostics.surfaceRef}>
+      <main class={$.compact.map((compact) => compact ? "workspace is-compact" : "workspace")} ref={diagnostics.surfaceRef}>
         <header class="page-header">
           <div>
             <p class="eyebrow">nexus-dom dogfood</p>

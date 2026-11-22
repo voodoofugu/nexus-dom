@@ -105,7 +105,7 @@ app.render(<IssueTitle issueId={1} />, "#app");
 
 The first mounted consumer resolves a descriptor to one app-scoped store.
 Later views using the same descriptor receive its current values; another app
-gets an independent instance. Dependency tuples infer and merge `state`, `live`,
+gets an independent instance. Dependency tuples infer and merge `state`, `$`,
 `acts` and `refs`, and duplicate keys are rejected by TypeScript and again at
 runtime. JSX attributes remain per-instance input, while shared mutable data
 belongs to explicit store dependencies.
@@ -136,12 +136,12 @@ are not presented as one atomic Nexus transaction: each store keeps its own
 provenance, while synchronous DOM work is still coalesced by the renderer
 scheduler.
 
-`state` and `live` expose the same store values with different update costs.
+`state` and `$` expose the same store values with different update costs.
 Reading `state.count` gives a plain value and makes the surrounding view rerun
-when `count` changes. `live.count` is a stable `LiveValue` that updates one DOM
+when `count` changes. `$.count` is a stable `LiveValue` that updates one DOM
 binding without rerunning the view. `refs` are non-reactive runtime cells and
-`acts` are commands. The legacy integrated app API keeps `app.$` for
-compatibility; standalone views use the explicit `live` name.
+`acts` are commands. These are two subscription strategies over one Nexus
+state, not two sources of truth.
 
 ### Legacy app-scoped tracked regions
 
@@ -370,6 +370,7 @@ npm run benchmark:compare
 npm run benchmark:compare:mobile
 npm run benchmark:compare:matrix
 npm run benchmark:heap
+npm run benchmark:density
 npm run benchmark:bundle
 ```
 
@@ -450,6 +451,16 @@ Firefox and WebKit. Chromium and Firefox currently expose `moveBefore()`;
 WebKit exercises the `insertBefore()` fallback. All three preserve nexus-dom row
 identity, keyed order and focus in the tested reorder sequence. Heap diagnostics
 remain Chromium-only because they use CDP.
+
+`npm run benchmark:density` compares 500 identical components with 1, 2, 4, 8
+and 16 fields using either individual `$` bindings or one tracked `state` view.
+It measures one-field and all-field updates plus forced-GC heap. In the first
+local Chrome run, targeted `$` updates stayed around `0.2–0.4 ms`; dense updates
+crossed over near eight fields, and at sixteen fields the tracked view measured
+`4.4 ms` versus `4.9 ms` for bindings. Retained JS heap at sixteen fields was
+about `2.1 KB/component` for the view versus `12.0 KB/component` for bindings.
+These values are machine-specific; the shape of the crossover is the useful
+result.
 
 `npm run benchmark:heap` runs a focused CDP sampling heap profile for static,
 keyed-static and one-/two-field keyed rows. It keeps source function names and

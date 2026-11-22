@@ -155,14 +155,14 @@ type ValidDependencies<D extends readonly AnyStore[]> =
 
 export interface ViewScope<D extends readonly AnyStore[]> {
   readonly state: Readonly<DependencyState<D>>;
-  readonly live: BoundState<DependencyState<D>, UpdateContext>;
+  readonly $: BoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
 export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly get: Getter<DependencyState<D>>;
-  readonly live: BoundState<DependencyState<D>, UpdateContext>;
+  readonly $: BoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
@@ -174,7 +174,7 @@ export interface StoreSetupContext<
   D extends readonly AnyStore[],
 > {
   readonly nexus: Nexus<S, A>;
-  readonly live: BoundState<S, UpdateContext>;
+  readonly $: BoundState<S, UpdateContext>;
   readonly acts: A;
   readonly refs: AppRefs<R>;
   readonly dependencies: StoreDependencyScope<D>;
@@ -208,7 +208,7 @@ interface ResolvedStore {
 
 interface ResolvedScope {
   source: NexusSource<RecordAny, UpdateContext>;
-  live: BoundState<RecordAny, UpdateContext>;
+  $: BoundState<RecordAny, UpdateContext>;
   acts: RecordAny;
   refs: AppRefs<RecordAny>;
 }
@@ -243,7 +243,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
           const state = dependencyScope.source.get();
           return key === undefined ? state : state[key];
         }) as Getter<RecordAny>,
-        live: dependencyScope.live,
+        $: dependencyScope.$,
         acts: dependencyScope.acts,
         refs: dependencyScope.refs,
       };
@@ -284,7 +284,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
         try {
           const setupCleanup = options.setup({
             nexus,
-          live: bind(nexus),
+          $: bind(nexus),
             acts: nexus.acts,
             refs,
             dependencies,
@@ -361,7 +361,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
     };
     // Validate state conflicts once, before any view project executes.
     source.get();
-    const scope = { source, live: bind(source), acts, refs };
+    const scope = { source, $: bind(source), acts, refs };
     scopes.set(dependencies, scope);
     return scope;
   };
@@ -374,7 +374,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
         source: scope.source,
         project: (state) =>
           vnode.render(
-            { state, live: scope.live, acts: scope.acts, refs: scope.refs },
+            { state, $: scope.$, acts: scope.acts, refs: scope.refs },
             vnode.input
           ),
       };

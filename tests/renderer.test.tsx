@@ -37,11 +37,11 @@ describe("nexus-dom rendering model", () => {
     const labels = store({ state: { label: "Count" } });
     let counterRuns = 0;
     const Counter = view(
-      ({ state, live, acts }, { suffix }: { suffix?: string }) => {
+      ({ state, $, acts }, { suffix }: { suffix?: string }) => {
         counterRuns++;
         return (
           <button onClick={acts.increment}>
-            {state.label}: {live.count}{suffix}
+            {state.label}: {$.count}{suffix}
           </button>
         );
       },

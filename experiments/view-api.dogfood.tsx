@@ -85,8 +85,8 @@ export const Summary = view(
 
 // Multiple stores form one fully typed scope.
 export const Toolbar = view(
-  ({ state, live, acts, refs }) => (
-    <section class={live.compact.map((compact) => (compact ? "compact" : ""))}>
+  ({ state, $, acts, refs }) => (
+    <section class={$.compact.map((compact) => (compact ? "compact" : ""))}>
       <input
         ref={refs.search}
         value={state.query}
@@ -166,8 +166,8 @@ void invalidInputProof;
 
 // The complete screen is also a view; no component closes over an `app` value.
 export const DogfoodApp = view(
-  ({ live }) => (
-    <main class={live.compact.map((compact) => (compact ? "compact" : ""))}>
+  ({ $ }) => (
+    <main class={$.compact.map((compact) => (compact ? "compact" : ""))}>
       <Toolbar />
       <Summary />
       <Inspector />

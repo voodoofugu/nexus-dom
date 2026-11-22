@@ -200,9 +200,14 @@ drilling or a provider hierarchy.
    remains clear as the application grows. Store descriptors can now depend on
    other descriptors for typed action access; cycles fail explicitly, and lazy
    setup resources follow app disposal, including failed initialization.
-   Standalone scopes call fine-grained bindings `live` rather than `$`, making
-   their relationship to plain tracked `state` explicit. Store actions receive
-   one extensible context with get/set/reset/refs/list/dependencies.
+   Plain `state` and fine-grained `$` are two subscription strategies over the
+   same Nexus state. Store actions receive one extensible context with
+   get/set/reset/refs/list/dependencies.
+   A density benchmark over 500 components now confirms the trade-off: targeted
+   `$` updates remain nearly flat as fields increase, while dense all-field
+   updates cross tracked-view reconciliation near eight fields. At sixteen
+   fields the first run measured `4.9 ms` for bindings versus `4.4 ms` for the
+   view, with roughly `12.0 KB` versus `2.1 KB` retained JS per component.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
