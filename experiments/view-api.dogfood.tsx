@@ -18,7 +18,7 @@ const issues = store({
   refs: {
     inspector: null as HTMLElement | null,
   },
-  acts: (get, set, refs) => ({
+  acts: ({ get, set, refs }) => ({
     selectIssue(id: number) {
       set({ selectedIssueId: id });
       refs.inspector.current?.focus();
@@ -47,7 +47,7 @@ const filters = store({
   refs: {
     search: null as HTMLInputElement | null,
   },
-  acts: (_get, set, refs) => ({
+  acts: ({ set, refs }) => ({
     setQuery(query: string) {
       set({ query });
     },
@@ -85,8 +85,8 @@ export const Summary = view(
 
 // Multiple stores form one fully typed scope.
 export const Toolbar = view(
-  ({ state, $, acts, refs }) => (
-    <section class={$.compact.map((compact) => (compact ? "compact" : ""))}>
+  ({ state, live, acts, refs }) => (
+    <section class={live.compact.map((compact) => (compact ? "compact" : ""))}>
       <input
         ref={refs.search}
         value={state.query}
@@ -166,8 +166,8 @@ void invalidInputProof;
 
 // The complete screen is also a view; no component closes over an `app` value.
 export const DogfoodApp = view(
-  ({ $ }) => (
-    <main class={$.compact.map((compact) => (compact ? "compact" : ""))}>
+  ({ live }) => (
+    <main class={live.compact.map((compact) => (compact ? "compact" : ""))}>
       <Toolbar />
       <Summary />
       <Inspector />

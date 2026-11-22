@@ -84,7 +84,7 @@ module-global instance. `view(render, stores)` defines a normal JSX component:
 ```tsx
 const issues = store({
   state: { issues: [] as Issue[] },
-  acts: (get, set) => ({
+  acts: ({ get, set }) => ({
     add(issue: Issue) {
       set({ issues: [...get("issues"), issue] });
     },
@@ -105,7 +105,7 @@ app.render(<IssueTitle issueId={1} />, "#app");
 
 The first mounted consumer resolves a descriptor to one app-scoped store.
 Later views using the same descriptor receive its current values; another app
-gets an independent instance. Dependency tuples infer and merge `state`, `$`,
+gets an independent instance. Dependency tuples infer and merge `state`, `live`,
 `acts` and `refs`, and duplicate keys are rejected by TypeScript and again at
 runtime. JSX attributes remain per-instance input, while shared mutable data
 belongs to explicit store dependencies.
@@ -116,7 +116,7 @@ Stores can depend on other descriptors when their actions need shared data:
 const assignments = store(
   {
     state: { assignee: "Unassigned" },
-    acts: (_get, set, _refs, _helpers, dependencies) => ({
+    acts: ({ set, dependencies }) => ({
       assignCurrentUser() {
         set({ assignee: dependencies.get("currentUser") });
       },
@@ -135,6 +135,13 @@ resolution and is disposed by `app.dispose()`. Updates across separate stores
 are not presented as one atomic Nexus transaction: each store keeps its own
 provenance, while synchronous DOM work is still coalesced by the renderer
 scheduler.
+
+`state` and `live` expose the same store values with different update costs.
+Reading `state.count` gives a plain value and makes the surrounding view rerun
+when `count` changes. `live.count` is a stable `LiveValue` that updates one DOM
+binding without rerunning the view. `refs` are non-reactive runtime cells and
+`acts` are commands. The legacy integrated app API keeps `app.$` for
+compatibility; standalone views use the explicit `live` name.
 
 ### Legacy app-scoped tracked regions
 
@@ -462,7 +469,7 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `6.28 KB gzip` for
-low-level core exports, `7.93 KB` for `createApp`, `8.21 KB` for the complete
-main entry, and `9.81 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `7.96 KB` for `createApp`, `8.25 KB` for the complete
+main entry, and `9.84 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

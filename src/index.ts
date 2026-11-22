@@ -46,6 +46,7 @@ export type {
   DependencyActs,
   DependencyRefs,
   DependencyState,
+  StoreActsContext,
   StoreDefinition,
   StoreDependencyScope,
   StoreOptions,

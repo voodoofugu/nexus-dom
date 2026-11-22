@@ -22,27 +22,38 @@ describe("nexus-dom rendering model", () => {
     let initializations = 0;
     const counter = store({
       state: { count: 1 },
-      acts: (get, set) => {
+      acts: ({ get, set, reset }) => {
         initializations++;
         return {
           increment() {
             set({ count: get("count") + 1 });
           },
+          resetCount() {
+            reset("count");
+          },
         };
       },
     });
     const labels = store({ state: { label: "Count" } });
+    let counterRuns = 0;
     const Counter = view(
-      ({ state, acts }, { suffix }: { suffix?: string }) => (
-        <button onClick={acts.increment}>
-          {state.label}: {state.count}{suffix}
-        </button>
-      ),
+      ({ state, live, acts }, { suffix }: { suffix?: string }) => {
+        counterRuns++;
+        return (
+          <button onClick={acts.increment}>
+            {state.label}: {live.count}{suffix}
+          </button>
+        );
+      },
       [counter, labels]
     );
     const Mirror = view(({ state }) => <output>{state.count}</output>, [counter]);
+    const Reset = view(
+      ({ acts }) => <button aria-label="Reset" onClick={acts.resetCount} />,
+      [counter]
+    );
     const App = view(() => (
-      <main><Counter suffix="!" /><Mirror /></main>
+      <main><Counter suffix="!" /><Mirror /><Reset /></main>
     ));
     const app = createApp();
     const host = document.createElement("div");
@@ -51,11 +62,18 @@ describe("nexus-dom rendering model", () => {
     const root = app.render(<App />, host, { schedule: "manual" });
     expect(initializations).toBe(1);
     expect(host.textContent).toBe("Count: 1!1");
+    expect(counterRuns).toBe(1);
 
     host.querySelector("button")?.click();
     root.flush();
     expect(host.textContent).toBe("Count: 2!2");
     expect(initializations).toBe(1);
+    expect(counterRuns).toBe(1);
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Reset"]')?.click();
+    root.flush();
+    expect(host.textContent).toBe("Count: 1!1");
+    expect(counterRuns).toBe(1);
 
     const secondApp = createApp();
     const secondHost = document.createElement("div");
@@ -87,7 +105,7 @@ describe("nexus-dom rendering model", () => {
     const cleanup = vi.fn();
     const session = store({
       state: { currentUser: "Georg" },
-      acts: (_get, set) => ({
+      acts: ({ set }) => ({
         renameUser(currentUser: string) {
           set({ currentUser });
         },
@@ -96,7 +114,7 @@ describe("nexus-dom rendering model", () => {
     const issues = store(
       {
         state: { assignee: "Unassigned" },
-        acts: (_get, set, _refs, _helpers, dependencies) => ({
+        acts: ({ set, dependencies }) => ({
           assignCurrentUser() {
             set({ assignee: dependencies.get("currentUser") });
           },

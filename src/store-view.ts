@@ -24,6 +24,19 @@ type EmptyRecord = {};
 const STORE_OPTIONS = Symbol("nexus-dom.store-options");
 declare const STORE_TYPES: unique symbol;
 
+export interface StoreActsContext<
+  S extends RecordAny,
+  R extends RecordAny,
+  D extends readonly AnyStore[],
+> {
+  readonly get: Getter<S>;
+  readonly set: Setter<S>;
+  readonly reset: (...keys: (keyof S)[]) => void;
+  readonly refs: AppRefs<R>;
+  readonly list: AppHelpers<S>["list"];
+  readonly dependencies: StoreDependencyScope<D>;
+}
+
 export interface StoreOptions<
   S extends RecordAny,
   A extends RecordAny,
@@ -32,13 +45,7 @@ export interface StoreOptions<
 > {
   state: S;
   refs?: R;
-  acts?: (
-    get: Getter<S>,
-    set: Setter<S>,
-    refs: AppRefs<R>,
-    helpers: AppHelpers<S>,
-    dependencies: StoreDependencyScope<D>
-  ) => A;
+  acts?: (context: StoreActsContext<S, R, D>) => A;
   setup?: (
     context: StoreSetupContext<S, A, R, D>
   ) => void | (() => void);
@@ -148,14 +155,14 @@ type ValidDependencies<D extends readonly AnyStore[]> =
 
 export interface ViewScope<D extends readonly AnyStore[]> {
   readonly state: Readonly<DependencyState<D>>;
-  readonly $: BoundState<DependencyState<D>, UpdateContext>;
+  readonly live: BoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
 export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly get: Getter<DependencyState<D>>;
-  readonly $: BoundState<DependencyState<D>, UpdateContext>;
+  readonly live: BoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
@@ -167,7 +174,7 @@ export interface StoreSetupContext<
   D extends readonly AnyStore[],
 > {
   readonly nexus: Nexus<S, A>;
-  readonly $: BoundState<S, UpdateContext>;
+  readonly live: BoundState<S, UpdateContext>;
   readonly acts: A;
   readonly refs: AppRefs<R>;
   readonly dependencies: StoreDependencyScope<D>;
@@ -201,7 +208,7 @@ interface ResolvedStore {
 
 interface ResolvedScope {
   source: NexusSource<RecordAny, UpdateContext>;
-  $: BoundState<RecordAny, UpdateContext>;
+  live: BoundState<RecordAny, UpdateContext>;
   acts: RecordAny;
   refs: AppRefs<RecordAny>;
 }
@@ -236,24 +243,28 @@ export function createStoreViewRegistry(): StoreViewResolver {
           const state = dependencyScope.source.get();
           return key === undefined ? state : state[key];
         }) as Getter<RecordAny>,
-        $: dependencyScope.$,
+        live: dependencyScope.live,
         acts: dependencyScope.acts,
         refs: dependencyScope.refs,
       };
       const refs = createRefs(options.refs ?? {});
-      const nexus = options.acts
-        ? createNexus({
+      let nexus: Nexus<RecordAny, RecordAny>;
+      nexus = options.acts
+        ? (createNexus({
             state: options.state,
-            acts: (get, set) =>
-              options.acts!(
+            acts: (get, set) => {
+              const helpers = createListHelpers(get, set);
+              return options.acts!({
                 get,
                 set,
+                reset: (...keys) => nexus.reset(...(keys as string[])),
                 refs,
-                createListHelpers(get, set),
-                dependencies
-              ),
-          })
-        : createNexus({ state: options.state });
+                list: helpers.list,
+                dependencies,
+              });
+            },
+          }) as Nexus<RecordAny, RecordAny>)
+        : (createNexus({ state: options.state }) as Nexus<RecordAny, RecordAny>);
       const resolved = {
         nexus: nexus as Nexus<RecordAny, RecordAny>,
         refs,
@@ -273,7 +284,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
         try {
           const setupCleanup = options.setup({
             nexus,
-            $: bind(nexus),
+          live: bind(nexus),
             acts: nexus.acts,
             refs,
             dependencies,
@@ -350,7 +361,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
     };
     // Validate state conflicts once, before any view project executes.
     source.get();
-    const scope = { source, $: bind(source), acts, refs };
+    const scope = { source, live: bind(source), acts, refs };
     scopes.set(dependencies, scope);
     return scope;
   };
@@ -363,7 +374,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
         source: scope.source,
         project: (state) =>
           vnode.render(
-            { state, $: scope.$, acts: scope.acts, refs: scope.refs },
+            { state, live: scope.live, acts: scope.acts, refs: scope.refs },
             vnode.input
           ),
       };
