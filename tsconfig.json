@@ -18,5 +18,5 @@
     },
     "noEmit": true
   },
-  "include": ["src", "tests", "benchmarks", "example", "vitest.config.ts"]
+  "include": ["src", "tests", "benchmarks", "example", "experiments", "vitest.config.ts"]
 }

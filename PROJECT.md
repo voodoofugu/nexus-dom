@@ -194,6 +194,11 @@ drilling or a provider hierarchy.
    focus, refs and current event closures while their plain-DOM shape remains
    stable, and falls back to atomic replacement for structural changes. The
    next question is whether that boundary stays understandable in a larger app.
+   A type-only spike in `experiments/` now tests the next authoring model:
+   standalone `view(render, stores)` definitions, lazy app-scoped store
+   dependencies, flat inferred state/actions/refs, compile-time key conflicts
+   and direct positional view input such as `IssueTitle(id)` without a props
+   container. It deliberately does not change the runtime API yet.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
