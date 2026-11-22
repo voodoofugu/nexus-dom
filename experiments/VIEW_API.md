@@ -1,8 +1,8 @@
-# Type-only `view` / lazy-store experiment
+# `view` / lazy-store design validation
 
-This directory does not change the runtime or public package API. It checks a
-candidate authoring model against the issue-triage dogfood with the normal
-project TypeScript configuration.
+This directory checks the standalone `view` and lazy-store authoring model
+against focused issue-triage examples with the normal project TypeScript
+configuration. The live playground uses the same public API.
 
 ```tsx
 const Summary = view(
@@ -13,7 +13,7 @@ const Summary = view(
 );
 ```
 
-## Candidate semantics
+## Current semantics
 
 - `store(options)` declares state, actions and refs but does not create a
   module-global state instance.
@@ -44,31 +44,29 @@ const SelectedIssueTitle = view(
 );
 ```
 
-That is a good fit for one globally selected issue. For two independently
-parameterized instances, the spike tests direct positional input rather than a
-props container:
+That is a good fit for one globally selected issue. Independently parameterized
+instances use normal JSX attributes, destructured directly into local values:
 
 ```tsx
 const IssueTitle = view(
-  ({ state }, issueId: number) => {
+  ({ state }, { issueId }: { issueId: number }) => {
     return <strong>{findIssue(state.issues, issueId)?.title}</strong>;
   },
   [issuesStore]
 );
 
-return <li>{IssueTitle(issue.id)}</li>;
+return <li><IssueTitle issueId={issue.id} /></li>;
 ```
 
-`issueId` is inferred at the call site and is used directly in the view logic.
-This loses conventional `<IssueTitle issueId={...} />` syntax, so the experiment
-must compare readability and ownership behavior before choosing it. It does
-avoid both a global `selectedIssueId` workaround and `props.issueId` access.
+The JSX boundary remains conventional while the implementation uses `issueId`
+directly rather than `props.issueId`. Required and optional attributes and
+`children` remain statically checked.
 
 ## Still unresolved
 
 - Whether stores merge into one flat scope or retain namespaces.
-- Whether direct calls such as `IssueTitle(id)` are clearer than JSX props, and
-  how their identity and ownership behave when the surrounding view reruns.
+- The exact internal type signature needed to keep JSX input and dependency
+  scope inference stable without exposing overload complexity to users.
 - How one store explicitly depends on another store inside its actions.
 - Cross-store batching and update provenance.
 - Reset, persistence, devtools and initialization cleanup for late stores.

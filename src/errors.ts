@@ -4,7 +4,9 @@ export type NexusDOMErrorCode =
   | "DUPLICATE_LIST_KEY"
   | "INVALID_LIST_INDEX"
   | "INVALID_LIST_REMOVE_COUNT"
-  | "RENDER_TARGET_NOT_FOUND";
+  | "RENDER_TARGET_NOT_FOUND"
+  | "STORE_VIEW_OUTSIDE_APP"
+  | "STORE_DEPENDENCY_CONFLICT";
 
 /** An actionable error raised by nexus-dom itself, not by user render code. */
 export class NexusDOMError extends Error {

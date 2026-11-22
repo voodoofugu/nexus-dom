@@ -10,12 +10,79 @@ import {
   onCleanup,
   render,
   Show,
+  store,
+  view,
   when,
   type CommitEvent,
   type LiveItem,
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
+  it("lazily resolves typed store views once per app", () => {
+    let initializations = 0;
+    const counter = store({
+      state: { count: 1 },
+      acts: (get, set) => {
+        initializations++;
+        return {
+          increment() {
+            set({ count: get("count") + 1 });
+          },
+        };
+      },
+    });
+    const labels = store({ state: { label: "Count" } });
+    const Counter = view(
+      ({ state, acts }, { suffix }: { suffix?: string }) => (
+        <button onClick={acts.increment}>
+          {state.label}: {state.count}{suffix}
+        </button>
+      ),
+      [counter, labels]
+    );
+    const Mirror = view(({ state }) => <output>{state.count}</output>, [counter]);
+    const App = view(() => (
+      <main><Counter suffix="!" /><Mirror /></main>
+    ));
+    const app = createApp();
+    const host = document.createElement("div");
+
+    expect(initializations).toBe(0);
+    const root = app.render(<App />, host, { schedule: "manual" });
+    expect(initializations).toBe(1);
+    expect(host.textContent).toBe("Count: 1!1");
+
+    host.querySelector("button")?.click();
+    root.flush();
+    expect(host.textContent).toBe("Count: 2!2");
+    expect(initializations).toBe(1);
+
+    const secondApp = createApp();
+    const secondHost = document.createElement("div");
+    secondApp.render(<Mirror />, secondHost);
+    expect(secondHost.textContent).toBe("1");
+    expect(initializations).toBe(2);
+  });
+
+  it("rejects store views outside an app and runtime key conflicts", () => {
+    const left = store({ state: { value: 1 } });
+    const right = store({ state: { value: 2 } });
+    const Conflicted = (view as any)(
+      ({ state }: any) => <p>{state.value}</p>,
+      [left, right]
+    );
+    const Standalone = view(({ state }) => <p>{state.value}</p>, [left]);
+
+    expect(() => render(<Standalone />, document.createElement("div"))).toThrowError(
+      expect.objectContaining({ code: "STORE_VIEW_OUTSIDE_APP" })
+    );
+    expect(() =>
+      createApp().render(<Conflicted />, document.createElement("div"))
+    ).toThrowError(
+      expect.objectContaining({ code: "STORE_DEPENDENCY_CONFLICT" })
+    );
+  });
+
   it("creates a complete app with reactive state and non-reactive refs", () => {
     const app = createApp({
       state: { count: 0 },

@@ -9,6 +9,7 @@ import {
 import { Owner, withOwner } from "./owner.js";
 import { createScheduler } from "./scheduler.js";
 import { mountTrackedView } from "./view.js";
+import { nexusDOMError } from "./errors.js";
 import type {
   DOMRenderer,
   ElementVNode,
@@ -17,6 +18,7 @@ import type {
   MountedRoot,
   Renderable,
   RendererOptions,
+  StoreViewResolver,
   VNode,
 } from "./types.js";
 
@@ -48,7 +50,8 @@ function createElement(document: Document, target: Node, type: string) {
 }
 
 export function createDOMRenderer<C = unknown>(
-  options: RendererOptions<C> = {}
+  options: RendererOptions<C> = {},
+  storeViews?: StoreViewResolver
 ): DOMRenderer<C> {
   const scheduler = createScheduler(options);
   const eventRecords = new WeakMap<Element, Map<string, EventRecord>>();
@@ -457,6 +460,17 @@ export function createDOMRenderer<C = unknown>(
   };
 
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
+    if (vnode.kind === "store-view") {
+      if (!storeViews) {
+        throw nexusDOMError(
+          "STORE_VIEW_OUTSIDE_APP",
+          "A view with store dependencies must be rendered through createApp().render()."
+        );
+      }
+      renderVNode(storeViews.resolve(vnode), target, owner);
+      return;
+    }
+
     if (vnode.kind === "error-boundary") {
       renderBoundary(target, owner, vnode.children, vnode.fallback);
       return;

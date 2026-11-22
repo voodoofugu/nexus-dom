@@ -41,6 +41,15 @@ export { onCleanup } from "./owner.js";
 export { render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";
 export { Show } from "./show.js";
+export { store, view } from "./store-view.js";
+export type {
+  DependencyActs,
+  DependencyRefs,
+  DependencyState,
+  StoreDefinition,
+  StoreOptions,
+  ViewScope,
+} from "./store-view.js";
 export type {
   BoundState,
   CommitEvent,
@@ -60,6 +69,7 @@ export type {
   RenderRoot,
   RendererOptions,
   ShowVNode,
+  StoreViewVNode,
   TrackedViewVNode,
   VNode,
 } from "./types.js";

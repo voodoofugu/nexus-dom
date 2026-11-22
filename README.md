@@ -75,7 +75,42 @@ code can safely expose or reuse it without creating duplicate wrappers.
 available for tests, custom scheduling and advanced integrations that need to
 mount several roots through the same renderer.
 
-### Tracked views with ordinary expressions
+### Standalone views and lazy stores
+
+The current authoring model separates application bootstrap from component
+definitions. `store(...)` declares state, actions and refs without creating a
+module-global instance. `view(render, stores)` defines a normal JSX component:
+
+```tsx
+const issues = store({
+  state: { issues: [] as Issue[] },
+  acts: (get, set) => ({
+    add(issue: Issue) {
+      set({ issues: [...get("issues"), issue] });
+    },
+  }),
+});
+
+const IssueTitle = view(
+  ({ state }, { issueId }: { issueId: number }) => {
+    const issue = state.issues.find((item) => item.id === issueId);
+    return <strong>{issue?.title}</strong>;
+  },
+  [issues]
+);
+
+const app = createApp();
+app.render(<IssueTitle issueId={1} />, "#app");
+```
+
+The first mounted consumer resolves a descriptor to one app-scoped store.
+Later views using the same descriptor receive its current values; another app
+gets an independent instance. Dependency tuples infer and merge `state`, `$`,
+`acts` and `refs`, and duplicate keys are rejected by TypeScript and again at
+runtime. JSX attributes remain per-instance input, while shared mutable data
+belongs to explicit store dependencies.
+
+### Legacy app-scoped tracked regions
 
 `app.view(...)` creates an owned reactive region and passes the complete app
 scope into its callback. Reads from `state` are plain values and determine the
@@ -400,8 +435,8 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `6.18 KB gzip` for
-low-level core exports, `7.17 KB` for `createApp`, `7.42 KB` for the complete
-main entry, and `9.02 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `6.28 KB gzip` for
+low-level core exports, `7.70 KB` for `createApp`, `7.99 KB` for the complete
+main entry, and `9.59 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

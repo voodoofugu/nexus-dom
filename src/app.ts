@@ -15,6 +15,7 @@ import {
   type ListController,
 } from "./list.js";
 import { render as renderView } from "./render.js";
+import { createStoreViewRegistry } from "./store-view.js";
 import type {
   BoundState,
   Renderable,
@@ -117,6 +118,12 @@ function createRefs<R extends RecordAny>(values: R): AppRefs<R> {
   ) as AppRefs<R>;
 }
 
+export function createApp(): NexusDOMApp<
+  Record<string, never>,
+  Record<string, never>,
+  Record<string, never>
+>;
+
 export function createApp<
   S extends RecordAny,
   R extends RecordAny = Record<string, never>,
@@ -133,22 +140,26 @@ export function createApp<
   R extends RecordAny,
   A extends RecordAny,
 >(
-  options: AppOptions<S, R, A> | AppOptionsWithoutActs<S, R>
+  options?: AppOptions<S, R, A> | AppOptionsWithoutActs<S, R>
 ): NexusDOMApp<S, A, R> {
-  const refs = createRefs((options.refs ?? {}) as R);
+  const normalized = (options ?? { state: {} }) as
+    | AppOptions<S, R, A>
+    | AppOptionsWithoutActs<S, R>;
+  const refs = createRefs((normalized.refs ?? {}) as R);
   const nexus =
-    "acts" in options
+    "acts" in normalized
       ? createNexus({
-          state: options.state,
+          state: normalized.state,
           acts: (get, set) =>
-            options.acts(get, set, refs, createListHelpers(get, set)),
+            normalized.acts(get, set, refs, createListHelpers(get, set)),
         })
-      : createNexus({ state: options.state });
+      : createNexus({ state: normalized.state });
   const typedNexus = nexus as Nexus<S, A>;
   const binding = bind(typedNexus);
   const helpers = createListHelpers(typedNexus.get, typedNexus.set);
   const roots = new Set<RenderRoot>();
   const cleanups = new Set<() => void>();
+  const storeViews = createStoreViewRegistry();
   let disposed = false;
 
   const app: NexusDOMApp<S, A, R> = {
@@ -193,7 +204,7 @@ export function createApp<
           "Cannot render a disposed app. app.dispose() has already run."
         );
       }
-      const root = renderView(view, target, rendererOptions);
+      const root = renderView(view, target, rendererOptions, storeViews);
       let rootDisposed = false;
       const managedRoot: RenderRoot = {
         flush: root.flush,
@@ -209,7 +220,7 @@ export function createApp<
     },
   };
 
-  const setup = options.setup as
+  const setup = normalized.setup as
     | ((context: AppSetupContext<S, A, R>) => void | (() => void))
     | undefined;
   const setupCleanup = setup?.({

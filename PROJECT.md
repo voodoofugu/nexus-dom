@@ -26,10 +26,13 @@ caches) the reactive view of Nexus state, while `render(view, target)` owns the
 renderer instance. `createDOMRenderer` is a low-level escape hatch rather than a
 required setup step.
 
-`createApp({ state, refs, acts })` is the primary integrated facade. It creates
-Nexus and bindings internally, exposes reactive values under `$`, non-reactive
-`{ current }` cells under `refs`, actions under `acts`, and owns the convenient
-`app.render(...)` entry point.
+The new primary authoring experiment uses standalone `store(...)` descriptors
+and `view(render, dependencies)` JSX components. `createApp()` owns the renderer
+roots and lazily resolves each descriptor to one app-scoped Nexus instance;
+different apps stay isolated. Component input remains normal JSX attributes,
+destructured directly as the render callback's second argument. The previous
+`createApp({ state, refs, acts })` facade remains available while the new model
+is validated and still owns the convenient `app.render(...)` entry point.
 
 `app.view(({ state, $, acts, refs }) => JSX)` is the first hybrid-rendering
 experiment. It tracks ordinary top-level state reads, reruns only the owned
@@ -167,7 +170,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `9.02 KB gzip`; actual application cost still depends on imported APIs
+  about `9.59 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 
 ### Current problems and likely solutions
@@ -187,18 +190,14 @@ drilling or a provider hierarchy.
    infrastructure at `313 B/row`, Preact Signals at `755 B/row` and Solid at
    `566 B/row`. The remaining gap to Solid is primarily binding/subscription
    state rather than retained leaks; disposal still returns to baseline.
-3. **Control-flow ergonomics.** The first dogfood workspace now uses tracked
-   `app.view(...)` regions for plain conditionals, array methods and derived
-   summaries while retaining `$` and `.each(...)` for hot identity-sensitive
-   paths. Bounded positional reconciliation now preserves the inspector, input,
-   focus, refs and current event closures while their plain-DOM shape remains
-   stable, and falls back to atomic replacement for structural changes. The
-   next question is whether that boundary stays understandable in a larger app.
-   A type-only spike in `experiments/` now tests the next authoring model:
-   standalone `view(render, stores)` definitions, lazy app-scoped store
-   dependencies, flat inferred state/actions/refs, compile-time key conflicts
-   and direct positional view input such as `IssueTitle(id)` without a props
-   container. It deliberately does not change the runtime API yet.
+3. **Control-flow ergonomics.** The dogfood workspace now runs on standalone
+   `view(render, stores)` components and lazy app-scoped stores. Normal JSX
+   attributes provide instance input while the render callback destructures
+   values directly; shared state/actions/refs come from the explicit dependency
+   tuple. Bounded positional reconciliation preserves stable plain DOM and
+   falls back to atomic replacement for structural changes. The next design
+   questions are cross-store actions/batching and whether the flat merged scope
+   remains clear as the application grows.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -221,9 +220,9 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `6.18 KB
-gzip` for core, `7.17 KB` for `createApp`, and `7.42 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `9.02 KB gzip` when the
+The isolated Rollup/Terser ESM benchmark currently measures roughly `6.28 KB
+gzip` for core, `7.70 KB` for `createApp`, and `7.99 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `9.59 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

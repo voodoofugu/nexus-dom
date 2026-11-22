@@ -91,6 +91,17 @@ export interface TrackedViewVNode {
   readonly project: (state: Record<string, unknown>) => Renderable;
 }
 
+export interface StoreViewVNode {
+  readonly kind: "store-view";
+  readonly dependencies: readonly unknown[];
+  readonly input: Record<string, unknown>;
+  readonly render: (scope: unknown, input: Record<string, unknown>) => Renderable;
+}
+
+export interface StoreViewResolver {
+  resolve(vnode: StoreViewVNode): TrackedViewVNode;
+}
+
 export interface KeyedVNode {
   readonly kind: "keyed";
   readonly source: LiveValue<readonly unknown[], unknown>;
@@ -116,6 +127,7 @@ export type VNode =
   | ShowVNode
   | DynamicVNode
   | TrackedViewVNode
+  | StoreViewVNode
   | ErrorBoundaryVNode
   | KeyedVNode;
 

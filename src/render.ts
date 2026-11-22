@@ -4,6 +4,7 @@ import type {
   Renderable,
   RendererOptions,
   RenderRoot,
+  StoreViewResolver,
 } from "./types.js";
 
 function resolveTarget(target: ParentNode | string): ParentNode {
@@ -23,9 +24,10 @@ function resolveTarget(target: ParentNode | string): ParentNode {
 export function render<C = unknown>(
   view: Renderable,
   target: ParentNode | string,
-  options: RendererOptions<C> = {}
+  options: RendererOptions<C> = {},
+  storeViews?: StoreViewResolver
 ): RenderRoot {
-  const renderer = createDOMRenderer(options);
+  const renderer = createDOMRenderer(options, storeViews);
   const root = renderer.mount(view, resolveTarget(target));
 
   return {

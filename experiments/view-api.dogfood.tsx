@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { store, view } from "./view-api.js";
+import { store, view } from "nexus-dom";
 
 type IssueStatus = "backlog" | "active" | "done";
 type IssueFilter = "all" | IssueStatus;
@@ -130,22 +130,39 @@ export const SelectedIssueTitle = view(
   [issues]
 );
 
-// Per-instance input can stay positional instead of being wrapped in props.
-// A view factory is called as a regular function inside JSX.
+interface IssueTitleInput {
+  issueId: number;
+  emphasis?: "normal" | "strong";
+  children?: import("../src/index.js").Renderable;
+}
+
+// JSX attributes remain the explicit per-instance input. Destructuring keeps
+// the values direct inside user logic rather than requiring `props.issueId`.
 export const IssueTitle = view(
-  ({ state }, issueId: number) => {
+  (
+    { state },
+    { issueId, emphasis = "normal", children }: IssueTitleInput
+  ) => {
     const issue = state.issues.find((candidate) => candidate.id === issueId);
-    return <strong>{issue?.title}</strong>;
+    return emphasis === "strong" ? (
+      <strong>{issue?.title}{children}</strong>
+    ) : (
+      <span>{issue?.title}{children}</span>
+    );
   },
   [issues]
 );
 
-const directInputProof = IssueTitle(1);
-void directInputProof;
+const jsxInputProof = <IssueTitle issueId={1} emphasis="strong">!</IssueTitle>;
+void jsxInputProof;
 
-// @ts-expect-error issueId is a required positional input.
-const missingInputProof = IssueTitle();
+// @ts-expect-error issueId is a required JSX attribute.
+const missingInputProof = <IssueTitle />;
 void missingInputProof;
+
+// @ts-expect-error optional JSX attributes retain their declared union.
+const invalidInputProof = <IssueTitle issueId={1} emphasis="loud" />;
+void invalidInputProof;
 
 // The complete screen is also a view; no component closes over an `app` value.
 export const DogfoodApp = view(
@@ -154,7 +171,7 @@ export const DogfoodApp = view(
       <Toolbar />
       <Summary />
       <Inspector />
-      <section>{IssueTitle(1)}</section>
+      <section><IssueTitle issueId={1} /></section>
     </main>
   ),
   [issues, filters]

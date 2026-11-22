@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { createApp } from "nexus-dom";
+import { createApp, store, view } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 import "./style.css";
 
@@ -31,7 +31,7 @@ const nextStatus: Record<IssueStatus, IssueStatus> = {
   done: "backlog",
 };
 
-const app = createApp({
+const workspace = store({
   state: {
     issues: initialIssues,
     query: "",
@@ -129,12 +129,14 @@ const app = createApp({
   },
 });
 
+const app = createApp();
+
 const diagnostics = createPlaygroundDiagnostics();
 const statusLabel = (status: IssueStatus) =>
   status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
 
-function Toolbar() {
-  return app.view(({ $, acts, refs }) => {
+const Toolbar = view(
+  ({ $, acts, refs }) => {
     diagnostics.viewRun("toolbar");
     const filters: Array<{ value: IssueFilter; label: string }> = [
       { value: "all", label: "All issues" },
@@ -170,11 +172,12 @@ function Toolbar() {
         </button>
       </section>
     );
-  });
-}
+  },
+  [workspace]
+);
 
-function Summary() {
-  return app.view(({ state }) => {
+const Summary = view(
+  ({ state }) => {
     diagnostics.viewRun("summary");
     const counts = state.issues.reduce(
       (result, issue) => {
@@ -192,11 +195,26 @@ function Summary() {
         <article><span>Done</span><strong>{counts.done}</strong></article>
       </section>
     );
-  });
-}
+  },
+  [workspace]
+);
 
-function IssueList() {
-  return app.view(({ $, acts }) => {
+const EmptyState = view(
+  ({ state }) => {
+    const query = state.query.trim().toLowerCase();
+    const count = state.issues.filter((issue) =>
+      (state.filter === "all" || issue.status === state.filter) &&
+      (query === "" || issue.title.toLowerCase().includes(query) || issue.code.toLowerCase().includes(query) || issue.owner.toLowerCase().includes(query))
+    ).length;
+    return count === 0 ? (
+      <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
+    ) : null;
+  },
+  [workspace]
+);
+
+const IssueList = view(
+  ({ $, acts }) => {
     diagnostics.viewRun("issue-list");
     const visibleIssues = $.$select((state) => {
       const query = state.query.trim().toLowerCase();
@@ -243,23 +261,15 @@ function IssueList() {
           )}
         </ul>
 
-        {app.view(({ state }) => {
-          const query = state.query.trim().toLowerCase();
-          const count = state.issues.filter((issue) =>
-            (state.filter === "all" || issue.status === state.filter) &&
-            (query === "" || issue.title.toLowerCase().includes(query) || issue.code.toLowerCase().includes(query) || issue.owner.toLowerCase().includes(query))
-          ).length;
-          return count === 0 ? (
-            <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
-          ) : null;
-        })}
+        <EmptyState />
       </section>
     );
-  });
-}
+  },
+  [workspace]
+);
 
-function Inspector() {
-  return app.view(({ state, acts, refs }) => {
+const Inspector = view(
+  ({ state, acts, refs }) => {
     diagnostics.viewRun("inspector");
     const issue = state.issues.find((candidate) => candidate.id === state.selectedIssueId);
 
@@ -301,11 +311,12 @@ function Inspector() {
         </div>
       </aside>
     );
-  });
-}
+  },
+  [workspace]
+);
 
-function App() {
-  return app.view(({ $, acts }) => {
+const App = view(
+  ({ $, acts }) => {
     diagnostics.viewRun("app-shell");
     return (
       <main class={$.compact.map((compact) => compact ? "workspace is-compact" : "workspace")} ref={diagnostics.surfaceRef}>
@@ -323,7 +334,8 @@ function App() {
         <diagnostics.Panel />
       </main>
     );
-  });
-}
+  },
+  [workspace]
+);
 
 app.render(<App />, "#app", { onCommit: diagnostics.onCommit });
