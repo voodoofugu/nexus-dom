@@ -52,6 +52,8 @@ export type {
   StoreOptions,
   StoreSetupContext,
   ViewScope,
+  WritableBoundState,
+  WritableLiveValue,
 } from "./store-view.js";
 export type {
   BoundState,

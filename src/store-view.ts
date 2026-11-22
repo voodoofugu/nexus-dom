@@ -2,11 +2,13 @@ import {
   createNexus,
   type Getter,
   type Nexus,
+  type SetContext,
   type Setter,
   type UpdateContext,
 } from "nexus-state";
 import { nexusDOMError } from "./errors.js";
 import { bind } from "./live.js";
+import { LIVE_VALUE, type LiveValue } from "./types.js";
 import { createListHelpers, type AppHelpers } from "./list.js";
 import type { AppRefs } from "./app.js";
 import type {
@@ -108,6 +110,15 @@ export type DependencyRefs<D extends readonly AnyStore[]> = EnsureRecord<
   MergeStores<D, StoreRefs<D[number]>>
 >;
 
+export interface WritableLiveValue<T, C = unknown> extends LiveValue<T, C> {
+  set(value: T, context?: SetContext): void;
+  update(project: (current: T) => T, context?: SetContext): void;
+}
+
+export type WritableBoundState<S extends RecordAny, C = unknown> = {
+  readonly [K in keyof S]: WritableLiveValue<S[K], C>;
+} & Pick<BoundState<S, C>, "$select">;
+
 type Conflicts<
   D extends readonly AnyStore[],
   Domain extends "state" | "acts" | "refs",
@@ -155,14 +166,14 @@ type ValidDependencies<D extends readonly AnyStore[]> =
 
 export interface ViewScope<D extends readonly AnyStore[]> {
   readonly state: Readonly<DependencyState<D>>;
-  readonly $: BoundState<DependencyState<D>, UpdateContext>;
+  readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
 export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly get: Getter<DependencyState<D>>;
-  readonly $: BoundState<DependencyState<D>, UpdateContext>;
+  readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
@@ -174,7 +185,7 @@ export interface StoreSetupContext<
   D extends readonly AnyStore[],
 > {
   readonly nexus: Nexus<S, A>;
-  readonly $: BoundState<S, UpdateContext>;
+  readonly $: WritableBoundState<S, UpdateContext>;
   readonly acts: A;
   readonly refs: AppRefs<R>;
   readonly dependencies: StoreDependencyScope<D>;
@@ -208,7 +219,7 @@ interface ResolvedStore {
 
 interface ResolvedScope {
   source: NexusSource<RecordAny, UpdateContext>;
-  $: BoundState<RecordAny, UpdateContext>;
+  $: WritableBoundState<RecordAny, UpdateContext>;
   acts: RecordAny;
   refs: AppRefs<RecordAny>;
 }
@@ -217,6 +228,44 @@ const createRefs = (values: RecordAny): AppRefs<RecordAny> =>
   Object.fromEntries(
     Object.entries(values).map(([key, current]) => [key, { current }])
   );
+
+const createWritableBinding = (
+  source: NexusSource<RecordAny, UpdateContext>,
+  ownerForKey: (key: string) => ResolvedStore | undefined
+): WritableBoundState<RecordAny, UpdateContext> => {
+  const readonly = bind(source);
+  const cache = new Map<PropertyKey, WritableLiveValue<unknown, UpdateContext>>();
+  return new Proxy(Object.create(null), {
+    get(_target, property) {
+      if (property === "$select") return readonly.$select;
+      if (typeof property !== "string") return undefined;
+      let value = cache.get(property);
+      if (value) return value;
+      const base = readonly[property]!;
+      const owner = ownerForKey(property);
+      if (!owner) return base;
+      value = {
+        [LIVE_VALUE]: true,
+        get: () => base.get(),
+        subscribe: (listener) => base.subscribe(listener),
+        map: (project, isEqual) => base.map(project, isEqual),
+        render: (project, options) => base.render(project, options),
+        each: (base.each as any).bind(base),
+        set(next, context = "$.set") {
+          owner.nexus.set({ [property]: next }, context);
+        },
+        update(project, context = "$.update") {
+          owner.nexus.set(
+            (state) => ({ [property]: project(state[property]) }),
+            context
+          );
+        },
+      };
+      cache.set(property, value);
+      return value;
+    },
+  });
+};
 
 export function createStoreViewRegistry(): StoreViewResolver {
   const stores = new Map<AnyStore, ResolvedStore>();
@@ -284,7 +333,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
         try {
           const setupCleanup = options.setup({
             nexus,
-          $: bind(nexus),
+          $: createWritableBinding(nexus, () => resolved),
             acts: nexus.acts,
             refs,
             dependencies,
@@ -329,9 +378,19 @@ export function createStoreViewRegistry(): StoreViewResolver {
     const acts: RecordAny = {};
     const refs = {} as AppRefs<RecordAny>;
     const stateKeys = new Map<ResolvedStore, Set<string>>();
+    const stateOwners = new Map<string, ResolvedStore>();
     for (const item of resolved) {
       const state = item.nexus.get();
       stateKeys.set(item, new Set(Object.keys(state)));
+      for (const key of Object.keys(state)) {
+        if (stateOwners.has(key)) {
+          throw nexusDOMError(
+            "STORE_DEPENDENCY_CONFLICT",
+            `Store dependencies define the same state key "${key}".`
+          );
+        }
+        stateOwners.set(key, item);
+      }
       mergeDomain(acts, item.nexus.acts, "acts");
       mergeDomain(refs, item.refs, "refs");
     }
@@ -361,7 +420,12 @@ export function createStoreViewRegistry(): StoreViewResolver {
     };
     // Validate state conflicts once, before any view project executes.
     source.get();
-    const scope = { source, $: bind(source), acts, refs };
+    const scope = {
+      source,
+      $: createWritableBinding(source, (key) => stateOwners.get(key)),
+      acts,
+      refs,
+    };
     scopes.set(dependencies, scope);
     return scope;
   };

@@ -116,6 +116,9 @@ memoization, but they do not reduce the physical work of a full reverse.
    useful `app.view(...)` regions without growing into a general VDOM?
 10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
     commands such as focus, rather than relying on scheduler timing?
+11. Can one deterministic owner-path contract support browser identity,
+    `id(localKey)`, SSR output and hydration without turning every node into
+    marked framework DOM?
 
 ## Current assessment
 
@@ -170,8 +173,12 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `9.84 KB gzip`; actual application cost still depends on imported APIs
+  about `10.02 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
+- Writable `$field.set(value)` and `$field.update(project)` cover small local
+  changes without forcing one-off actions; actions remain the domain-command
+  path. Runtime refs stay separate because state participates in cloning,
+  reset, persistence, devtools and future server serialization.
 
 ### Current problems and likely solutions
 
@@ -205,9 +212,10 @@ drilling or a provider hierarchy.
    get/set/reset/refs/list/dependencies.
    A density benchmark over 500 components now confirms the trade-off: targeted
    `$` updates remain nearly flat as fields increase, while dense all-field
-   updates cross tracked-view reconciliation near eight fields. At sixteen
-   fields the first run measured `4.9 ms` for bindings versus `4.4 ms` for the
-   view, with roughly `12.0 KB` versus `2.1 KB` retained JS per component.
+   updates cross tracked-view reconciliation between eight and sixteen fields.
+   After writable bindings, the sixteen-field run measured `6.4 ms` for
+   bindings versus `4.3 ms` for the view, with roughly `12.1 KB` versus `2.1
+   KB` retained JS per component.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -231,8 +239,8 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `6.28 KB
-gzip` for core, `7.96 KB` for `createApp`, and `8.25 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `9.84 KB gzip` when the
+gzip` for core, `8.15 KB` for `createApp`, and `8.44 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `10.02 KB gzip` when the
 tree-shaken dependency is bundled. Track both separately from the playground
 bundle.
 

@@ -143,6 +143,25 @@ binding without rerunning the view. `refs` are non-reactive runtime cells and
 `acts` are commands. These are two subscription strategies over one Nexus
 state, not two sources of truth.
 
+Bindings from standalone stores are writable for small local updates:
+
+```tsx
+<button onClick={() => $.count.update((count) => count + 1)}>
+  {$.count}
+</button>
+
+<button onClick={() => $.filter.set("active")}>Active</button>
+```
+
+`update` is preferred for increments and other read-modify-write operations;
+`$.count.set($.count.get() + 1)` is valid but easier to make stale. Direct
+updates use `$.set` / `$.update` provenance. Named `acts` remain useful for
+shared domain operations, validation and multi-key changes.
+
+Runtime refs intentionally remain separate from state. Nexus snapshots, reset,
+persistence, devtools and future SSR operate on state data; DOM nodes, sockets
+and canvas contexts are non-serializable resources with app lifecycle instead.
+
 ### Legacy app-scoped tracked regions
 
 `app.view(...)` creates an owned reactive region and passes the complete app
@@ -455,10 +474,11 @@ remain Chromium-only because they use CDP.
 `npm run benchmark:density` compares 500 identical components with 1, 2, 4, 8
 and 16 fields using either individual `$` bindings or one tracked `state` view.
 It measures one-field and all-field updates plus forced-GC heap. In the first
-local Chrome run, targeted `$` updates stayed around `0.2–0.4 ms`; dense updates
-crossed over near eight fields, and at sixteen fields the tracked view measured
-`4.4 ms` versus `4.9 ms` for bindings. Retained JS heap at sixteen fields was
-about `2.1 KB/component` for the view versus `12.0 KB/component` for bindings.
+local Chrome run after writable bindings, targeted `$` updates stayed around
+`0.3–0.4 ms`; dense updates crossed over between eight and sixteen fields, and
+at sixteen fields the tracked view measured `4.3 ms` versus `6.4 ms` for
+bindings. Retained JS heap at sixteen fields was
+about `2.1 KB/component` for the view versus `12.1 KB/component` for bindings.
 These values are machine-specific; the shape of the crossover is the useful
 result.
 
@@ -480,7 +500,7 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `6.28 KB gzip` for
-low-level core exports, `7.96 KB` for `createApp`, `8.25 KB` for the complete
-main entry, and `9.84 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `8.15 KB` for `createApp`, `8.44 KB` for the complete
+main entry, and `10.02 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

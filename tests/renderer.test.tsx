@@ -40,9 +40,15 @@ describe("nexus-dom rendering model", () => {
       ({ state, $, acts }, { suffix }: { suffix?: string }) => {
         counterRuns++;
         return (
-          <button onClick={acts.increment}>
-            {state.label}: {$.count}{suffix}
-          </button>
+          <section>
+            <button onClick={acts.increment}>
+              {state.label}: {$.count}{suffix}
+            </button>
+            <button
+              aria-label="Direct increment"
+              onClick={() => $.count.update((count) => count + 1)}
+            />
+          </section>
         );
       },
       [counter, labels]
@@ -64,9 +70,14 @@ describe("nexus-dom rendering model", () => {
     expect(host.textContent).toBe("Count: 1!1");
     expect(counterRuns).toBe(1);
 
-    host.querySelector("button")?.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="Direct increment"]')?.click();
     root.flush();
     expect(host.textContent).toBe("Count: 2!2");
+    expect(counterRuns).toBe(1);
+
+    host.querySelector("button")?.click();
+    root.flush();
+    expect(host.textContent).toBe("Count: 3!3");
     expect(initializations).toBe(1);
     expect(counterRuns).toBe(1);
 
