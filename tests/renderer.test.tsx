@@ -46,7 +46,7 @@ describe("nexus-dom rendering model", () => {
             </button>
             <button
               aria-label="Direct increment"
-              onClick={() => $.count.update((count) => count + 1)}
+              onClick={() => $.count.set((count) => count + 1)}
             />
           </section>
         );
@@ -187,6 +187,71 @@ describe("nexus-dom rendering model", () => {
       createApp().render(<Broken />, document.createElement("div"))
     ).toThrow("setup failed");
     expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("creates stable prefixed ids for component instances", () => {
+    const values = store({
+      state: { value: 1 },
+      acts: ({ set }) => ({ setValue(value: number) { set({ value }); } }),
+    });
+    const Field = view(
+      ({ id, state }, { name }: { name: string }) => {
+        const inputId = id("input");
+        expect(id("input")).toBe(inputId);
+        return <label for={inputId}>{name}<input id={inputId} value={state.value} /></label>;
+      },
+      [values]
+    );
+    const App = view(() => <main><Field name="First" /><Field name="Second" /></main>);
+    const app = createApp();
+    const host = document.createElement("div");
+    const root = app.render(<App />, host, { schedule: "manual", idPrefix: "account" });
+    const before = Array.from(host.querySelectorAll("input"), (input) => input.id);
+
+    expect(before).toEqual(["nxs-account-c0-input", "nxs-account-c1-input"]);
+    // Update through the writable binding path used by the public component scope.
+    const Increment = view(({ $ }) => <button onClick={() => $.value.set(2)} />, [values]);
+    const controlHost = document.createElement("div");
+    const control = app.render(<Increment />, controlHost, { schedule: "manual" });
+    controlHost.querySelector("button")?.click();
+    control.flush();
+    root.flush();
+
+    expect(Array.from(host.querySelectorAll("input"), (input) => input.id)).toEqual(before);
+  });
+
+  it("preserves component ids through keyed moves", () => {
+    const items = store({
+      state: { items: [{ id: 1 }, { id: 2 }, { id: 3 }] },
+      acts: ({ list }) => ({ reverse() { list("items").reverse(); } }),
+    });
+    const Row = view(
+      ({ id }, { itemId }: { itemId: number }) =>
+        <li id={id("row")} data-item={itemId}>{itemId}</li>
+    );
+    const List = view(
+      ({ $, acts }) => (
+        <section>
+          <button onClick={acts.reverse}>Reverse</button>
+          <ul>{$.items.each((item) => item.id, ($item) => <Row itemId={$item.id.get()} />)}</ul>
+        </section>
+      ),
+      [items]
+    );
+    const app = createApp();
+    const host = document.createElement("div");
+    const root = app.render(<List />, host, { schedule: "manual", idPrefix: "list" });
+    const before = new Map(
+      Array.from(host.querySelectorAll("li"), (row) => [row.dataset.item, row.id])
+    );
+
+    host.querySelector("button")?.click();
+    root.flush();
+
+    expect(Array.from(host.querySelectorAll("li"), (row) => row.dataset.item)).toEqual(["3", "2", "1"]);
+    expect(Array.from(host.querySelectorAll("li"), (row) => row.id)).toEqual([
+      before.get("3"), before.get("2"), before.get("1"),
+    ]);
   });
 
   it("creates a complete app with reactive state and non-reactive refs", () => {

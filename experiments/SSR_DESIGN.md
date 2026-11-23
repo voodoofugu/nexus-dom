@@ -3,7 +3,7 @@
 SSR must be designed together with component identity. A random or process-wide
 counter cannot promise the same output on the server and client.
 
-## Proposed public surface
+## Public surface
 
 ```tsx
 const Field = view(
@@ -15,8 +15,8 @@ const Field = view(
   [form]
 );
 
-const html = renderToString(<App />, { app, idPrefix: "account" });
-hydrate(<App />, document.querySelector("#app")!, { app, idPrefix: "account" });
+const html = renderToString(<App />, { idPrefix: "account" });
+hydrate(<App />, document.querySelector("#app")!, { idPrefix: "account" });
 ```
 
 `id(localKey)` is preferable to an order-only hook: explicit local keys remain
@@ -35,11 +35,13 @@ in one component returns the same value.
 
 ## Rendering phases
 
-1. Add an owner identity path and `id(localKey)` to the browser renderer without
-   changing DOM output unless requested.
-2. Implement `renderToString` for elements, fragments, components, store views,
-   text and current `LiveValue` values. Server apps get independent lazy stores
-   and run setup only when explicitly marked server-safe.
+1. **Implemented:** add owner identity and `id(localKey)` to the browser renderer
+   without changing DOM output unless requested. Explicit `idPrefix` produces
+   IDs such as `nxs-account-c0-input`; reruns retain the owner token.
+2. **Implemented:** synchronous `renderToString` for elements, fragments,
+   components, store views, text, keyed/dynamic regions, boundaries and current
+   `LiveValue` values. Each call gets independent lazy stores; setup is skipped
+   because there is no server-safe opt-in contract yet.
 3. Define hydration markers for empty text, dynamic regions and keyed blocks.
    Plain stable element trees should hydrate by structural walking; structural
    regions need minimal deterministic boundaries.

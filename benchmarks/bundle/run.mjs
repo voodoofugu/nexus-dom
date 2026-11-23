@@ -12,6 +12,8 @@ const entries = [
   { entry: "app", external: true },
   { entry: "full", external: true },
   { entry: "full", external: false, label: "full + nexus-state" },
+  { entry: "server", external: true },
+  { entry: "server", external: false, label: "server + nexus-state" },
 ];
 const results = [];
 

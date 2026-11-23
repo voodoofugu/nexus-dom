@@ -10,6 +10,7 @@ import { nexusDOMError } from "./errors.js";
 import { bind } from "./live.js";
 import { LIVE_VALUE, type LiveValue } from "./types.js";
 import { createListHelpers, type AppHelpers } from "./list.js";
+import { captureOwnerId } from "./owner.js";
 import type { AppRefs } from "./app.js";
 import type {
   BoundState,
@@ -111,8 +112,7 @@ export type DependencyRefs<D extends readonly AnyStore[]> = EnsureRecord<
 >;
 
 export interface WritableLiveValue<T, C = unknown> extends LiveValue<T, C> {
-  set(value: T, context?: SetContext): void;
-  update(project: (current: T) => T, context?: SetContext): void;
+  set(value: T | ((current: T) => T), context?: SetContext): void;
 }
 
 export type WritableBoundState<S extends RecordAny, C = unknown> = {
@@ -165,6 +165,7 @@ type ValidDependencies<D extends readonly AnyStore[]> =
       };
 
 export interface ViewScope<D extends readonly AnyStore[]> {
+  readonly id: (localKey: string) => string;
   readonly state: Readonly<DependencyState<D>>;
   readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
@@ -209,6 +210,7 @@ export function view<
     dependencies,
     input,
     render: render as StoreViewVNode["render"],
+    id: captureOwnerId(),
   });
 }
 
@@ -252,13 +254,18 @@ const createWritableBinding = (
         render: (project, options) => base.render(project, options),
         each: (base.each as any).bind(base),
         set(next, context = "$.set") {
-          owner.nexus.set({ [property]: next }, context);
-        },
-        update(project, context = "$.update") {
-          owner.nexus.set(
-            (state) => ({ [property]: project(state[property]) }),
-            context
-          );
+          if (typeof next === "function") {
+            owner.nexus.set(
+              (state) => ({
+                [property]: (next as (current: unknown) => unknown)(
+                  state[property]
+                ),
+              }),
+              context
+            );
+          } else {
+            owner.nexus.set({ [property]: next }, context);
+          }
         },
       };
       cache.set(property, value);
@@ -267,7 +274,9 @@ const createWritableBinding = (
   });
 };
 
-export function createStoreViewRegistry(): StoreViewResolver {
+export function createStoreViewRegistry(
+  registryOptions: { runSetup?: boolean } = {}
+): StoreViewResolver {
   const stores = new Map<AnyStore, ResolvedStore>();
   const scopes = new WeakMap<readonly unknown[], ResolvedScope>();
   const resolving = new Set<AnyStore>();
@@ -320,7 +329,7 @@ export function createStoreViewRegistry(): StoreViewResolver {
       };
       stores.set(definition, resolved);
 
-      if (options.setup) {
+      if (options.setup && registryOptions.runSetup !== false) {
         const ownCleanups = new Set<() => void>();
         const onCleanup = (cleanup: () => void) => {
           ownCleanups.add(cleanup);
@@ -438,7 +447,13 @@ export function createStoreViewRegistry(): StoreViewResolver {
         source: scope.source,
         project: (state) =>
           vnode.render(
-            { state, $: scope.$, acts: scope.acts, refs: scope.refs },
+            {
+              id: vnode.id,
+              state,
+              $: scope.$,
+              acts: scope.acts,
+              refs: scope.refs,
+            },
             vnode.input
           ),
       };

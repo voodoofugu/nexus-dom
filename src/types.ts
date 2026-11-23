@@ -96,6 +96,7 @@ export interface StoreViewVNode {
   readonly dependencies: readonly unknown[];
   readonly input: Record<string, unknown>;
   readonly render: (scope: unknown, input: Record<string, unknown>) => Renderable;
+  readonly id: (localKey: string) => string;
 }
 
 export interface StoreViewResolver {
@@ -166,6 +167,8 @@ export interface RendererOptions<C = unknown> {
   onCommit?: (event: CommitEvent<C>) => void;
   /** Handles errors thrown by scheduled bindings or structural updates. */
   onError?: (error: unknown) => void;
+  /** Stable root prefix used by component ids and future SSR hydration. */
+  idPrefix?: string;
 }
 
 export interface MountedRoot {

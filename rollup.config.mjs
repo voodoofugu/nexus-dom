@@ -32,6 +32,7 @@ const input = {
   index: "./src/index.ts",
   "jsx-runtime": "./src/jsx-runtime.ts",
   "jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
+  server: "./src/server.ts",
 };
 
 const output = (dir, format) => ({

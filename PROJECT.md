@@ -47,7 +47,8 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
 
 ## Current boundaries
 
-- Browser DOM only.
+- Browser DOM rendering plus synchronous HTML serialization; hydration does
+  not exist yet.
 - `nexus-state` is a regular dependency, not copied into the renderer runtime.
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
 - No general Virtual DOM or whole-tree reconciliation; tracked views only have
@@ -120,6 +121,11 @@ memoization, but they do not reduce the physical work of a full reverse.
     `id(localKey)`, SSR output and hydration without turning every node into
     marked framework DOM?
 
+Owners now expose `id(localKey)` through standalone view scope. IDs use
+`nxs-<root>-c<owner>-<local>` and survive tracked reruns. Browser and server
+rendering produce matching IDs when given the same explicit `idPrefix` and
+initial tree; hydration still needs to reuse that traversal contract.
+
 ## Current assessment
 
 ### Strengths
@@ -164,8 +170,9 @@ drilling or a provider hierarchy.
   values into `$` bindings.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
   operations require `app.list(...)` metadata.
-- SSR, hydration, portals, suspense, transitions,
-  style integration and renderer devtools do not exist yet.
+- Hydration, initial state transfer, portals, suspense, transitions, style
+  integration and renderer devtools do not exist yet. The first synchronous
+  server renderer serializes current state but intentionally skips store setup.
 - Empty text anchors are still internal structural nodes, even though comments,
   wrappers and custom attributes were removed.
 - `moveBefore()` preserves state in Chromium and Firefox. WebKit currently uses
@@ -173,9 +180,9 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `10.02 KB gzip`; actual application cost still depends on imported APIs
+  about `10.27 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
-- Writable `$field.set(value)` and `$field.update(project)` cover small local
+- Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
   path. Runtime refs stay separate because state participates in cloning,
   reset, persistence, devtools and future server serialization.
@@ -213,8 +220,8 @@ drilling or a provider hierarchy.
    A density benchmark over 500 components now confirms the trade-off: targeted
    `$` updates remain nearly flat as fields increase, while dense all-field
    updates cross tracked-view reconciliation between eight and sixteen fields.
-   After writable bindings, the sixteen-field run measured `6.4 ms` for
-   bindings versus `4.3 ms` for the view, with roughly `12.1 KB` versus `2.1
+   After component IDs, the sixteen-field run measured `6.2 ms` for bindings
+   versus `4.6 ms` for the view, with roughly `12.1 KB` versus `2.2
    KB` retained JS per component.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
@@ -238,10 +245,11 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `6.28 KB
-gzip` for core, `8.15 KB` for `createApp`, and `8.44 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `10.02 KB gzip` when the
-tree-shaken dependency is bundled. Track both separately from the playground
+The isolated Rollup/Terser ESM benchmark currently measures roughly `6.45 KB
+gzip` for core, `8.34 KB` for `createApp`, and `8.69 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `10.27 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `4.39 KB` externalized
+or `5.48 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

@@ -141,26 +141,65 @@ Reading `state.count` gives a plain value and makes the surrounding view rerun
 when `count` changes. `$.count` is a stable `LiveValue` that updates one DOM
 binding without rerunning the view. `refs` are non-reactive runtime cells and
 `acts` are commands. These are two subscription strategies over one Nexus
-state, not two sources of truth.
+state, not two sources of truth. `state` stays read-only inside a view; direct
+local writes go through `$.field.set(...)`, while named actions remain the
+explicit path for domain operations.
 
 Bindings from standalone stores are writable for small local updates:
 
 ```tsx
-<button onClick={() => $.count.update((count) => count + 1)}>
+<button onClick={() => $.count.set((count) => count + 1)}>
   {$.count}
 </button>
 
 <button onClick={() => $.filter.set("active")}>Active</button>
 ```
 
-`update` is preferred for increments and other read-modify-write operations;
-`$.count.set($.count.get() + 1)` is valid but easier to make stale. Direct
-updates use `$.set` / `$.update` provenance. Named `acts` remain useful for
-shared domain operations, validation and multi-key changes.
+The functional `set` form is preferred for increments and other
+read-modify-write operations; `$.count.set($.count.get() + 1)` is valid but
+easier to make stale. Direct updates use `$.set` provenance. Named `acts`
+remain useful for shared domain operations, validation and multi-key changes.
 
 Runtime refs intentionally remain separate from state. Nexus snapshots, reset,
 persistence, devtools and future SSR operate on state data; DOM nodes, sockets
 and canvas contexts are non-serializable resources with app lifecycle instead.
+
+Views also receive a stable component-local ID factory:
+
+```tsx
+const Field = view(({ id }) => {
+  const inputId = id("input");
+  return <label for={inputId}><input id={inputId} /></label>;
+});
+
+app.render(<Field />, target, { idPrefix: "account" });
+// nxs-account-c0-input
+```
+
+The ID survives tracked reruns and uses a different owner token for each
+component instance. An explicit `idPrefix` is shared by browser and server
+rendering; client-only roots get an automatic unique prefix.
+
+### Server rendering
+
+The synchronous server entry renders current state without a browser DOM:
+
+```tsx
+import { renderToString } from "nexus-dom/server";
+
+const html = renderToString(<Field />, { idPrefix: "account" });
+```
+
+Elements, fragments, components, standalone store views, keyed lists, dynamic
+regions, error boundaries and current `LiveValue` values are supported. Lazy
+stores are isolated for each call, and `setup` is skipped because browser
+resources such as sockets and DOM refs are not server-safe by default. Passing
+the same explicit `idPrefix` to `renderToString` and `app.render` produces the
+same component IDs for the same initial tree.
+
+This is serialization, not hydration. The client renderer still mounts a new
+tree; marker design, DOM reuse, mismatch recovery and initial state transfer
+remain separate work.
 
 ### Legacy app-scoped tracked regions
 
@@ -367,10 +406,12 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
   bindings, actions and refs;
 - SVG namespace support, including HTML descendants of `foreignObject`;
 - animation-frame scheduling for paint-aligned updates.
+- stable component-local `id(localKey)` values with explicit root prefixes;
+- synchronous HTML serialization through `nexus-dom/server`.
 
 ## Deliberately missing
 
-- SSR and hydration;
+- hydration and initial state transfer;
 - portals, suspense or transitions;
 - a style adapter;
 - full cold-navigation measurements including resource loading.
@@ -394,9 +435,9 @@ npm run benchmark:bundle
 ```
 
 `npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
-the main entry and both JSX runtimes. Declarations are emitted separately to
-`dist/types`, and `npm run smoke:dist` loads every built runtime entry in both
-module formats.
+the main entry, both JSX runtimes and the server entry. Declarations are emitted
+separately to `dist/types`, and `npm run smoke:dist` loads every built runtime
+entry in both module formats.
 
 Visual workloads can opt into frame batching:
 
@@ -476,9 +517,9 @@ and 16 fields using either individual `$` bindings or one tracked `state` view.
 It measures one-field and all-field updates plus forced-GC heap. In the first
 local Chrome run after writable bindings, targeted `$` updates stayed around
 `0.3–0.4 ms`; dense updates crossed over between eight and sixteen fields, and
-at sixteen fields the tracked view measured `4.3 ms` versus `6.4 ms` for
+at sixteen fields the tracked view measured `4.6 ms` versus `6.2 ms` for
 bindings. Retained JS heap at sixteen fields was
-about `2.1 KB/component` for the view versus `12.1 KB/component` for bindings.
+about `2.2 KB/component` for the view versus `12.1 KB/component` for bindings.
 These values are machine-specific; the shape of the crossover is the useful
 result.
 
@@ -499,8 +540,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `6.28 KB gzip` for
-low-level core exports, `8.15 KB` for `createApp`, `8.44 KB` for the complete
-main entry, and `10.02 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The larger playground bundle also contains the example UI and
+included. The current local measurement is approximately `6.45 KB gzip` for
+low-level core exports, `8.34 KB` for `createApp`, `8.69 KB` for the complete
+main entry, and `10.27 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `4.39 KB` externalized or `5.48 KB` with
+`nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

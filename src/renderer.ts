@@ -23,6 +23,7 @@ import type {
 } from "./types.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+let nextRootId = 0;
 
 type RefTarget =
   | ((element: Element | null) => void)
@@ -585,7 +586,11 @@ export function createDOMRenderer<C = unknown>(
 
   return {
     mount(view, container): MountedRoot {
-      const owner = new Owner();
+      const owner = new Owner(
+        undefined,
+        true,
+        options.idPrefix ?? `r${(nextRootId++).toString(36)}`
+      );
       const document = container.ownerDocument ?? (container as Document);
       const fragment = document.createDocumentFragment();
       try {

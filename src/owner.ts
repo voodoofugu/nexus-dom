@@ -4,15 +4,35 @@ type Cleanup = () => void;
 type ErrorHandler = (error: unknown) => void;
 const MOUNTED = Symbol("nexus-dom.owner-mounted");
 
+interface OwnerIds {
+  prefix: string;
+  next: number;
+}
+
+const safeIdPart = (value: string, fallback: string) => {
+  const normalized = value
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+};
+
 export class Owner {
   private children: Set<Owner> | undefined;
   private cleanups: Cleanup | Cleanup[] | undefined;
   private disposed = false;
   private errorHandler: ErrorHandler | undefined;
   private mounts: Cleanup | Cleanup[] | typeof MOUNTED | undefined;
+  private readonly ids: OwnerIds;
+  private idIndex: number | undefined;
 
-  constructor(readonly parent?: Owner, tracked = true) {
+  constructor(readonly parent?: Owner, tracked = true, idPrefix = "r0") {
+    this.ids = parent?.ids ?? { prefix: safeIdPart(idPrefix, "r0"), next: 0 };
     if (parent && tracked) (parent.children ??= new Set()).add(this);
+  }
+
+  id(localKey: string) {
+    this.idIndex ??= this.ids.next++;
+    return `nxs-${this.ids.prefix}-c${this.idIndex.toString(36)}-${safeIdPart(localKey, "id")}`;
   }
 
   addCleanup(cleanup: Cleanup) {
@@ -104,6 +124,17 @@ export function withOwner<T>(owner: Owner, run: () => T): T {
   } finally {
     currentOwner = previous;
   }
+}
+
+export function captureOwnerId() {
+  if (!currentOwner) {
+    throw nexusDOMError(
+      "ID_OUTSIDE_COMPONENT",
+      "Component ids can only be created while a component is mounting."
+    );
+  }
+  const owner = currentOwner;
+  return (localKey: string) => owner.id(localKey);
 }
 
 /** Registers component cleanup against its current owner scope. */

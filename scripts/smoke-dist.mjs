@@ -12,9 +12,13 @@ const esmRuntime = await import(
 const esmDevRuntime = await import(
   pathToFileURL(path.join(root, "dist/esm/jsx-dev-runtime.js")).href
 );
+const esmServer = await import(
+  pathToFileURL(path.join(root, "dist/esm/server.js")).href
+);
 const cjs = require(path.join(root, "dist/cjs/index.js"));
 const cjsRuntime = require(path.join(root, "dist/cjs/jsx-runtime.js"));
 const cjsDevRuntime = require(path.join(root, "dist/cjs/jsx-dev-runtime.js"));
+const cjsServer = require(path.join(root, "dist/cjs/server.js"));
 
 for (const [name, entry] of [
   ["esm", esm],
@@ -24,6 +28,15 @@ for (const [name, entry] of [
     if (typeof entry[exported] !== "function") {
       throw new Error(`${name}: missing function export ${exported}`);
     }
+  }
+}
+
+for (const [name, server] of [
+  ["esm server", esmServer],
+  ["cjs server", cjsServer],
+]) {
+  if (typeof server.renderToString !== "function") {
+    throw new Error(`${name}: missing renderToString export`);
   }
 }
 

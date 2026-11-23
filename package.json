@@ -26,6 +26,11 @@
       "types": "./dist/types/jsx-dev-runtime.d.ts",
       "import": "./dist/esm/jsx-dev-runtime.js",
       "require": "./dist/cjs/jsx-dev-runtime.js"
+    },
+    "./server": {
+      "types": "./dist/types/server.d.ts",
+      "import": "./dist/esm/server.js",
+      "require": "./dist/cjs/server.js"
     }
   },
   "files": [

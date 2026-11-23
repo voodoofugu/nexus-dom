@@ -7,7 +7,10 @@ export type NexusDOMErrorCode =
   | "RENDER_TARGET_NOT_FOUND"
   | "STORE_VIEW_OUTSIDE_APP"
   | "STORE_DEPENDENCY_CONFLICT"
-  | "STORE_DEPENDENCY_CYCLE";
+  | "STORE_DEPENDENCY_CYCLE"
+  | "ID_OUTSIDE_COMPONENT"
+  | "INVALID_SERVER_ELEMENT"
+  | "INVALID_SERVER_ATTRIBUTE";
 
 /** An actionable error raised by nexus-dom itself, not by user render code. */
 export class NexusDOMError extends Error {
