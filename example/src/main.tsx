@@ -31,17 +31,45 @@ const nextStatus: Record<IssueStatus, IssueStatus> = {
   done: "backlog",
 };
 
-const workspace = store({
+const preferences = store({
+  state: { compact: false },
+  acts: ({ get, set }) => ({
+    toggleCompact() {
+      set({ compact: !get("compact") });
+    },
+  }),
+  mount({ nexus }) {
+    return persist(nexus, { key: "nexus-dom-workspace", include: ["compact"] });
+  },
+});
+
+const filters = store({
+  state: { query: "", filter: "all" as IssueFilter },
+  refs: { search: null as HTMLInputElement | null },
+  acts: ({ set, refs }) => ({
+    setQuery(query: string) {
+      set({ query });
+    },
+    clearQuery() {
+      set({ query: "" });
+      refs.search.current?.focus();
+    },
+    setFilter(filter: IssueFilter) {
+      set({ filter });
+    },
+    focusSearch() {
+      refs.search.current?.focus();
+    },
+  }),
+});
+
+const issues = store({
   state: {
     issues: initialIssues,
-    query: "",
-    filter: "all" as IssueFilter,
     selectedIssueId: 1 as number | null,
-    compact: false,
     nextIssueId: 6,
   },
   refs: {
-    search: null as HTMLInputElement | null,
     inspector: null as HTMLElement | null,
     lastSelectedIssue: null as number | null,
   },
@@ -52,17 +80,6 @@ const workspace = store({
       requestAnimationFrame(() => refs.inspector.current?.focus());
 
     return {
-      setQuery(query: string) {
-        set({ query });
-      },
-      clearQuery() {
-        if (refs.search.current) refs.search.current.value = "";
-        set({ query: "" });
-        refs.search.current?.focus();
-      },
-      setFilter(filter: IssueFilter) {
-        set({ filter });
-      },
       selectIssue(id: number) {
         refs.lastSelectedIssue.current = id;
         set({ selectedIssueId: id });
@@ -119,16 +136,7 @@ const workspace = store({
         set({ selectedIssueId: nextSelected });
         if (nextSelected !== null) focusInspector();
       },
-      toggleCompact() {
-        set({ compact: !get("compact") });
-      },
-      focusSearch() {
-        refs.search.current?.focus();
-      },
     };
-  },
-  mount({ nexus }) {
-    return persist(nexus, { key: "nexus-dom-workspace", include: ["compact"] });
   },
 });
 
@@ -141,7 +149,7 @@ const statusLabel = (status: IssueStatus) =>
 const Toolbar = view(
   ({ $, acts, refs }) => {
     diagnostics.viewRun("toolbar");
-    const filters: Array<{ value: IssueFilter; label: string }> = [
+    const statusFilters: Array<{ value: IssueFilter; label: string }> = [
       { value: "all", label: "All issues" },
       { value: "backlog", label: "Backlog" },
       { value: "active", label: "In progress" },
@@ -155,13 +163,14 @@ const Toolbar = view(
           <input
             ref={refs.search}
             type="search"
+            value={$.query}
             placeholder="Title, code or owner"
             onInput={(event) => acts.setQuery((event.currentTarget as HTMLInputElement).value)}
           />
         </label>
         <button class="quiet-button" onClick={acts.clearQuery}>Clear</button>
         <div class="filters" role="group" aria-label="Status">
-          {filters.map(({ value, label }) => (
+          {statusFilters.map(({ value, label }) => (
             <button
               aria-pressed={$.filter.map((filter) => filter === value)}
               onClick={() => acts.setFilter(value)}
@@ -176,7 +185,7 @@ const Toolbar = view(
       </section>
     );
   },
-  [workspace]
+  [filters, preferences]
 );
 
 const Summary = view(
@@ -199,7 +208,7 @@ const Summary = view(
       </section>
     );
   },
-  [workspace]
+  [issues]
 );
 
 const EmptyState = view(
@@ -213,7 +222,7 @@ const EmptyState = view(
       <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
     ) : null;
   },
-  [workspace]
+  [issues, filters]
 );
 
 const IssueList = view(
@@ -268,7 +277,7 @@ const IssueList = view(
       </section>
     );
   },
-  [workspace]
+  [issues, filters]
 );
 
 const Inspector = view(
@@ -315,7 +324,7 @@ const Inspector = view(
       </aside>
     );
   },
-  [workspace]
+  [issues, filters]
 );
 
 const App = view(
@@ -338,7 +347,7 @@ const App = view(
       </main>
     );
   },
-  [workspace]
+  [issues, preferences]
 );
 
 app.render(<App />, "#app", { onCommit: diagnostics.onCommit });
