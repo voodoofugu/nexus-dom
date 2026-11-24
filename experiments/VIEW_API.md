@@ -30,6 +30,44 @@ const Summary = view(
 
 ## Props experiment
 
+### Named dependencies
+
+A typed registry can provide autocomplete for `["issues"]` and infer the
+scope from that tuple. The type-only experiment in
+`named-store-dependencies.tsx` checks that a typo, access to an undeclared
+store and incorrect JSX props all fail type checking.
+
+One possible API is a view factory bound to an application registry:
+
+```tsx
+// workspace/model.ts
+export const workspaceView = defineViews({ issues, preferences });
+
+// workspace/IssueCount.tsx
+import { workspaceView } from "./model";
+
+export const IssueCount = workspaceView(
+  ({ state }) => <p>{state.issues.length} issues</p>,
+  ["issues"]
+);
+```
+
+`defineViews` is a proposed API. A registry-backed factory could resolve names
+to descriptors at definition time and keep the same app-scoped store lifetime
+as `view` today.
+
+Ancestor lookup would be a different contract. The registry can tell
+TypeScript which fields an `"issues"` consumer receives. JSX composition does
+not guarantee that the component is mounted under a provider. A component
+could move into a preview, test or separate root and fail at runtime. A
+tree-scoped API would also need rules for missing providers and duplicate
+names in nested scopes.
+
+Keep descriptor tuples as the default while evaluating whether a registry
+reduces repetition across several modules in the same feature.
+
+### Instance input
+
 The dogfood screens need no props: selection, filters and issue data naturally
 belong to shared stores. This spike intentionally has no props object. For
 example, the selected issue title reads `selectedIssueId` from the same
