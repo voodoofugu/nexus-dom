@@ -1,12 +1,47 @@
 # nexus-dom
 
-Experimental DOM rendering models for [`nexus-state`](https://github.com/voodoofugu/nexus-state).
+## Table of contents
 
-This repository is a prototype, not a published framework. Its first hypothesis is that a Nexus selector can own a concrete DOM binding, allowing a state change to update that binding without executing the component again or reconciling the complete component subtree.
+- [About](#about)
+- [Quick start](#quick-start)
+- [API](#api)
+- [Server rendering](#server-rendering)
+- [Local error recovery](#local-error-recovery)
+- [Development](#development)
 
-The hypothesis is intentionally replaceable. The project may move toward component reruns, local reconciliation or a hybrid renderer if experiments show a better correctness, ergonomics or performance trade-off.
+## About
 
-## Current experiment
+`nexus-dom` renders JSX to the DOM with [`nexus-state`](https://github.com/voodoofugu/nexus-state).
+Views declare the stores they use. Reading `state.count` tracks that key for
+view updates, while placing `$.count` in JSX binds it directly to the DOM.
+Keyed lists preserve row identity across reorders.
+
+## Quick start
+
+Run the playground from a checkout with `npm install` and `npm run dev`.
+The package is currently in development. Set `jsx` to `react-jsx` and
+`jsxImportSource` to `nexus-dom` in your TypeScript configuration.
+
+```tsx
+import { createApp, store, view } from "nexus-dom";
+
+const counter = store({ state: { count: 0 } });
+const Counter = view(({ $ }) => (
+  <button onClick={() => $.count.set((count) => count + 1)}>
+    Clicks: {$.count}
+  </button>
+), [counter]);
+
+const app = createApp();
+app.render(<Counter />, "#app");
+```
+
+Call `app.dispose()` when the application is removed to dispose its DOM roots
+and store resources.
+
+## API
+
+### App roots and low-level bindings
 
 ```tsx
 import { createApp } from "nexus-dom";
@@ -488,6 +523,7 @@ These should only be added after the basic binding model proves understandable a
 npm install
 npm run dev
 npm run check
+npm run smoke:dogfood
 npm run benchmark
 npm run benchmark:browser
 npm run benchmark:compare
@@ -502,6 +538,10 @@ npm run benchmark:bundle
 the main entry, both JSX runtimes and the server entry. Declarations are emitted
 separately to `dist/types`, and `npm run smoke:dist` loads every built runtime
 entry in both module formats.
+
+`npm run smoke:dogfood` builds the playground and checks filtering, editing,
+keyed moves, focus and persisted preferences in Chromium. Set `CHROME_PATH`
+to use a specific browser executable.
 
 Visual workloads can opt into frame batching:
 

@@ -47,13 +47,27 @@ export interface StoreOptions<
   R extends RecordAny,
   D extends readonly AnyStore[] = readonly [],
 > {
+  /** Initial state for each app that resolves this store. */
   state: S;
+  /** Initial values for mutable, non-reactive `{ current }` cells. */
   refs?: R;
+  /** Creates named commands with access to state and declared dependencies. */
   acts?: (context: StoreActsContext<S, R, D>) => A;
+  /** Prepares the first client render and may return app-scoped cleanup. */
   setup?: (
     context: StoreSetupContext<S, A, R, D>
   ) => void | (() => void);
-  /** Connects client resources when the first consuming view mounts. */
+  /**
+   * Connects client resources when the first consuming view mounts.
+   * Hydration validates the server snapshot before running this callback.
+   * Return a cleanup function or register one with `onCleanup`.
+   * @example
+   * ```ts
+   * mount({ nexus }) {
+   *   return persist(nexus, { key: "preferences", include: ["compact"] });
+   * }
+   * ```
+   */
   mount?: (
     context: NoInfer<StoreSetupContext<S, A, R, D>>
   ) => void | (() => void);
@@ -74,6 +88,15 @@ export interface StoreDefinition<
   };
 }
 
+/**
+ * Declares a lazy store shared by the views of one application.
+ * @param options initial state, actions, refs and client lifecycle callbacks.
+ * @param dependencies stores available to this store's actions and lifecycle.
+ * @example
+ * ```ts
+ * const preferences = store({ state: { compact: false } });
+ * ```
+ */
 export function store<
   S extends RecordAny,
   R extends RecordAny = EmptyRecord,
@@ -170,10 +193,15 @@ type ValidDependencies<D extends readonly AnyStore[]> =
       };
 
 export interface ViewScope<D extends readonly AnyStore[]> {
+  /** Returns a stable DOM id for a local key within this component instance. */
   readonly id: (localKey: string) => string;
+  /** Plain values whose top-level reads determine when the view reruns. */
   readonly state: Readonly<DependencyState<D>>;
+  /** Writable live values for direct DOM bindings and small local writes. */
   readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
+  /** Named commands from the declared stores. */
   readonly acts: DependencyActs<D>;
+  /** Shared, non-reactive runtime cells from the declared stores. */
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
@@ -202,6 +230,19 @@ type ViewComponent<Input extends object = EmptyRecord> = (
   input: Input & { children?: Renderable }
 ) => VNode | null;
 
+/**
+ * Defines a tracked JSX component with explicit store dependencies.
+ * @param render renders from a typed store scope and JSX props.
+ * @param dependencies stores available in the render scope.
+ * @example
+ * ```tsx
+ * const Title = view(
+ *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.title}</h1>,
+ *   [documentStore]
+ * );
+ * // <Title prefix="Editing: " />
+ * ```
+ */
 export function view<
   const D extends readonly AnyStore[] = readonly [],
   Input extends object = EmptyRecord,

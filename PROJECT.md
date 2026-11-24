@@ -1,6 +1,6 @@
 # nexus-dom — experiment context
 
-_Started: 2026-11-21 · status: exploratory_
+_Started: 2026-11-21 · status: working alpha_
 
 ## Goal
 
@@ -252,9 +252,41 @@ drilling or a provider hierarchy.
    run and total bundled dependency cost are recorded; real mobile hardware and
    full network-cold navigation remain necessary before public claims.
 
+## First stable release
+
+`1.0.0` is a possible first public version once the supported API is clear.
+Before tagging, settle the legacy `app.view` contract and public exports,
+test SSR on a served application in real browsers, and verify the packed
+package in a separate consumer project. Ship a license, CI checks, and API
+reference examples that agree with the emitted declarations. Use the existing
+`nexus-state` and `morphing-scroll` docs as references for structure, editor
+documentation and examples.
+
+The issue-triage browser smoke covers separate issue, filter and preference
+stores. Keep issue data and selection in one store because a single action
+can change both. Run the smoke with `npm run smoke:dogfood`.
+
 ## Benchmark policy
 
 Microbenchmarks are regression tools, not marketing evidence. Meaningful comparisons must use production browser builds and equal behavior. Measure initial mount, one-of-many updates, bulk updates, structural list changes, branch replacement, event storms, cleanup, heap retention and bundle size. Direct DOM is the lower bound; React, Preact Signals and Solid are comparison points once the model supports equivalent structural behavior.
+
+### November 24 browser comparison
+
+Production builds, 1,000 keyed rows, one local desktop run at 1× CPU.
+Chromium medians in milliseconds:
+
+| Renderer | First mount | Warm mount | Last to first | Full reverse |
+| --- | ---: | ---: | ---: | ---: |
+| nexus-dom | 12.0 | 1.5 | 0.7 | 1.8 |
+| React | 13.4 | 1.5 | 2.7 | 2.7 |
+| Solid | 12.3 | 1.6 | 0.7 | 1.7 |
+| Preact Signals | 14.2 | 2.1 | 0.9 | 4.4 |
+
+All four preserved focus in Chromium and Firefox. In WebKit, where
+`moveBefore()` was unavailable, nexus-dom and React preserved focus in the
+tested reorder. At 10,000 rows, the Chromium JS heap probe measured about
+723 B/row for nexus-dom with one live field, 1,029 with two, 566 for Solid
+and 755 for Preact Signals. The probe excludes native DOM memory.
 
 The automated Headless Chrome benchmark covers exact row replacement, adjacent
 swap, generic/LIS and exact/context last-to-first moves, full reverse and stable
