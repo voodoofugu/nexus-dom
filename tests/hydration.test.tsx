@@ -115,6 +115,150 @@ describe("nexus-dom hydration", () => {
     expect(host.childNodes).toHaveLength(0);
   });
 
+  it("restores lazy store state before hydration and client setup", () => {
+    const initial = {
+      count: 41,
+      label: "</script><script>unsafe</script>",
+    };
+    let setupCount = -1;
+    const counter = store({
+      state: initial,
+      acts: ({ get, set }) => ({
+        increment() {
+          set({ count: get("count") + 1 });
+        },
+      }),
+      setup({ nexus }) {
+        setupCount = nexus.get("count");
+      },
+    });
+    const Counter = view(
+      ({ state, acts }) => (
+        <button onClick={acts.increment}>{state.label}: {state.count}</button>
+      ),
+      [counter]
+    );
+    const html = renderToString(<Counter />, {
+      hydration: true,
+      idPrefix: "state",
+    });
+    expect(html).toContain("\\u003c/script\\u003e");
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const button = host.querySelector("button")!;
+    initial.count = 0;
+    initial.label = "client default";
+    const app = createApp();
+
+    const root = app.hydrate(<Counter />, host, {
+      schedule: "manual",
+      idPrefix: "state",
+    });
+
+    expect(setupCount).toBe(41);
+    expect(host.querySelector("button")).toBe(button);
+    expect(
+      Array.from(host.childNodes).some((node) => node.nodeType === 8)
+    ).toBe(false);
+    expect(button.textContent).toBe("</script><script>unsafe</script>: 41");
+
+    button.click();
+    root.flush();
+    expect(button.textContent).toBe("</script><script>unsafe</script>: 42");
+  });
+
+  it("restores dependency stores before dependent setup", () => {
+    const baseState = { count: 9 };
+    const detailState = { label: "server" };
+    const base = store({ state: baseState });
+    let setupValues: unknown[] = [];
+    const detail = store(
+      {
+        state: detailState,
+        setup({ nexus, dependencies }) {
+          setupValues = [dependencies.get("count"), nexus.get("label")];
+        },
+      },
+      [base]
+    );
+    const Summary = view(
+      ({ state }) => <p>{state.count}: {state.label}</p>,
+      [base, detail]
+    );
+    const html = renderToString(<Summary />, { hydration: true });
+    baseState.count = 0;
+    detailState.label = "client";
+    const host = document.createElement("div");
+    host.innerHTML = html;
+
+    createApp().hydrate(<Summary />, host);
+
+    expect(setupValues).toEqual([9, "server"]);
+    expect(host.textContent).toBe("9: server");
+  });
+
+  it("rejects a hydration snapshot for a different store shape", () => {
+    const model = store({ state: { count: 1 } });
+    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<Counter />, { hydration: true });
+    const marker = Array.from(host.childNodes).find(
+      (node): node is Comment =>
+        node.nodeType === 8 && node.nodeValue!.startsWith("nxs:s")
+    )!;
+    marker.nodeValue = "nxs:s" + JSON.stringify({
+      v: 1,
+      stores: [{ keys: ["other"], state: { other: 1 } }],
+    });
+
+    expect(() => createApp().hydrate(<Counter />, host)).toThrowError(
+      expect.objectContaining({ code: "HYDRATION_STATE_INVALID" })
+    );
+  });
+
+  it("rejects state that cannot be represented by the JSON contract", () => {
+    const model = store({ state: { value: 1n } });
+    const Value = view(({ state }) => <p>{state.value}</p>, [model]);
+
+    expect(() =>
+      renderToString(<Value />, { hydration: true })
+    ).toThrowError(expect.objectContaining({ code: "HYDRATION_STATE_INVALID" }));
+  });
+
+  it.each([
+    { value: new Date("2026-01-01T00:00:00Z") },
+    { value: Number.NaN },
+  ])("rejects lossy hydration state %#", (state) => {
+    const model = store({ state });
+    const Value = view(({ state }) => <p>{String(state.value)}</p>, [model]);
+
+    expect(() =>
+      renderToString(<Value />, { hydration: true })
+    ).toThrowError(expect.objectContaining({ code: "HYDRATION_STATE_INVALID" }));
+  });
+
+  it("can retry a restored store after setup throws", () => {
+    let attempts = 0;
+    const model = store({
+      state: { count: 7 },
+      setup() {
+        attempts++;
+        if (attempts === 1) throw new Error("setup failed");
+      },
+    });
+    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const html = renderToString(<Counter />, { hydration: true });
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const app = createApp();
+
+    expect(() => app.hydrate(<Counter />, host)).toThrow("setup failed");
+
+    host.innerHTML = html;
+    expect(() => app.hydrate(<Counter />, host)).not.toThrow();
+    expect(attempts).toBe(2);
+  });
+
   it("hydrates populated and empty dynamic regions", () => {
     const state = createNexus({
       state: { visible: true, deferred: false },

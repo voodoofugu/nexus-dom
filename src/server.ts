@@ -3,6 +3,7 @@ import { Owner, withOwner } from "./owner.js";
 import { createStoreViewRegistry } from "./store-view.js";
 import { nexusDOMError } from "./errors.js";
 import { hydrationText } from "./hydration-markers.js";
+import { serializeHydrationState } from "./hydration-state.js";
 import type { Renderable, VNode } from "./types.js";
 
 export interface ServerRenderOptions {
@@ -174,7 +175,11 @@ export function renderToString(
   };
 
   try {
-    return render(view, root);
+    const html = render(view, root);
+    const snapshots = storeViews.snapshots();
+    return options.hydration && snapshots.length > 0
+      ? html + serializeHydrationState(snapshots)
+      : html;
   } finally {
     storeViews.dispose();
     root.dispose();

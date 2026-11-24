@@ -101,7 +101,14 @@ export interface StoreViewVNode {
 
 export interface StoreViewResolver {
   resolve(vnode: StoreViewVNode): TrackedViewVNode;
+  restore?(snapshots: readonly StoreSnapshot[]): void;
+  completeRestore?(): void;
   dispose(): void;
+}
+
+export interface StoreSnapshot {
+  readonly keys: readonly string[];
+  readonly state: Record<string, unknown>;
 }
 
 export interface KeyedVNode {

@@ -1,5 +1,6 @@
 import { createDOMRenderer } from "./renderer.js";
 import { nexusDOMError } from "./errors.js";
+import { takeHydrationState } from "./hydration-state.js";
 import type {
   Renderable,
   RendererOptions,
@@ -28,7 +29,25 @@ export function hydrate<C = unknown>(
   storeViews?: StoreViewResolver
 ): RenderRoot {
   const renderer = createDOMRenderer(options, storeViews);
-  const root = renderer.hydrate(view, resolveTarget(target));
+  const resolvedTarget = resolveTarget(target);
+  const snapshots = takeHydrationState(resolvedTarget);
+  if (snapshots) {
+    if (!storeViews?.restore) {
+      throw nexusDOMError(
+        "HYDRATION_STATE_INVALID",
+        "Lazy-store hydration state requires createApp().hydrate()."
+      );
+    }
+    storeViews.restore(snapshots);
+  }
+  let root: ReturnType<typeof renderer.hydrate> | undefined;
+  try {
+    root = renderer.hydrate(view, resolvedTarget);
+    storeViews?.completeRestore?.();
+  } catch (error) {
+    root?.dispose();
+    throw error;
+  }
 
   return {
     dispose: root.dispose,

@@ -207,6 +207,16 @@ resources such as sockets and DOM refs are not server-safe by default. Passing
 the same explicit `idPrefix` to `renderToString` and `app.hydrate` produces the
 same component IDs for the same initial tree.
 
+When hydration resolves lazy stores, the server appends one versioned
+`<!--nxs:s...-->` JSON payload to the root. `app.hydrate(...)` restores those
+stores before their client `setup` functions run and removes the payload.
+Stores are matched in deterministic lazy-resolution order and guarded by their
+exact top-level key shape, so server and client must render the same view build.
+State transfer accepts only finite JSON values, arrays and plain objects;
+`Date`, `Map`, `Set`, functions, `undefined`, `BigInt`, cycles and custom class
+instances require an application-level serialization policy. Refs and setup
+resources are intentionally never serialized.
+
 Hydration reuses stable elements and text, then attaches live text/property
 subscriptions, events, refs and tracked store-view reconciliation. Dynamic and
 `when(...)` branches, keyed multi-node/empty rows and error-boundary fallbacks
@@ -219,7 +229,8 @@ structural regions need no server markers because the expected VNode traversal
 provides their boundaries. A tag/text mismatch produces `HYDRATION_MISMATCH`,
 disposes partial client behavior, reports the error through `onError` and
 replaces the complete root using the same `idPrefix`. Initial store state
-transfer and branch-local mismatch replacement remain follow-up work.
+transfer is automatic for lazy stores; branch-local mismatch replacement
+remains follow-up work.
 
 ### Legacy app-scoped tracked regions
 
@@ -432,7 +443,7 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 
 ## Deliberately missing
 
-- initial state transfer and branch-local mismatch fallback;
+- branch-local hydration mismatch fallback;
 - portals, suspense or transitions;
 - a style adapter;
 - full cold-navigation measurements including resource loading.
@@ -562,8 +573,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.42 KB gzip` for
-low-level core exports, `10.32 KB` for `createApp`, `10.70 KB` for the complete
-main entry, and `12.23 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `5.12 KB` externalized or `6.21 KB` with
+low-level core exports, `10.96 KB` for `createApp`, `11.34 KB` for the complete
+main entry, and `12.88 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `5.99 KB` externalized or `7.07 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

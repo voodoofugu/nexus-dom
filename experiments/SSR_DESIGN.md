@@ -61,13 +61,19 @@ in one component returns the same value.
    model and attaches events, refs and subscriptions. A structured mismatch
    disposes partial ownership, reports through `onError` and remounts the root
    with the same prefix. Branch-local replacement remains an optimization.
-5. Verify identical HTML/IDs, keyed moves, multiple roots, nested boundaries,
-   failed hydration cleanup and client-only store setup.
+5. **Implemented:** hydration-mode server rendering captures resolved lazy
+   stores in deterministic order and appends a versioned `nxs:s` comment.
+   `app.hydrate` validates exact store keys, restores JSON-safe state before
+   client setup and removes the payload. Lossy JSON values and cycles fail
+   explicitly; refs and browser resources remain client-only.
+6. Verify additional multiple-root and production-navigation cases; consider
+   explicit store serialization IDs only if real code-splitting requires them.
 
 ## Open decisions
 
 - Whether server rendering may await store initialization; the first version
   should remain synchronous unless an explicit async contract is introduced.
-- Serialization/hydration of initial lazy-store state.
+- Whether custom state codecs or explicit store serialization IDs are needed;
+  the initial contract deliberately supports strict JSON and matching builds.
 - Whether branch-local mismatch recovery is worth the extra boundary state.
 - Development-only mismatch diagnostics versus production fallback behavior.

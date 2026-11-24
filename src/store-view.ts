@@ -17,6 +17,7 @@ import type {
   NexusSource,
   Renderable,
   StoreViewResolver,
+  StoreSnapshot,
   StoreViewVNode,
   TrackedViewVNode,
   VNode,
@@ -276,12 +277,20 @@ const createWritableBinding = (
 
 export function createStoreViewRegistry(
   registryOptions: { runSetup?: boolean } = {}
-): StoreViewResolver {
+): StoreViewResolver & { snapshots(): readonly StoreSnapshot[] } {
   const stores = new Map<AnyStore, ResolvedStore>();
+  const storeOrder: ResolvedStore[] = [];
   const scopes = new WeakMap<readonly unknown[], ResolvedScope>();
   const resolving = new Set<AnyStore>();
   const cleanups: Array<() => void> = [];
+  let restoreSnapshots: readonly StoreSnapshot[] | undefined;
+  let restoreIndex = 0;
   let disposed = false;
+
+  const sortedKeys = (value: RecordAny) => Object.keys(value).sort();
+  const sameKeys = (left: readonly string[], right: readonly string[]) =>
+    left.length === right.length &&
+    left.every((key, index) => key === right[index]);
 
   const resolveStore = (definition: AnyStore) => {
     const existing = stores.get(definition);
@@ -294,6 +303,7 @@ export function createStoreViewRegistry(
     }
     resolving.add(definition);
     const options = definition[STORE_OPTIONS];
+    let consumedSnapshot = false;
     try {
       const dependencyScope = resolveScope(definition.dependencies);
       const dependencies = {
@@ -306,10 +316,31 @@ export function createStoreViewRegistry(
         refs: dependencyScope.refs,
       };
       const refs = createRefs(options.refs ?? {});
+      const expectedKeys = sortedKeys(options.state);
+      const snapshot = restoreSnapshots?.[restoreIndex];
+      let initialState = options.state;
+      if (restoreSnapshots) {
+        if (
+          !snapshot ||
+          !snapshot.state ||
+          typeof snapshot.state !== "object" ||
+          Array.isArray(snapshot.state) ||
+          !sameKeys(expectedKeys, [...snapshot.keys].sort()) ||
+          !sameKeys(expectedKeys, sortedKeys(snapshot.state))
+        ) {
+          throw nexusDOMError(
+            "HYDRATION_STATE_INVALID",
+            `Hydration snapshot ${restoreIndex} does not match store keys ${JSON.stringify(expectedKeys)}.`
+          );
+        }
+        initialState = snapshot.state;
+        restoreIndex++;
+        consumedSnapshot = true;
+      }
       let nexus: Nexus<RecordAny, RecordAny>;
       nexus = options.acts
         ? (createNexus({
-            state: options.state,
+            state: initialState,
             acts: (get, set) => {
               const helpers = createListHelpers(get, set);
               return options.acts!({
@@ -322,12 +353,13 @@ export function createStoreViewRegistry(
               });
             },
           }) as Nexus<RecordAny, RecordAny>)
-        : (createNexus({ state: options.state }) as Nexus<RecordAny, RecordAny>);
+        : (createNexus({ state: initialState }) as Nexus<RecordAny, RecordAny>);
       const resolved = {
         nexus: nexus as Nexus<RecordAny, RecordAny>,
         refs,
       };
       stores.set(definition, resolved);
+      storeOrder.push(resolved);
 
       if (options.setup && registryOptions.runSetup !== false) {
         const ownCleanups = new Set<() => void>();
@@ -342,7 +374,7 @@ export function createStoreViewRegistry(
         try {
           const setupCleanup = options.setup({
             nexus,
-          $: createWritableBinding(nexus, () => resolved),
+            $: createWritableBinding(nexus, () => resolved),
             acts: nexus.acts,
             refs,
             dependencies,
@@ -353,10 +385,14 @@ export function createStoreViewRegistry(
         } catch (error) {
           disposeSetup();
           stores.delete(definition);
+          if (storeOrder.at(-1) === resolved) storeOrder.pop();
           throw error;
         }
       }
       return resolved;
+    } catch (error) {
+      if (consumedSnapshot) restoreIndex--;
+      throw error;
     } finally {
       resolving.delete(definition);
     }
@@ -440,6 +476,31 @@ export function createStoreViewRegistry(
   };
 
   return {
+    restore(snapshots) {
+      if (stores.size > 0) {
+        throw nexusDOMError(
+          "HYDRATION_STATE_LATE",
+          "Hydration state must be restored before the first lazy store is resolved."
+        );
+      }
+      restoreSnapshots = snapshots;
+      restoreIndex = 0;
+    },
+    completeRestore() {
+      if (restoreSnapshots && restoreIndex !== restoreSnapshots.length) {
+        throw nexusDOMError(
+          "HYDRATION_STATE_INVALID",
+          `Hydration provided ${restoreSnapshots.length} store snapshots, but the view resolved ${restoreIndex}.`
+        );
+      }
+      restoreSnapshots = undefined;
+    },
+    snapshots() {
+      return storeOrder.map(({ nexus }) => {
+        const state = nexus.get();
+        return { keys: sortedKeys(state), state };
+      });
+    },
     resolve(vnode): TrackedViewVNode {
       const scope = resolveScope(vnode.dependencies);
       return {
@@ -466,6 +527,7 @@ export function createStoreViewRegistry(
       }
       cleanups.length = 0;
       stores.clear();
+      storeOrder.length = 0;
     },
   };
 }
