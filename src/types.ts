@@ -95,6 +95,7 @@ export interface TrackedViewVNode {
 export interface StoreViewVNode {
   readonly kind: "store-view";
   readonly dependencies: readonly unknown[];
+  readonly lazy?: true;
   readonly input: Record<string, unknown>;
   readonly render: (scope: unknown, input: Record<string, unknown>) => Renderable;
   readonly id: (localKey: string) => string;

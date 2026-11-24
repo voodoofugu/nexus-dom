@@ -32,16 +32,15 @@ const Summary = view(
 
 ### Named dependencies
 
-A typed registry can provide autocomplete for `["issues"]` and infer the
-scope from that tuple. The type-only experiment in
-`named-store-dependencies.tsx` checks that a typo, access to an undeclared
-store and incorrect JSX props all fail type checking.
+A typed registry provides autocomplete for `["issues"]` and infers the
+scope from that tuple. `named-store-dependencies.tsx` checks that a typo,
+access to an undeclared store and incorrect JSX props fail type checking.
 
-One possible API is a view factory bound to an application registry:
+The dogfood uses a view factory bound to a feature registry.
 
 ```tsx
 // workspace/model.ts
-export const workspaceView = defineViews({ issues, preferences });
+export const workspaceView = defineView({ issues, preferences }, { default: "issues" });
 
 // workspace/IssueCount.tsx
 import { workspaceView } from "./model";
@@ -52,9 +51,9 @@ export const IssueCount = workspaceView(
 );
 ```
 
-`defineViews` is a proposed API. A registry-backed factory could resolve names
-to descriptors at definition time and keep the same app-scoped store lifetime
-as `view` today.
+`defineView` resolves explicit names to descriptors at definition time.
+Omitting the dependency list makes the default store available on first
+read. Both paths keep the same app-scoped lifetime as `view`.
 
 Ancestor lookup would be a different contract. The registry can tell
 TypeScript which fields an `"issues"` consumer receives. JSX composition does
@@ -63,8 +62,8 @@ could move into a preview, test or separate root and fail at runtime. A
 tree-scoped API would also need rules for missing providers and duplicate
 names in nested scopes.
 
-Keep descriptor tuples as the default while evaluating whether a registry
-reduces repetition across several modules in the same feature.
+Use descriptor tuples for components that already import their stores. Use a
+named factory when views across a feature share the same registry.
 
 ### Instance input
 

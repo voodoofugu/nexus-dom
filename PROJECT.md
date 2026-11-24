@@ -196,7 +196,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `13.09 KB gzip`; actual application cost still depends on imported APIs
+  about `13.43 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -296,10 +296,10 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `8.48 KB
-gzip` for core, `11.18 KB` for `createApp`, and `11.56 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `13.09 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `6.18 KB` externalized
-or `7.25 KB` with `nexus-state`. Track these separately from the playground
+gzip` for core, `11.38 KB` for `createApp`, and `11.89 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `13.43 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `6.40 KB` externalized
+or `7.48 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

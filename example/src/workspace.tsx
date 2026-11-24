@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { persist, store, view } from "nexus-dom";
+import { defineView, persist, store } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 
 type IssueStatus = "backlog" | "active" | "done";
@@ -141,8 +141,15 @@ const issues = store({
 
 export function createWorkspace() {
   const diagnostics = createPlaygroundDiagnostics();
+  const view = defineView({ issues, filters, preferences }, { default: "preferences" });
   const statusLabel = (status: IssueStatus) =>
     status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
+
+  const CompactToggle = view(({ $, acts }) => (
+    <button class="quiet-button" onClick={acts.toggleCompact}>
+      {$.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
+    </button>
+  ));
 
   const Toolbar = view(
     ({ $, acts, refs }) => {
@@ -177,13 +184,11 @@ export function createWorkspace() {
               </button>
             ))}
           </div>
-          <button class="quiet-button" onClick={acts.toggleCompact}>
-            {$.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
-          </button>
+          <CompactToggle />
         </section>
       );
     },
-    [filters, preferences]
+    ["filters"]
   );
 
   const Summary = view(
@@ -206,7 +211,7 @@ export function createWorkspace() {
         </section>
       );
     },
-    [issues]
+    ["issues"]
   );
 
   const EmptyState = view(
@@ -220,7 +225,7 @@ export function createWorkspace() {
         <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
       ) : null;
     },
-    [issues, filters]
+    ["issues", "filters"]
   );
 
   const IssueList = view(
@@ -275,7 +280,7 @@ export function createWorkspace() {
         </section>
       );
     },
-    [issues, filters]
+    ["issues", "filters"]
   );
 
   const Inspector = view(
@@ -322,7 +327,7 @@ export function createWorkspace() {
         </aside>
       );
     },
-    [issues, filters]
+    ["issues", "filters"]
   );
 
   const App = view(
@@ -345,7 +350,7 @@ export function createWorkspace() {
         </main>
       );
     },
-    [issues, preferences]
+    ["issues", "preferences"]
   );
 
   return { App, onCommit: diagnostics.onCommit };

@@ -5,6 +5,7 @@
 - [About](#about)
 - [Quick start](#quick-start)
 - [API](#api)
+- [Named and default stores](#named-and-default-stores)
 - [Server rendering](#server-rendering)
 - [Local error recovery](#local-error-recovery)
 - [Development](#development)
@@ -248,6 +249,35 @@ stays available to collision diagnostics but is not exposed in markup. An
 explicit `idPrefix` is shared by browser and server rendering; client-only
 roots get an automatic unique prefix. The hash is an identifier encoding, not
 a security boundary for sensitive keys.
+
+### Named and default stores
+
+`defineView(stores, options?)` gives a feature one component factory. The
+registry keys autocomplete in the dependency list. Each application still
+gets its own store instances.
+
+```tsx
+import { defineView } from "nexus-dom";
+
+export const workspaceView = defineView({ session, issues }, { default: "session" });
+
+const UserBadge = workspaceView(({ state }) => <span>{state.userName}</span>);
+const IssueCount = workspaceView(
+  ({ state }) => <p>{state.issues.length} issues</p>,
+  ["issues"]
+);
+```
+
+Omit the list to use the default store. The first property read through
+`state`, `$`, `acts` or `refs` creates the app's store instance if needed.
+A view can destructure these four objects and leave the store dormant. The
+same rule applies on the server. An unused default store adds no hydration
+snapshot. Reading `state.userName` tracks that key, while a JSX binding such
+as `{$.userName}` updates its DOM node directly.
+
+An explicit list defines the entire scope. Use `["session", "issues"]`
+for both stores and `[]` for an empty scope. Any view created with the factory
+can mount in a preview or a separate root without its original parent.
 
 ### Server rendering
 
@@ -651,8 +681,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.48 KB gzip` for
-low-level core exports, `11.18 KB` for `createApp`, `11.56 KB` for the complete
-main entry, and `13.09 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.18 KB` externalized or `7.25 KB` with
+low-level core exports, `11.38 KB` for `createApp`, `11.89 KB` for the complete
+main entry, and `13.43 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.40 KB` externalized or `7.48 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

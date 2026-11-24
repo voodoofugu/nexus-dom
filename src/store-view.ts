@@ -251,12 +251,84 @@ export function view<
   dependencies: D & ValidDependencies<D> = [] as unknown as D &
     ValidDependencies<D>
 ): ViewComponent<Input> {
+  return createStoreView(render as StoreViewVNode["render"], dependencies);
+}
+
+function createStoreView<Input extends object>(
+  render: StoreViewVNode["render"],
+  dependencies: readonly AnyStore[],
+  lazy?: true
+): ViewComponent<Input> {
   return (input) => ({
     kind: "store-view",
     dependencies,
+    ...(lazy ? { lazy } : {}),
     input,
-    render: render as StoreViewVNode["render"],
+    render,
     id: captureOwnerId(),
+  });
+}
+
+type StoreRegistry = Record<string, AnyStore>;
+type StoreName<R extends StoreRegistry> = Extract<keyof R, string>;
+type NamedStores<R extends StoreRegistry, N extends readonly StoreName<R>[]> = {
+  [K in keyof N]: R[N[K]];
+};
+type DefaultStores<R extends StoreRegistry, D> =
+  D extends StoreName<R> ? readonly [R[D]] : readonly [];
+
+/** A JSX component factory bound to a named store registry. */
+export interface ViewFactory<R extends StoreRegistry, D = undefined> {
+  <Input extends object = EmptyRecord>(
+    render: (scope: ViewScope<DefaultStores<R, D>>, input: Input) => Renderable
+  ): ViewComponent<Input>;
+  <const N extends readonly StoreName<R>[], Input extends object = EmptyRecord>(
+    render: (scope: ViewScope<NamedStores<R, N>>, input: Input) => Renderable,
+    dependencies: N & ValidDependencies<NamedStores<R, N>>
+  ): ViewComponent<Input>;
+}
+
+/**
+ * Creates a view factory with typed store names.
+ * @param stores descriptors available to this factory.
+ * @param options.default store available when a view omits its dependency list.
+ * @example
+ * ```tsx
+ * const workspaceView = defineView({ issues, preferences }, { default: "issues" });
+ * const Count = workspaceView(({ state }) => <p>{state.issues.length}</p>);
+ * const Density = workspaceView(({ $ }) => <output>{$.compact.map(String)}</output>, ["preferences"]);
+ * ```
+ */
+export function defineView<
+  const R extends StoreRegistry,
+  const D extends StoreName<R> | undefined = undefined,
+>(stores: R, options?: { default: D }): ViewFactory<R, D> {
+  const registry = new Map(Object.entries(stores));
+  const lookup = (name: string) => {
+    const descriptor = registry.get(name);
+    if (!descriptor) {
+      throw nexusDOMError("UNKNOWN_STORE_NAME", `No store named "${name}" in this view factory.`);
+    }
+    return descriptor;
+  };
+  const defaultName = options?.default;
+  const defaults = defaultName === undefined ? [] : [lookup(defaultName)];
+  const factory = (render: StoreViewVNode["render"], names?: readonly string[]) =>
+    names === undefined
+      ? createStoreView(render, defaults, defaults.length ? true : undefined)
+      : createStoreView(render, names.map(lookup));
+  return factory as ViewFactory<R, D>;
+}
+
+function lazyObject<T extends object>(read: () => T): T {
+  return new Proxy(Object.create(null), {
+    get: (_target, key) => Reflect.get(read(), key),
+    has: (_target, key) => Reflect.has(read(), key),
+    ownKeys: () => Reflect.ownKeys(read()),
+    getOwnPropertyDescriptor(_target, key) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(read(), key);
+      return descriptor && { ...descriptor, configurable: true };
+    },
   });
 }
 
@@ -558,6 +630,40 @@ export function createStoreViewRegistry(
     return scope;
   };
 
+  const lazyScope = (dependencies: readonly unknown[]): ResolvedScope => {
+    let scope: ResolvedScope | undefined;
+    let mounted = false;
+    const read = () => {
+      if (scope) return scope;
+      if (disposed) {
+        throw nexusDOMError("APP_DISPOSED", "Cannot resolve a store after app disposal.");
+      }
+      scope = resolveScope(dependencies);
+      // An event may read its first binding after the view has mounted.
+      if (mounted) scope.mount?.();
+      return scope;
+    };
+    return {
+      source: {
+        get() {
+          if (scope) return scope.source.get();
+          let snapshot: RecordAny | undefined;
+          return lazyObject(() => snapshot ??= read().source.get());
+        },
+        subscribe(listener, keys) {
+          return keys.length ? read().source.subscribe(listener, keys) : () => {};
+        },
+      },
+      $: lazyObject(() => read().$),
+      acts: lazyObject(() => read().acts),
+      refs: lazyObject(() => read().refs),
+      mount() {
+        mounted = true;
+        scope?.mount?.();
+      },
+    };
+  };
+
   return {
     restore(snapshots) {
       if (stores.size > 0) {
@@ -585,7 +691,7 @@ export function createStoreViewRegistry(
       });
     },
     resolve(vnode): TrackedViewVNode {
-      const scope = resolveScope(vnode.dependencies);
+      const scope = vnode.lazy ? lazyScope(vnode.dependencies) : resolveScope(vnode.dependencies);
       return {
         kind: "tracked-view",
         source: scope.source,

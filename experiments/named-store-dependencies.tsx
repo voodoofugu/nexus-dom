@@ -1,25 +1,11 @@
 /** @jsxImportSource nexus-dom */
-import { store, view, type Renderable, type ViewScope, type VNode } from "nexus-dom";
+import { defineView, store, view } from "nexus-dom";
 
 const issues = store({
   state: { issues: [{ id: 1, title: "Review the renderer" }] },
 });
 const preferences = store({ state: { compact: false } });
-const registry = { issues, preferences };
-
-type Registry = typeof registry;
-type Dependencies<Names extends readonly (keyof Registry)[]> = {
-  [Index in keyof Names]: Registry[Names[Index]];
-};
-
-// Type-only sketch of a view factory bound to the application's registry.
-type NamedView = <
-  const Names extends readonly (keyof Registry)[],
-  Props extends object,
->(
-  render: (scope: ViewScope<Dependencies<Names>>, props: Props) => Renderable,
-  dependencies: Names
-) => (props: Props) => VNode;
+const namedView = defineView({ issues, preferences }, { default: "issues" });
 
 export const IssueTitle = view(
   ({ state }, { issueId }: { issueId: number }) =>
@@ -27,7 +13,7 @@ export const IssueTitle = view(
   [issues]
 );
 
-export function checkNamedDependencies(namedView: NamedView) {
+export function checkNamedDependencies() {
   const NamedIssueTitle = namedView(
     ({ state, $ }, { issueId }: { issueId: number }) => {
       // @ts-expect-error preferences is outside this dependency tuple.
@@ -42,11 +28,26 @@ export function checkNamedDependencies(namedView: NamedView) {
     ["issues", "preferences"]
   );
 
+  const DefaultCount = namedView(({ state }) => {
+    // @ts-expect-error Only issues is available through the default scope.
+    void state.compact;
+    return <p>{state.issues.length}</p>;
+  });
+
+  namedView(({ state }) => {
+    // @ts-expect-error An explicit list replaces the default scope.
+    void state.issues;
+    return <p>{String(state.compact)}</p>;
+  }, ["preferences"]);
+
+  // @ts-expect-error Typo in the default name.
+  defineView({ issues, preferences }, { default: "isssues" });
+
   // @ts-expect-error Typo in the registry key.
   namedView(() => <p />, ["isssues"]);
 
   // @ts-expect-error JSX still requires the correct prop type.
   const invalidTitle = <NamedIssueTitle issueId="1" />;
   void invalidTitle;
-  return <><NamedIssueTitle issueId={1} /><IssueCount /></>;
+  return <><NamedIssueTitle issueId={1} /><IssueCount /><DefaultCount /></>;
 }
