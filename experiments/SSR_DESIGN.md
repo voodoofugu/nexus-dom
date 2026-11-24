@@ -75,5 +75,7 @@ in one component returns the same value.
   should remain synchronous unless an explicit async contract is introduced.
 - Whether custom state codecs or explicit store serialization IDs are needed;
   the initial contract deliberately supports strict JSON and matching builds.
-- Whether branch-local mismatch recovery is worth the extra boundary state.
+- Branch-local mismatch recovery is deferred until large SSR views demonstrate
+  a real need. Root remount remains the simple correctness fallback and keeps
+  partial-subscription cleanup deterministic without extra server markers.
 - Development-only mismatch diagnostics versus production fallback behavior.

@@ -197,6 +197,50 @@ describe("nexus-dom hydration", () => {
     expect(host.textContent).toBe("9: server");
   });
 
+  it("keeps hydration state isolated between roots", () => {
+    const initial = { count: 1 };
+    const model = store({ state: initial });
+    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const firstHTML = renderToString(<Counter />, {
+      hydration: true,
+      idPrefix: "first",
+    });
+    initial.count = 2;
+    const secondHTML = renderToString(<Counter />, {
+      hydration: true,
+      idPrefix: "second",
+    });
+    initial.count = 0;
+    const firstHost = document.createElement("div");
+    const secondHost = document.createElement("div");
+    firstHost.innerHTML = firstHTML;
+    secondHost.innerHTML = secondHTML;
+
+    createApp().hydrate(<Counter />, firstHost, { idPrefix: "first" });
+    createApp().hydrate(<Counter />, secondHost, { idPrefix: "second" });
+
+    expect(firstHost.textContent).toBe("1");
+    expect(secondHost.textContent).toBe("2");
+  });
+
+  it("keeps restored state when a mismatch remounts the root", () => {
+    const initial = { count: 7 };
+    const model = store({ state: initial });
+    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<Counter />, { hydration: true });
+    host.querySelector("p")!.outerHTML = "<section>Mismatch</section>";
+    initial.count = 0;
+    const onError = vi.fn();
+
+    createApp().hydrate(<Counter />, host, { onError });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "HYDRATION_MISMATCH" })
+    );
+    expect(host.innerHTML).toBe("<p>7</p>");
+  });
+
   it("rejects a hydration snapshot for a different store shape", () => {
     const model = store({ state: { count: 1 } });
     const Counter = view(({ state }) => <p>{state.count}</p>, [model]);

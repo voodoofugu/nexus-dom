@@ -183,6 +183,9 @@ drilling or a provider hierarchy.
   plus exact top-level keys. It rejects lossy JSON values and assumes the same
   server/client view build; explicit store serialization IDs and custom codecs
   remain possible later extensions.
+- Branch-local mismatch recovery is intentionally deferred. Root remount has a
+  small, deterministic cleanup contract; local recovery needs evidence from
+  large SSR views before adding boundary state or server markers.
 - Empty text anchors are still internal structural nodes, even though comments,
   wrappers and custom attributes were removed.
 - `moveBefore()` preserves state in Chromium and Firefox. WebKit currently uses
