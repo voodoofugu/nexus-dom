@@ -326,13 +326,14 @@ function selectorLive<S extends object, R, C>(
   nexus: NexusSource<S, C>,
   selector: (state: S) => R,
   isEqual: EqualityFn<R> = Object.is,
-  sourceKey?: PropertyKey
+  sourceKey?: PropertyKey,
+  track = (state: S) => trackSelector(state, selector)
 ): LiveValue<R, C> {
   const live: LiveValue<R, C> = {
     [LIVE_VALUE]: true,
     get: () => selector(nexus.get()),
     subscribe(listener: LiveListener<R, C>) {
-      let tracked = trackSelector(nexus.get(), selector);
+      const tracked = track(nexus.get());
       let current = tracked.value;
       let dependencies = tracked.dependencies;
       let disposed = false;
@@ -340,7 +341,7 @@ function selectorLive<S extends object, R, C>(
 
       const handle = (state: S, context?: C) => {
         if (disposed) return;
-        const next = trackSelector(state, selector);
+        const next = track(state);
 
         if (!sameDependencies(dependencies, next.dependencies)) {
           const previousUnsubscribe = unsubscribe;
@@ -448,4 +449,20 @@ export function when<T, C>(
     .render((visible) => (visible ? truthy : fallback));
 }
 
-export { selectorLive as createLiveSelector };
+export function createLiveSelector<S extends object, R, C>(
+  source: NexusSource<S, C>,
+  selector: (state: S) => R,
+  isEqual?: EqualityFn<R>,
+  sourceKey?: PropertyKey
+): LiveValue<R, C> {
+  return selectorLive(source, selector, isEqual, sourceKey);
+}
+
+export function createTrackedSelector<S extends object, R, C>(
+  source: NexusSource<S, C>,
+  selector: (state: S) => R,
+  track: (state: S) => ReturnType<typeof trackSelector<S, R>>,
+  isEqual?: EqualityFn<R>
+): LiveValue<R, C> {
+  return selectorLive(source, selector, isEqual, undefined, track);
+}

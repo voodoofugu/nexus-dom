@@ -276,8 +276,18 @@ and duplicate namespace names are errors.
 Reading `state.preferences.theme` subscribes the view to the preferences
 store. Use `$.preferences.theme` for a binding to that field alone. Reading
 an action or ref opens its store without subscribing the view. Each binding
-group has its own `$select`. For a live selector that reads several stores,
-use the flat `component(render, [descriptors])` scope.
+group has its own `$select` for a selector within that store. Use
+`$.$select` to read several stores in one selector.
+
+```tsx
+const visibleIssues = $.$select(({ filters, issues }) =>
+  issues.items.filter((issue) => issue.title.includes(filters.query))
+);
+```
+
+The selector subscribes to the stores it reads on each run. If a condition
+stops reading a store, the selector drops that subscription. `$select` is
+reserved as a store name within a component scope.
 
 ### Server rendering
 
@@ -680,9 +690,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.49 KB gzip` for
-low-level core exports, `11.50 KB` for `createApp`, `11.96 KB` for the complete
-main entry, and `13.50 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.51 KB` externalized or `7.58 KB` with
+included. The current local measurement is approximately `8.47 KB gzip` for
+low-level core exports, `11.55 KB` for `createApp`, `12.07 KB` for the complete
+main entry, and `13.63 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.56 KB` externalized or `7.64 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

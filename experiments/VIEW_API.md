@@ -38,10 +38,9 @@ const Summary = component(
 component. Reading one group's state subscribes the view to that store.
 Conditional reads add or remove subscriptions on the next render.
 
-The dogfood uses this form for the toolbar, summary, inspector and shell.
-The keyed list still uses the flat view for a live selector across two stores.
-Evaluate field-level tracking inside a group and cross-store selectors
-before choosing the release API.
+The dogfood uses this form throughout. The keyed list uses `$.$select` to
+derive its rows from the issues and filters stores. Evaluate field-level
+tracking inside a group before choosing the release API.
 
 ### Instance input
 
@@ -80,5 +79,4 @@ directly rather than `props.issueId`. Required and optional attributes and
 ## Still unresolved
 
 - Field-level tracking inside component scopes.
-- Live selectors that read several store namespaces.
 - Whether `app.view` still earns a public entry before the first stable release.

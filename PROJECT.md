@@ -196,7 +196,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `13.50 KB gzip`; actual application cost still depends on imported APIs
+  about `13.63 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -256,9 +256,9 @@ drilling or a provider hierarchy.
 
 `1.0.0` is a possible first public version once the supported API is clear.
 
-1. Check a live selector across store namespaces in the dogfood keyed list.
-   Measure whether tracking individual fields within a namespace earns its
-   complexity for ordinary component renders.
+1. Measure whether tracking individual fields within a namespace earns its
+   complexity. The dogfood now uses a live selector across stores for its
+   filtered keyed list.
 2. Settle the legacy `app.view` contract and supported exports. Publish API
    examples that agree with emitted declarations, following `nexus-state`
    and `morphing-scroll`.
@@ -298,11 +298,11 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `8.49 KB
-gzip` for core, `11.50 KB` for `createApp`, and `11.96 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `13.50 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `6.51 KB` externalized
-or `7.58 KB` with `nexus-state`. Track these separately from the playground
+The isolated Rollup/Terser ESM benchmark currently measures roughly `8.47 KB
+gzip` for core, `11.55 KB` for `createApp`, and `12.07 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `13.63 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `6.56 KB` externalized
+or `7.64 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { componentScope, persist, store, component } from "nexus-dom";
+import { componentScope, persist, store } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 
 type IssueStatus = "backlog" | "active" | "done";
@@ -227,13 +227,14 @@ export function createWorkspace() {
     }
   );
 
-  const IssueList = component(
+  const IssueList = workspaceComponent(
     ({ $, acts }) => {
       diagnostics.viewRun("issue-list");
       const visibleIssues = $.$select((state) => {
-        const query = state.query.trim().toLowerCase();
-        return state.items.filter((issue) => {
-          const matchesFilter = state.filter === "all" || issue.status === state.filter;
+        const { query: search, filter } = state.filters;
+        const query = search.trim().toLowerCase();
+        return state.issues.items.filter((issue) => {
+          const matchesFilter = filter === "all" || issue.status === filter;
           const matchesQuery = query === "" ||
             issue.title.toLowerCase().includes(query) ||
             issue.code.toLowerCase().includes(query) ||
@@ -246,7 +247,7 @@ export function createWorkspace() {
         <section class="list-panel" aria-label="Issues">
           <div class="panel-heading">
             <div><p class="eyebrow">Keyed collection</p><h2>Renderer work queue</h2></div>
-            <button class="primary" onClick={acts.createIssue}>New issue</button>
+            <button class="primary" onClick={acts.issues.createIssue}>New issue</button>
           </div>
 
           <ul class="issue-list">
@@ -258,15 +259,15 @@ export function createWorkspace() {
                   <li data-status={$issue.status} data-priority={$issue.priority}>
                     <button
                       class="issue-main"
-                      aria-current={$.selectedIssueId.map((selected) => selected === id ? "true" : undefined)}
-                      onClick={() => acts.selectIssue(id)}
+                      aria-current={$.issues.selectedIssueId.map((selected) => selected === id ? "true" : undefined)}
+                      onClick={() => acts.issues.selectIssue(id)}
                     >
                       <span class="issue-code">{$issue.code}</span>
                       <strong>{$issue.title}</strong>
                       <span class="issue-summary">{$issue.summary}</span>
                       <span class="issue-owner">{$issue.owner}</span>
                     </button>
-                    <button class="status-button" onClick={() => acts.cycleStatus(id)}>
+                    <button class="status-button" onClick={() => acts.issues.cycleStatus(id)}>
                       {$issue.status.map(statusLabel)}
                     </button>
                   </li>
@@ -278,8 +279,7 @@ export function createWorkspace() {
           <EmptyState />
         </section>
       );
-    },
-    [issues, filters]
+    }
   );
 
   const Inspector = workspaceComponent(

@@ -36,7 +36,6 @@ export function sameDependencies<S extends object>(
   right: ["*"] | (keyof S)[]
 ) {
   if (left.length !== right.length) return false;
-  if (left[0] === "*" || right[0] === "*") return left[0] === right[0];
   const rightKeys = right as (keyof S)[];
   return (left as (keyof S)[]).every((key) => rightKeys.includes(key));
 }

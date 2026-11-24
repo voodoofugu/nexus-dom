@@ -74,12 +74,12 @@ try {
       )), true, "Hydration should reuse the server shell and rows and keep focus");
     };
     if (ssr) await assertHydrated();
-    await page.getByRole("button", { name: "In progress", exact: true }).first().click();
-    assert.equal(await rows.count(), 2);
-
     const issue = page.getByRole("button", { name: /ND-19/ });
     const original = await issue.elementHandle();
     assert.ok(original);
+    await page.getByRole("button", { name: "In progress", exact: true }).first().click();
+    assert.equal(await rows.count(), 2);
+    assert.equal(await issue.evaluate((node, previous) => node === previous, original), true);
     await issue.click();
     await page.waitForFunction(() => document.activeElement?.matches(".inspector"));
 
@@ -94,6 +94,9 @@ try {
 
     await inspector.getByRole("button", { name: "Close inspector" }).click();
     await inspector.getByRole("button", { name: "Focus search" }).click();
+    assert.equal(await search.evaluate((node) => node === document.activeElement), true);
+    await search.fill("Follow a commit");
+    assert.equal(await rows.count(), 1);
     assert.equal(await search.evaluate((node) => node === document.activeElement), true);
     await search.fill("no matching title");
     await page.getByText("No matching issues").waitFor();

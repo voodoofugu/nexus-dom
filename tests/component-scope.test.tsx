@@ -85,6 +85,51 @@ it("hydrates snapshots in namespace access order", () => {
   app.dispose();
 });
 
+it("tracks conditional namespaces in a cross-store live selector", () => {
+  const openDetails = vi.fn();
+  const filters = store({ state: { show: false } });
+  const details = store({ state: { title: "Details" }, mount: openDetails });
+  const workspaceComponent = componentScope({ filters, details });
+  const project = vi.fn();
+  const commits = vi.fn();
+  let rename = (_title: string) => {};
+  const Panel = workspaceComponent(({ $ }) => {
+    const title = $.$select((state) => {
+      project();
+      return state.filters.show ? state.details.title : "Hidden";
+    });
+    rename = (title) => $.details.title.set(title, "rename");
+    return <><p>{title}</p><button onClick={() => $.filters.show.set((show) => !show)}>Toggle</button></>;
+  });
+  const host = document.createElement("div");
+  const app = createApp();
+  const root = app.render(<Panel />, host, { schedule: "manual", onCommit: commits });
+  const toggle = host.querySelector("button")!;
+  expect(openDetails).not.toHaveBeenCalled();
+  toggle.click();
+  root.flush();
+  expect(host.querySelector("p")?.textContent).toBe("Details");
+  expect(openDetails).toHaveBeenCalledOnce();
+  rename("Edited");
+  root.flush();
+  expect(host.querySelector("p")?.textContent).toBe("Edited");
+  expect(commits.mock.lastCall?.[0].contexts).toContainEqual({ source: "rename" });
+  toggle.click();
+  root.flush();
+  project.mockClear();
+  rename("While hidden");
+  root.flush();
+  expect(project).not.toHaveBeenCalled();
+  expect(host.querySelector("p")?.textContent).toBe("Hidden");
+  toggle.click();
+  root.flush();
+  expect(host.querySelector("p")?.textContent).toBe("While hidden");
+  app.dispose();
+  project.mockClear();
+  rename("After disposal");
+  expect(project).not.toHaveBeenCalled();
+});
+
 it("rejects a local namespace that conflicts with a shared one", () => {
   const model = store({ state: { value: 1 } });
   const workspaceComponent = componentScope({ model });

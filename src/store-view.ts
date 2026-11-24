@@ -7,7 +7,7 @@ import {
   type UpdateContext,
 } from "nexus-state";
 import { nexusDOMError } from "./errors.js";
-import { bind } from "./live.js";
+import { bind, createTrackedSelector } from "./live.js";
 import { LIVE_VALUE, type LiveValue } from "./types.js";
 import { createListHelpers, type AppHelpers } from "./list.js";
 import { captureOwnerId } from "./owner.js";
@@ -261,12 +261,18 @@ export function component<
 }
 
 type StoreRegistry = Record<string, AnyStore>;
+type ValidNamespaceNames<R> = Record<Extract<keyof R, "$select">, never>;
+type WorkspaceState<R extends StoreRegistry> = {
+  readonly [K in keyof R]: Readonly<StoreState<R[K]>>;
+};
 
 /** Store namespaces exposed to a component created by `componentScope`. */
 export type WorkspaceScope<R extends StoreRegistry> = {
   readonly id: (localKey: string) => string;
-  readonly state: { readonly [K in keyof R]: Readonly<StoreState<R[K]>> };
-  readonly $: { readonly [K in keyof R]: WritableBoundState<StoreState<R[K]>, UpdateContext> };
+  readonly state: WorkspaceState<R>;
+  readonly $: {
+    readonly [K in keyof R]: WritableBoundState<StoreState<R[K]>, UpdateContext>;
+  } & Pick<BoundState<WorkspaceState<R>, UpdateContext>, "$select">;
   readonly acts: { readonly [K in keyof R]: StoreActs<R[K]> };
   readonly refs: { readonly [K in keyof R]: AppRefs<StoreRefs<R[K]>> };
 };
@@ -278,7 +284,7 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
   ): ViewComponent<Input>;
   <const Extra extends StoreRegistry, Input extends object = EmptyRecord>(
     render: (scope: WorkspaceScope<R & Extra>, input: Input) => Renderable,
-    extra: Extra & Record<Extract<keyof Extra, keyof R>, never>
+    extra: Extra & ValidNamespaceNames<Extra> & Record<Extract<keyof Extra, keyof R>, never>
   ): ViewComponent<Input>;
 }
 
@@ -293,11 +299,20 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
  * ));
  * ```
  */
-export function componentScope<const R extends StoreRegistry>(stores: R): WorkspaceViewFactory<R> {
+export function componentScope<const R extends StoreRegistry>(
+  stores: R & ValidNamespaceNames<R>
+): WorkspaceViewFactory<R> {
+  const checkName = (name: string) => {
+    if (name === "$select") {
+      throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", 'Store namespace "$select" is reserved.');
+    }
+  };
   const shared = new Map(Object.entries(stores).map(([name, store]) => [name, [store]]));
+  for (const name of shared.keys()) checkName(name);
   const factory = (render: StoreViewVNode["render"], extra?: StoreRegistry): ViewComponent<object> => {
     const registry = extra ? new Map(shared) : shared;
     for (const [name, store] of Object.entries(extra ?? {})) {
+      checkName(name);
       if (registry.has(name)) {
         throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", `Store namespace "${name}" is already defined.`);
       }
@@ -630,17 +645,20 @@ export function createStoreViewRegistry(
       if (mounted) scope.mount?.();
       return scope;
     };
-    const namespace = (get: (name: string) => unknown): RecordAny =>
-      new Proxy(Object.create(null), {
+    const namespace = (get: (name: string) => unknown, target = Object.create(null)): RecordAny =>
+      new Proxy(target, {
         get(_target, name) {
           if (typeof name === "string" && registry.has(name)) return get(name);
+          return Reflect.get(_target, name);
         },
-        has: (_target, name) => typeof name === "string" && registry.has(name),
-        ownKeys: () => [...registry.keys()],
+        has: (_target, name) =>
+          (typeof name === "string" && registry.has(name)) || Reflect.has(_target, name),
+        ownKeys: (_target) => [...registry.keys(), ...Reflect.ownKeys(_target)],
         getOwnPropertyDescriptor(_target, name) {
           if (typeof name === "string" && registry.has(name)) {
             return { enumerable: true, configurable: true, get: () => get(name) };
           }
+          return Reflect.getOwnPropertyDescriptor(_target, name);
         },
       });
     const snapshot = (used?: Set<string>) => {
@@ -655,27 +673,33 @@ export function createStoreViewRegistry(
         return value;
       });
     };
-    const $ = namespace((name) => read(name).$);
+    const track = <R>(select: (state: RecordAny) => R) => {
+      const used = new Set<string>();
+      return { value: select(snapshot(used)), dependencies: [...used] };
+    };
+    const source: NexusSource<RecordAny, UpdateContext> = {
+      get: snapshot,
+      subscribe(listener, names) {
+        const stop = names.map((name) =>
+          read(name).source.subscribe((_state, context) => listener(snapshot(), context), ["*"])
+        );
+        return () => stop.forEach((unsubscribe) => unsubscribe());
+      },
+    };
+    const $ = namespace((name) => read(name).$, {
+      __proto__: null,
+      $select: <R>(select: (state: RecordAny) => R, isEqual?: (left: R, right: R) => boolean) =>
+        createTrackedSelector(source, select, () => track(select), isEqual),
+    });
     const acts = namespace((name) => read(name).acts);
     const refs = namespace((name) => read(name).refs);
     const project = (state: RecordAny) =>
       vnode.render({ id: vnode.id, state, $, acts, refs }, vnode.input);
     return {
       kind: "tracked-view",
-      source: {
-        get: snapshot,
-        subscribe(listener, names) {
-          const stop = names.map((name) =>
-            read(name).source.subscribe((_state, context) => listener(snapshot(), context), ["*"])
-          );
-          return () => stop.forEach((unsubscribe) => unsubscribe());
-        },
-      },
+      source,
       project,
-      track() {
-        const used = new Set<string>();
-        return { value: project(snapshot(used)), dependencies: [...used] };
-      },
+      track: () => track(project),
       mountStores() {
         mounted = true;
         for (const scope of scopes.values()) scope.mount?.();
