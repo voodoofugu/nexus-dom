@@ -40,14 +40,7 @@ export function hydrate<C = unknown>(
     }
     storeViews.restore(snapshots);
   }
-  let root: ReturnType<typeof renderer.hydrate> | undefined;
-  try {
-    root = renderer.hydrate(view, resolvedTarget);
-    storeViews?.completeRestore?.();
-  } catch (error) {
-    root?.dispose();
-    throw error;
-  }
+  const root = renderer.hydrate(view, resolvedTarget);
 
   return {
     dispose: root.dispose,

@@ -7,6 +7,7 @@ import {
   ErrorBoundary,
   hydrate,
   NexusDOMError,
+  persist,
   store,
   view,
   when,
@@ -195,6 +196,88 @@ describe("nexus-dom hydration", () => {
 
     expect(setupValues).toEqual([9, "server"]);
     expect(host.textContent).toBe("9: server");
+  });
+
+  it("loads persisted preferences after hydration and disconnects on app disposal", () => {
+    const storage = {
+      getItem: vi.fn(() => '{"version":0,"state":{"label":"Saved"}}'),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    const commits = vi.fn();
+    const onError = vi.fn();
+    let change = () => {};
+    const preferences = store({
+      state: { label: "Server" },
+      mount({ nexus }) {
+        change = () => nexus.set({ label: "Changed" }, "test");
+        return persist(nexus, { key: "preferences", storage });
+      },
+    });
+    const mountModel = vi.fn();
+    const model = store({
+      state: {},
+      mount({ dependencies }) {
+        mountModel(dependencies.get("label"));
+      },
+    }, [preferences]);
+    const Panel = view(
+      ({ state }) => <p>{state.label}</p>,
+      [model, preferences]
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<Panel />, { hydration: true });
+    const paragraph = host.firstChild;
+    expect(storage.getItem).not.toHaveBeenCalled();
+
+    const app = createApp();
+    const root = app.hydrate(<Panel />, host, {
+      schedule: "manual",
+      onCommit: commits,
+      onError,
+    });
+    expect(host.firstChild).toBe(paragraph);
+    expect(host.textContent).toBe("Server");
+    expect(mountModel).toHaveBeenCalledExactlyOnceWith("Saved");
+    root.flush();
+    expect(host.textContent).toBe("Saved");
+    expect(host.firstChild).toBe(paragraph);
+    expect(onError).not.toHaveBeenCalled();
+    expect(commits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contexts: [expect.objectContaining({ source: "storage" })],
+      })
+    );
+
+    root.dispose();
+    const secondRoot = app.render(<Panel />, host);
+    expect(storage.getItem).toHaveBeenCalledOnce();
+    secondRoot.dispose();
+    change();
+    expect(storage.setItem).toHaveBeenCalledOnce();
+    app.dispose();
+    change();
+    expect(storage.setItem).toHaveBeenCalledOnce();
+  });
+
+  it("skips store mount when hydration rejects an unused snapshot", () => {
+    const mount = vi.fn();
+    const model = store({ state: { count: 1 }, mount });
+    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<Counter />, { hydration: true });
+    const marker = host.lastChild!;
+    const payload = JSON.parse(marker.nodeValue!.slice("nxs:s".length));
+    payload.stores.push(payload.stores[0]);
+    marker.nodeValue = "nxs:s" + JSON.stringify(payload);
+    const app = createApp();
+
+    expect(() => app.hydrate(<Counter />, host)).toThrowError(
+      expect.objectContaining({ code: "HYDRATION_STATE_INVALID" })
+    );
+    expect(mount).not.toHaveBeenCalled();
+    expect(host.childNodes).toHaveLength(0);
+    app.dispose();
   });
 
   it("keeps hydration state isolated between roots", () => {

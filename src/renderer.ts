@@ -871,20 +871,24 @@ export function createDOMRenderer<C = unknown>(
   const mountRoot = (
     view: Renderable,
     container: ParentNode,
-    idPrefix: string
+    idPrefix: string,
+    restoring = false
   ): MountedRoot => {
     const owner = new Owner(undefined, true, idPrefix);
     const document = container.ownerDocument ?? (container as Document);
     const fragment = document.createDocumentFragment();
+    let nodes: Node[] = [];
     try {
       renderInto(view, fragment, owner);
+      if (restoring) storeViews?.completeRestore?.();
+      nodes = Array.from(fragment.childNodes);
+      container.appendChild(fragment);
+      owner.mount();
     } catch (error) {
       owner.dispose();
+      for (const node of nodes) node.parentNode?.removeChild(node);
       throw error;
     }
-    const nodes = Array.from(fragment.childNodes);
-    container.appendChild(fragment);
-    owner.mount();
 
     let disposed = false;
     return {
@@ -922,12 +926,19 @@ export function createDOMRenderer<C = unknown>(
           while (container.firstChild) {
             container.removeChild(container.firstChild);
           }
-          return mountRoot(view, container, idPrefix);
+          return mountRoot(view, container, idPrefix, true);
         }
         throw error;
       }
       const nodes = Array.from(container.childNodes);
-      owner.mount();
+      try {
+        storeViews?.completeRestore?.();
+        owner.mount();
+      } catch (error) {
+        owner.dispose();
+        for (const node of nodes) node.parentNode?.removeChild(node);
+        throw error;
+      }
 
       let disposed = false;
       return {

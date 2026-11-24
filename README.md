@@ -139,6 +139,33 @@ coalesced view contributes its most recent causal context to `onCommit`. Keep
 invariants that require atomic observation inside one store; use dependency
 actions to coordinate commands whose visual result only needs one commit.
 
+Use `mount` for client integrations that can change state, such as restoring
+preferences from storage or connecting Redux DevTools. It runs once per
+app-scoped store when a view that depends on it first mounts. Store
+dependencies mount before their dependents. During hydration, the callback
+runs after the DOM is adopted and the server snapshot is validated. Storage
+values then reach the view through normal scheduled updates.
+
+```ts
+import { persist, store } from "nexus-dom";
+import { devtools } from "nexus-state/devtools";
+
+const preferences = store({
+  state: { compact: false },
+  acts: ({ reset }) => ({
+    resetPreferences: () => reset("compact"),
+  }),
+  mount({ nexus, onCleanup }) {
+    onCleanup(persist(nexus, { key: "preferences", include: ["compact"] }));
+    return devtools(nexus, { name: "Preferences" });
+  },
+});
+```
+
+Use `setup` for initialization needed during the first client render.
+Both callbacks are client-only. Returned cleanup functions and callbacks
+registered with `onCleanup` run on `app.dispose()`.
+
 `state` and `$` expose the same store values with different update costs.
 Reading `state.count` gives a plain value and makes the surrounding view rerun
 when `count` changes. `$.count` is a stable `LiveValue` that updates one DOM
@@ -218,7 +245,9 @@ exact top-level key shape, so server and client must render the same view build.
 State transfer accepts only finite JSON values, arrays and plain objects;
 `Date`, `Map`, `Set`, functions, `undefined`, `BigInt`, cycles and custom class
 instances require an application-level serialization policy. Refs and setup
-resources are intentionally never serialized.
+resources are intentionally never serialized. A store's `mount` runs after
+DOM adoption, so it can load local preferences without changing the
+state used to match server HTML.
 
 Hydration reuses stable elements and text, then attaches live text/property
 subscriptions, events, refs and tracked store-view reconciliation. Dynamic and
@@ -575,9 +604,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.42 KB gzip` for
-low-level core exports, `10.96 KB` for `createApp`, `11.34 KB` for the complete
-main entry, and `12.88 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `5.99 KB` externalized or `7.07 KB` with
+included. The current local measurement is approximately `8.48 KB gzip` for
+low-level core exports, `11.18 KB` for `createApp`, `11.56 KB` for the complete
+main entry, and `13.09 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.18 KB` externalized or `7.25 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

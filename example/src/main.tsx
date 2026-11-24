@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { createApp, store, view } from "nexus-dom";
+import { createApp, persist, store, view } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 import "./style.css";
 
@@ -126,6 +126,9 @@ const workspace = store({
         refs.search.current?.focus();
       },
     };
+  },
+  mount({ nexus }) {
+    return persist(nexus, { key: "nexus-dom-workspace", include: ["compact"] });
   },
 });
 

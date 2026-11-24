@@ -142,6 +142,7 @@ export function mountTrackedView<C>({
     clearBranch();
     end.parentNode?.removeChild(end);
   });
+  if (vnode.mountStores) branchOwner?.addMount(vnode.mountStores);
 
   return hydrationNext;
 }

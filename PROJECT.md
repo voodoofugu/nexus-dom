@@ -186,6 +186,9 @@ drilling or a provider hierarchy.
 - Branch-local mismatch recovery is intentionally deferred. Root remount has a
   small, deterministic cleanup contract; local recovery needs evidence from
   large SSR views before adding boundary state or server markers.
+- Lazy-store `setup` prepares the first client render. The one-time `mount`
+  callback connects persistence and devtools after DOM adoption or insertion.
+  The app owns both lifecycles and disposes their resources.
 - Empty text anchors are still internal structural nodes, even though comments,
   wrappers and custom attributes were removed.
 - `moveBefore()` preserves state in Chromium and Firefox. WebKit currently uses
@@ -193,7 +196,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `12.88 KB gzip`; actual application cost still depends on imported APIs
+  about `13.09 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -260,11 +263,11 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `8.42 KB
-gzip` for core, `10.96 KB` for `createApp`, and `11.34 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `12.88 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `5.99 KB` externalized
-or `7.07 KB` with `nexus-state`. Track these separately from the playground
+The isolated Rollup/Terser ESM benchmark currently measures roughly `8.48 KB
+gzip` for core, `11.18 KB` for `createApp`, and `11.56 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `13.09 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `6.18 KB` externalized
+or `7.25 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

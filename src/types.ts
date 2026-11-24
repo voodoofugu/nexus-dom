@@ -89,6 +89,7 @@ export interface TrackedViewVNode {
   readonly kind: "tracked-view";
   readonly source: NexusSource<Record<string, unknown>, unknown>;
   readonly project: (state: Record<string, unknown>) => Renderable;
+  readonly mountStores?: () => void;
 }
 
 export interface StoreViewVNode {

@@ -221,7 +221,8 @@ export function createApp<
           root.dispose();
         },
       };
-      roots.add(managedRoot);
+      if (disposed) managedRoot.dispose();
+      else roots.add(managedRoot);
       return managedRoot;
     },
     hydrate(view, target, rendererOptions) {
@@ -242,7 +243,8 @@ export function createApp<
           root.dispose();
         },
       };
-      roots.add(managedRoot);
+      if (disposed) managedRoot.dispose();
+      else roots.add(managedRoot);
       return managedRoot;
     },
   };

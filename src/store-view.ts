@@ -53,6 +53,10 @@ export interface StoreOptions<
   setup?: (
     context: StoreSetupContext<S, A, R, D>
   ) => void | (() => void);
+  /** Connects client resources when the first consuming view mounts. */
+  mount?: (
+    context: NoInfer<StoreSetupContext<S, A, R, D>>
+  ) => void | (() => void);
 }
 
 export interface StoreDefinition<
@@ -218,6 +222,7 @@ export function view<
 interface ResolvedStore {
   nexus: Nexus<RecordAny, RecordAny>;
   refs: AppRefs<RecordAny>;
+  mount?: () => void;
 }
 
 interface ResolvedScope {
@@ -225,6 +230,7 @@ interface ResolvedScope {
   $: WritableBoundState<RecordAny, UpdateContext>;
   acts: RecordAny;
   refs: AppRefs<RecordAny>;
+  mount?: () => void;
 }
 
 const createRefs = (values: RecordAny): AppRefs<RecordAny> =>
@@ -354,14 +360,14 @@ export function createStoreViewRegistry(
             },
           }) as Nexus<RecordAny, RecordAny>)
         : (createNexus({ state: initialState }) as Nexus<RecordAny, RecordAny>);
-      const resolved = {
+      const resolved: ResolvedStore = {
         nexus: nexus as Nexus<RecordAny, RecordAny>,
         refs,
       };
       stores.set(definition, resolved);
       storeOrder.push(resolved);
 
-      if (options.setup && registryOptions.runSetup !== false) {
+      if (registryOptions.runSetup !== false && (options.setup || options.mount)) {
         const ownCleanups = new Set<() => void>();
         const onCleanup = (cleanup: () => void) => {
           ownCleanups.add(cleanup);
@@ -371,15 +377,16 @@ export function createStoreViewRegistry(
           for (const cleanup of Array.from(ownCleanups).reverse()) cleanup();
           ownCleanups.clear();
         };
+        const context = () => ({
+          nexus,
+          $: createWritableBinding(nexus, () => resolved),
+          acts: nexus.acts,
+          refs,
+          dependencies,
+          onCleanup,
+        });
         try {
-          const setupCleanup = options.setup({
-            nexus,
-            $: createWritableBinding(nexus, () => resolved),
-            acts: nexus.acts,
-            refs,
-            dependencies,
-            onCleanup,
-          });
+          const setupCleanup = options.setup?.(context());
           if (setupCleanup) ownCleanups.add(setupCleanup);
           cleanups.push(disposeSetup);
         } catch (error) {
@@ -388,6 +395,39 @@ export function createStoreViewRegistry(
           if (storeOrder.at(-1) === resolved) storeOrder.pop();
           throw error;
         }
+        let mount = options.mount;
+        if (mount || dependencyScope.mount) {
+          resolved.mount = () => {
+            if (disposed) return;
+            dependencyScope.mount?.();
+            if (disposed) return;
+            const connect = mount;
+            mount = undefined;
+            if (!connect) return;
+            const mountCleanups = new Set<() => void>();
+            const disposeMount = () => {
+              for (const stop of Array.from(mountCleanups).reverse()) stop();
+              mountCleanups.clear();
+            };
+            try {
+              const cleanup = connect({
+                ...context(),
+                onCleanup(cleanup) {
+                  mountCleanups.add(cleanup);
+                  return () => mountCleanups.delete(cleanup);
+                },
+              });
+              if (cleanup) mountCleanups.add(cleanup);
+            } catch (error) {
+              disposeMount();
+              throw error;
+            }
+            if (disposed) disposeMount();
+            else ownCleanups.add(disposeMount);
+          };
+        }
+      } else if (dependencyScope.mount) {
+        resolved.mount = dependencyScope.mount;
       }
       return resolved;
     } catch (error) {
@@ -465,12 +505,14 @@ export function createStoreViewRegistry(
     };
     // Validate state conflicts once, before any view project executes.
     source.get();
-    const scope = {
+    const mounts = resolved.flatMap((item) => item.mount ? [item.mount] : []);
+    const scope: ResolvedScope = {
       source,
       $: createWritableBinding(source, (key) => stateOwners.get(key)),
       acts,
       refs,
     };
+    if (mounts.length) scope.mount = () => mounts.forEach((mount) => mount());
     scopes.set(dependencies, scope);
     return scope;
   };
@@ -506,6 +548,7 @@ export function createStoreViewRegistry(
       return {
         kind: "tracked-view",
         source: scope.source,
+        ...(scope.mount ? { mountStores: scope.mount } : {}),
         project: (state) =>
           vnode.render(
             {
