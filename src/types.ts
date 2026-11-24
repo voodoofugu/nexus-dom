@@ -167,7 +167,7 @@ export interface RendererOptions<C = unknown> {
   onCommit?: (event: CommitEvent<C>) => void;
   /** Handles errors thrown by scheduled bindings or structural updates. */
   onError?: (error: unknown) => void;
-  /** Stable root prefix used by component ids and future SSR hydration. */
+  /** Stable root prefix shared by server rendering and hydration. */
   idPrefix?: string;
 }
 
@@ -182,5 +182,6 @@ export interface RenderRoot extends MountedRoot {
 
 export interface DOMRenderer<C = unknown> {
   mount(view: Renderable, container: ParentNode): MountedRoot;
+  hydrate(view: Renderable, container: ParentNode): MountedRoot;
   flush(): void;
 }

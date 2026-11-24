@@ -2,10 +2,13 @@ import { isLiveValue, createMutableLiveItem } from "./live.js";
 import { Owner, withOwner } from "./owner.js";
 import { createStoreViewRegistry } from "./store-view.js";
 import { nexusDOMError } from "./errors.js";
+import { hydrationText } from "./hydration-markers.js";
 import type { Renderable, VNode } from "./types.js";
 
 export interface ServerRenderOptions {
   idPrefix?: string;
+  /** Emits structural markers required by hydrate(). */
+  hydration?: boolean;
 }
 
 const voidElements = new Set([
@@ -52,7 +55,10 @@ export function renderToString(
     if (Array.isArray(current)) {
       return current.map((child) => render(child, owner)).join("");
     }
-    if (isLiveValue(current)) return escapeText(current.get());
+    if (isLiveValue(current)) {
+      const value = escapeText(current.get());
+      return options.hydration ? hydrationText(value) : value;
+    }
     if (typeof current !== "object") return escapeText(current);
 
     const vnode = current as VNode;

@@ -10,6 +10,7 @@ import { Owner, withOwner } from "./owner.js";
 import { createScheduler } from "./scheduler.js";
 import { mountTrackedView } from "./view.js";
 import { nexusDOMError } from "./errors.js";
+import { TEXT_END, TEXT_START } from "./hydration-markers.js";
 import type {
   DOMRenderer,
   ElementVNode,
@@ -586,6 +587,158 @@ export function createDOMRenderer<C = unknown>(
     target.appendChild(document.createTextNode(formatText(view)));
   };
 
+  const mismatch = (expected: string, node: Node | null): never => {
+    const actual = node
+      ? node.nodeType === 1
+        ? `<${(node as Element).localName}>`
+        : node.nodeType === 3
+          ? `text ${JSON.stringify(node.nodeValue)}`
+          : node.nodeType === 8
+            ? `comment ${JSON.stringify(node.nodeValue)}`
+            : `node type ${node.nodeType}`
+      : "the end of the container";
+    throw nexusDOMError(
+      "HYDRATION_MISMATCH",
+      `Expected ${expected}, but found ${actual}.`
+    );
+  };
+
+  const unsupportedHydration = (kind: string): never => {
+    throw nexusDOMError(
+      "HYDRATION_UNSUPPORTED",
+      `Hydration for ${kind} regions is not implemented yet.`
+    );
+  };
+
+  const hydrateTextNode = (
+    value: string,
+    target: Node,
+    node: Node | null
+  ) => {
+    const document = target.ownerDocument ?? (target as Document);
+    if (value === "") {
+      target.insertBefore(document.createTextNode(""), node);
+      return node;
+    }
+    if (!node || node.nodeType !== 3) {
+      mismatch(`text ${JSON.stringify(value)}`, node);
+    }
+    const text = node as Text;
+    if (text.data === value) return text.nextSibling;
+    if (text.data.startsWith(value)) return text.splitText(value.length);
+    return mismatch(`text ${JSON.stringify(value)}`, node);
+  };
+
+  const hydrateInto = (
+    view: Renderable,
+    target: Node,
+    owner: Owner,
+    node: Node | null
+  ): Node | null => {
+    if (
+      view === null ||
+      view === undefined ||
+      view === false ||
+      view === true
+    ) return node;
+
+    if (Array.isArray(view)) {
+      let next = node;
+      for (const child of view) next = hydrateInto(child, target, owner, next);
+      return next;
+    }
+
+    if (isLiveValue(view)) {
+      if (node?.nodeType !== 8 || node.nodeValue !== TEXT_START) {
+        return mismatch(`the <!--${TEXT_START}--> marker`, node);
+      }
+      const start = node;
+      let text = start.nextSibling;
+      if (text?.nodeType === 8 && text.nodeValue === TEXT_END) {
+        const document = target.ownerDocument ?? (target as Document);
+        text = document.createTextNode("");
+        target.insertBefore(text, start.nextSibling);
+      }
+      if (!text || text.nodeType !== 3) {
+        return mismatch("reactive text", text);
+      }
+      const end = text.nextSibling;
+      if (end?.nodeType !== 8 || end.nodeValue !== TEXT_END) {
+        return mismatch(`the <!--${TEXT_END}--> marker`, end);
+      }
+      const expected = formatText(view.get());
+      if ((text as Text).data !== expected) {
+        return mismatch(`reactive text ${JSON.stringify(expected)}`, text);
+      }
+      const next = end.nextSibling;
+      start.parentNode?.removeChild(start);
+      end.parentNode?.removeChild(end);
+      attachLive(view, owner, (value) => {
+        (text as Text).data = formatText(value);
+      });
+      return next;
+    }
+
+    if (typeof view !== "object") {
+      return hydrateTextNode(formatText(view), target, node);
+    }
+
+    const vnode = view as VNode;
+    if (vnode.kind === "fragment") {
+      return hydrateInto(vnode.props.children as Renderable, target, owner, node);
+    }
+    if (vnode.kind === "component") {
+      const componentOwner = new Owner(owner);
+      const output = withOwner(componentOwner, () => vnode.type(vnode.props));
+      return hydrateInto(output, target, componentOwner, node);
+    }
+    if (vnode.kind === "store-view") {
+      if (!storeViews) {
+        throw nexusDOMError(
+          "STORE_VIEW_OUTSIDE_APP",
+          "A view with store dependencies must be hydrated through createApp().hydrate()."
+        );
+      }
+      return hydrateInto(storeViews.resolve(vnode), target, owner, node);
+    }
+    if (vnode.kind === "tracked-view") {
+      const next = mountTrackedView({
+        target,
+        owner,
+        vnode,
+        scheduler,
+        renderInto,
+        reconcile: reconcileView,
+        hydration: { node, hydrateInto },
+      });
+      return next === undefined ? node : next;
+    }
+    if (vnode.kind !== "element") return unsupportedHydration(vnode.kind);
+    if (!(node instanceof Element) || node.localName !== vnode.type) {
+      return mismatch(`<${vnode.type}>`, node);
+    }
+
+    for (const [property, value] of Object.entries(vnode.props)) {
+      if (property === "children" || property === "key") continue;
+      if (property === "ref") attachRef(node, value, owner);
+      else if (isEventProperty(property)) attachEvent(node, property, value, owner);
+      else if (isLiveValue(value)) {
+        attachLive(value, owner, (next, previous) =>
+          writeProperty(node, property, next, previous)
+        );
+      }
+    }
+
+    const remaining = hydrateInto(
+      vnode.props.children as Renderable,
+      node,
+      owner,
+      node.firstChild
+    );
+    if (remaining) mismatch(`the end of <${vnode.type}>`, remaining);
+    return node.nextSibling;
+  };
+
   return {
     mount(view, container): MountedRoot {
       const owner = new Owner(
@@ -603,6 +756,37 @@ export function createDOMRenderer<C = unknown>(
       }
       const nodes = Array.from(fragment.childNodes);
       container.appendChild(fragment);
+      owner.mount();
+
+      let disposed = false;
+      return {
+        dispose() {
+          if (disposed) return;
+          disposed = true;
+          owner.dispose();
+          for (const node of nodes) node.parentNode?.removeChild(node);
+        },
+      };
+    },
+    hydrate(view, container): MountedRoot {
+      const owner = new Owner(
+        undefined,
+        true,
+        options.idPrefix ?? `r${(nextRootId++).toString(36)}`
+      );
+      try {
+        const remaining = hydrateInto(
+          view,
+          container as Node,
+          owner,
+          container.firstChild
+        );
+        if (remaining) mismatch("the end of the hydration root", remaining);
+      } catch (error) {
+        owner.dispose();
+        throw error;
+      }
+      const nodes = Array.from(container.childNodes);
       owner.mount();
 
       let disposed = false;

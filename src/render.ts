@@ -20,6 +20,22 @@ function resolveTarget(target: ParentNode | string): ParentNode {
   return element;
 }
 
+/** Reuses server-rendered DOM and attaches client behavior. */
+export function hydrate<C = unknown>(
+  view: Renderable,
+  target: ParentNode | string,
+  options: RendererOptions<C> = {},
+  storeViews?: StoreViewResolver
+): RenderRoot {
+  const renderer = createDOMRenderer(options, storeViews);
+  const root = renderer.hydrate(view, resolveTarget(target));
+
+  return {
+    dispose: root.dispose,
+    flush: renderer.flush,
+  };
+}
+
 /** Mounts a view using an isolated DOM renderer. */
 export function render<C = unknown>(
   view: Renderable,

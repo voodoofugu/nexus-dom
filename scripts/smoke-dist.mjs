@@ -24,7 +24,13 @@ for (const [name, entry] of [
   ["esm", esm],
   ["cjs", cjs],
 ]) {
-  for (const exported of ["createApp", "createDOMRenderer", "bind", "render"]) {
+  for (const exported of [
+    "createApp",
+    "createDOMRenderer",
+    "bind",
+    "hydrate",
+    "render",
+  ]) {
     if (typeof entry[exported] !== "function") {
       throw new Error(`${name}: missing function export ${exported}`);
     }

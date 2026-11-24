@@ -14,7 +14,7 @@ import {
   type ArrayKey,
   type ListController,
 } from "./list.js";
-import { render as renderView } from "./render.js";
+import { hydrate as hydrateView, render as renderView } from "./render.js";
 import { createStoreViewRegistry } from "./store-view.js";
 import type {
   BoundState,
@@ -87,6 +87,11 @@ export interface NexusDOMApp<
   onCleanup(cleanup: () => void): () => void;
   dispose(): void;
   render(
+    view: Renderable,
+    target: ParentNode | string,
+    options?: RendererOptions<UpdateContext>
+  ): RenderRoot;
+  hydrate(
     view: Renderable,
     target: ParentNode | string,
     options?: RendererOptions<UpdateContext>
@@ -206,6 +211,27 @@ export function createApp<
         );
       }
       const root = renderView(view, target, rendererOptions, storeViews);
+      let rootDisposed = false;
+      const managedRoot: RenderRoot = {
+        flush: root.flush,
+        dispose() {
+          if (rootDisposed) return;
+          rootDisposed = true;
+          roots.delete(managedRoot);
+          root.dispose();
+        },
+      };
+      roots.add(managedRoot);
+      return managedRoot;
+    },
+    hydrate(view, target, rendererOptions) {
+      if (disposed) {
+        throw nexusDOMError(
+          "APP_DISPOSED",
+          "Cannot hydrate with a disposed app. app.dispose() has already run."
+        );
+      }
+      const root = hydrateView(view, target, rendererOptions, storeViews);
       let rootDisposed = false;
       const managedRoot: RenderRoot = {
         flush: root.flush,

@@ -15,6 +15,15 @@ interface MountTrackedViewOptions<C> {
     nodes: readonly Node[],
     owner: Owner
   ): boolean;
+  hydration?: {
+    node: Node | null;
+    hydrateInto(
+      view: Renderable,
+      target: Node,
+      owner: Owner,
+      node: Node | null
+    ): Node | null;
+  };
 }
 
 export function mountTrackedView<C>({
@@ -24,10 +33,11 @@ export function mountTrackedView<C>({
   scheduler,
   renderInto,
   reconcile,
+  hydration,
 }: MountTrackedViewOptions<C>) {
   const document = target.ownerDocument ?? (target as Document);
   const end = document.createTextNode("");
-  target.appendChild(end);
+  if (!hydration) target.appendChild(end);
 
   const token = {};
   let active = true;
@@ -94,7 +104,36 @@ export function mountTrackedView<C>({
     if (owner.isMounted()) nextOwner.mount();
   }
 
-  mountBranch();
+  let hydrationNext: Node | null | undefined;
+  if (hydration) {
+    const tracked = trackSelector(vnode.source.get(), vnode.project);
+    const nextOwner = new Owner(owner, true, branchId);
+    const previous = hydration.node
+      ? hydration.node.previousSibling
+      : target.lastChild;
+    try {
+      hydrationNext = hydration.hydrateInto(
+        tracked.value,
+        target,
+        nextOwner,
+        hydration.node
+      );
+      updateSubscription(tracked.dependencies);
+    } catch (error) {
+      nextOwner.dispose();
+      throw error;
+    }
+    target.insertBefore(end, hydrationNext);
+    const nextNodes: Node[] = [];
+    let current = previous ? previous.nextSibling : target.firstChild;
+    while (current && current !== end) {
+      nextNodes.push(current);
+      current = current.nextSibling;
+    }
+    branchOwner = nextOwner;
+    branchNodes = nextNodes;
+    branchView = tracked.value;
+  } else mountBranch();
 
   owner.addCleanup(() => {
     active = false;
@@ -103,4 +142,6 @@ export function mountTrackedView<C>({
     clearBranch();
     end.parentNode?.removeChild(end);
   });
+
+  return hydrationNext;
 }

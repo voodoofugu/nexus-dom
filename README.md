@@ -186,24 +186,38 @@ a security boundary for sensitive keys.
 
 ### Server rendering
 
-The synchronous server entry renders current state without a browser DOM:
+The synchronous server entry renders current state without a browser DOM.
+Enable hydration markers when the client will reuse that markup:
 
 ```tsx
 import { renderToString } from "nexus-dom/server";
 
-const html = renderToString(<Field />, { idPrefix: "account" });
+const html = renderToString(<Field />, {
+  hydration: true,
+  idPrefix: "account",
+});
+
+app.hydrate(<Field />, target, { idPrefix: "account" });
 ```
 
 Elements, fragments, components, standalone store views, keyed lists, dynamic
 regions, error boundaries and current `LiveValue` values are supported. Lazy
 stores are isolated for each call, and `setup` is skipped because browser
 resources such as sockets and DOM refs are not server-safe by default. Passing
-the same explicit `idPrefix` to `renderToString` and `app.render` produces the
+the same explicit `idPrefix` to `renderToString` and `app.hydrate` produces the
 same component IDs for the same initial tree.
 
-This is serialization, not hydration. The client renderer still mounts a new
-tree; marker design, DOM reuse, mismatch recovery and initial state transfer
-remain separate work.
+The current hydration slice reuses stable elements and text, then attaches live
+text/property subscriptions, events, refs and tracked store-view reconciliation.
+Reactive text uses short paired comments in the server response; hydration
+removes them after creating or adopting the concrete text node. A tag/text
+mismatch throws `NexusDOMError` with `HYDRATION_MISMATCH` and disposes any
+client behavior attached before the mismatch.
+
+Dynamic, keyed and error-boundary regions are not hydrated yet and fail with
+`HYDRATION_UNSUPPORTED` instead of silently replacing server DOM. Initial store
+state transfer and automatic mismatch replacement also remain explicit follow-up
+work.
 
 ### Legacy app-scoped tracked regions
 
@@ -412,10 +426,11 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 - animation-frame scheduling for paint-aligned updates.
 - stable component-local `id(localKey)` values with explicit root prefixes;
 - synchronous HTML serialization through `nexus-dom/server`.
+- initial hydration for stable DOM, live bindings and tracked store views.
 
 ## Deliberately missing
 
-- hydration and initial state transfer;
+- structural hydration, mismatch fallback and initial state transfer;
 - portals, suspense or transitions;
 - a style adapter;
 - full cold-navigation measurements including resource loading.
@@ -544,9 +559,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `7.14 KB gzip` for
-low-level core exports, `9.03 KB` for `createApp`, `9.40 KB` for the complete
-main entry, and `10.95 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `5.08 KB` externalized or `6.16 KB` with
+included. The current local measurement is approximately `8.01 KB gzip` for
+low-level core exports, `9.92 KB` for `createApp`, `10.30 KB` for the complete
+main entry, and `11.84 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `5.12 KB` externalized or `6.21 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

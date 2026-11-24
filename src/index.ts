@@ -38,7 +38,7 @@ export type {
 } from "./list.js";
 export { bind, createLiveSelector, isLiveValue, when } from "./live.js";
 export { onCleanup } from "./owner.js";
-export { render } from "./render.js";
+export { hydrate, render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";
 export { Show } from "./show.js";
 export { store, view } from "./store-view.js";

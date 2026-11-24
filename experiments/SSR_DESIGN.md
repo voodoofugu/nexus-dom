@@ -15,7 +15,10 @@ const Field = view(
   [form]
 );
 
-const html = renderToString(<App />, { idPrefix: "account" });
+const html = renderToString(<App />, {
+  hydration: true,
+  idPrefix: "account",
+});
 hydrate(<App />, document.querySelector("#app")!, { idPrefix: "account" });
 ```
 
@@ -49,11 +52,14 @@ in one component returns the same value.
    components, store views, text, keyed/dynamic regions, boundaries and current
    `LiveValue` values. Each call gets independent lazy stores; setup is skipped
    because there is no server-safe opt-in contract yet.
-3. Define hydration markers for empty text, dynamic regions and keyed blocks.
-   Plain stable element trees should hydrate by structural walking; structural
-   regions need minimal deterministic boundaries.
-4. Implement hydration that reuses DOM, attaches events/refs/subscriptions and
-   reports a structured mismatch before falling back to local replacement.
+3. **Partially implemented:** opt-in server markers use
+   `<!--nxs:t-->...<!--nxs:/-->` around reactive text. They preserve empty text
+   and parser boundaries, then disappear after hydration. Dynamic and keyed
+   boundary markers remain to be defined.
+4. **Partially implemented:** hydration structurally reuses stable elements and
+   text and attaches events, refs, live subscriptions and tracked views. A
+   structured mismatch disposes partial client ownership and throws; local
+   replacement fallback remains to be implemented.
 5. Verify identical HTML/IDs, keyed moves, multiple roots, nested boundaries,
    failed hydration cleanup and client-only store setup.
 
@@ -61,6 +67,6 @@ in one component returns the same value.
 
 - Whether server rendering may await store initialization; the first version
   should remain synchronous unless an explicit async contract is introduced.
-- Marker format and the cost of comment-free hydration.
+- Marker format for dynamic/keyed/boundary regions and its retained DOM cost.
 - Serialization/hydration of initial lazy-store state.
 - Development-only mismatch diagnostics versus production fallback behavior.
