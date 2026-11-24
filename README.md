@@ -524,6 +524,7 @@ npm install
 npm run dev
 npm run check
 npm run smoke:dogfood
+npm run smoke:dogfood:ssr
 npm run benchmark
 npm run benchmark:browser
 npm run benchmark:compare
@@ -542,6 +543,11 @@ entry in both module formats.
 `npm run smoke:dogfood` builds the playground and checks filtering, editing,
 keyed moves, focus and persisted preferences in Chromium. Set `CHROME_PATH`
 to use a specific browser executable.
+
+`npm run smoke:dogfood:ssr` serves the same workspace through Vite's SSR
+loader. It checks that hydration adopts the server DOM, keeps the focused
+search input and applies persisted preferences after hydration. Set
+`NEXUS_DOM_BROWSER` to `firefox` or `webkit` to run with those browsers.
 
 Visual workloads can opt into frame batching:
 

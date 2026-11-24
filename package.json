@@ -45,6 +45,7 @@
     "build:dev": "npm run typecheck && NEXUS_DOM_BUILD=development rollup -c rollup.config.mjs && npm run build:types && node scripts/prepare-dist.mjs",
     "smoke:dist": "node scripts/smoke-dist.mjs",
     "smoke:dogfood": "npm run example:build && node scripts/smoke-dogfood.mjs",
+    "smoke:dogfood:ssr": "node scripts/smoke-dogfood.mjs --ssr",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
