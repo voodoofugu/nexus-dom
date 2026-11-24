@@ -252,6 +252,10 @@ a security boundary for sensitive keys.
 
 ### Store namespaces
 
+With `component(render, [stores])`, each component declares its own stores.
+Rendering a child inside a parent leaves that list unchanged. If both
+components declare the same descriptor, they share its instance within the app.
+
 `componentScope(stores)` groups state, bindings, actions and refs by the names in
 your store map. Each application creates its own instances when a view reads
 a group.
@@ -572,6 +576,7 @@ npm run benchmark:compare:mobile
 npm run benchmark:compare:matrix
 npm run benchmark:heap
 npm run benchmark:density
+npm run benchmark:selector-selection
 npm run benchmark:bundle
 ```
 

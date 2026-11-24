@@ -59,6 +59,7 @@
     "benchmark:compare:matrix": "npm run benchmark:compare && npm run benchmark:compare:firefox && npm run benchmark:compare:webkit",
     "benchmark:heap": "node benchmarks/heap/run.mjs",
     "benchmark:density": "node benchmarks/density/run.mjs",
+    "benchmark:selector-selection": "node benchmarks/density/run.mjs --selector-selection",
     "benchmark:bundle": "node benchmarks/bundle/run.mjs",
     "check": "npm run test && npm run build && npm run smoke:dist && npm run example:build"
   },

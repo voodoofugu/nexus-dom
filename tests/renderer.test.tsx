@@ -18,6 +18,37 @@ import {
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
+  it("keeps declared store scope independent of JSX ancestry", () => {
+    const titleStates = store({ state: { title: "Title" } });
+    const subTitleStates = store({ state: { subtitle: "Subtitle" } });
+    const SubTitle = component(({ state }) => {
+      // @ts-expect-error A parent's descriptor does not widen this scope.
+      const inherited = state.title;
+      return <p>{state.subtitle}: {inherited ?? "missing"}</p>;
+    }, [subTitleStates]);
+    const SharedSubTitle = component(
+      ({ state }) => <p>{state.subtitle}: {state.title}</p>,
+      [subTitleStates, titleStates]
+    );
+    const Title = component(({ $, state }) => (
+      <div>
+        <h1>{state.title}</h1>
+        <SubTitle />
+        <SharedSubTitle />
+        <button onClick={() => $.title.set("Updated")}>Rename</button>
+      </div>
+    ), [titleStates]);
+    const app = createApp();
+    const host = document.createElement("div");
+    const root = app.render(<Title />, host, { schedule: "manual" });
+    const subtitles = () => Array.from(host.querySelectorAll("p"), (node) => node.textContent);
+    expect(subtitles()).toEqual(["Subtitle: missing", "Subtitle: Title"]);
+    host.querySelector("button")!.click();
+    root.flush();
+    expect(subtitles()).toEqual(["Subtitle: missing", "Subtitle: Updated"]);
+    app.dispose();
+  });
+
   it("lazily resolves typed store views once per app", () => {
     let initializations = 0;
     const counter = store({

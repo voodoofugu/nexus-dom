@@ -256,9 +256,9 @@ drilling or a provider hierarchy.
 
 `1.0.0` is a possible first public version once the supported API is clear.
 
-1. Measure whether tracking individual fields within a namespace earns its
-   complexity. The dogfood now uses a live selector across stores for its
-   filtered keyed list.
+1. Compare a field-tracked namespace prototype against the current
+   `benchmark:selector-selection` baseline. Keep the existing lazy resolution,
+   conditional subscriptions, and SSR behavior.
 2. Settle the legacy `app.view` contract and supported exports. Publish API
    examples that agree with emitted declarations, following `nexus-state`
    and `morphing-scroll`.
@@ -270,6 +270,14 @@ stores. Keep issue data and selection in one store because a single action
 can change both. Run the smoke with `npm run smoke:dogfood`.
 
 ## Benchmark policy
+
+`npm run benchmark:selector-selection` changes only `selectedIssueId` in
+a keyed list with an unchanged filter. Both variants update the selected ID
+and keep the list mounted. In two local Chromium runs with 150 measured
+updates per case, the namespaced selector reran 150 times per run. The
+median for an update plus DOM flush was about 0.13 ms at 1,000 rows and
+1.37 to 1.65 ms at 10,000 rows. The flat selector tracks fields and ran zero times. Its
+selection-only timing fell below the fixture's timing resolution.
 
 Microbenchmarks are regression tools, not marketing evidence. Meaningful comparisons must use production browser builds and equal behavior. Measure initial mount, one-of-many updates, bulk updates, structural list changes, branch replacement, event storms, cleanup, heap retention and bundle size. Direct DOM is the lower bound; React, Preact Signals and Solid are comparison points once the model supports equivalent structural behavior.
 
