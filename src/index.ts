@@ -41,7 +41,7 @@ export { onCleanup } from "./owner.js";
 export { hydrate, render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";
 export { Show } from "./show.js";
-export { defineView, defineViews, store, view } from "./store-view.js";
+export { component, componentScope, store } from "./store-view.js";
 export type {
   DependencyActs,
   DependencyRefs,
@@ -52,7 +52,6 @@ export type {
   StoreOptions,
   StoreSetupContext,
   ViewScope,
-  ViewFactory,
   WorkspaceScope,
   WorkspaceViewFactory,
   WritableBoundState,

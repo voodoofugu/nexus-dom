@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { defineViews, persist, store, view } from "nexus-dom";
+import { componentScope, persist, store, component } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 
 type IssueStatus = "backlog" | "active" | "done";
@@ -141,17 +141,17 @@ const issues = store({
 
 export function createWorkspace() {
   const diagnostics = createPlaygroundDiagnostics();
-  const workspaceView = defineViews({ issues, filters, preferences });
+  const workspaceComponent = componentScope({ issues, filters, preferences });
   const statusLabel = (status: IssueStatus) =>
     status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
 
-  const CompactToggle = workspaceView(({ $, acts }) => (
+  const CompactToggle = workspaceComponent(({ $, acts }) => (
     <button class="quiet-button" onClick={acts.preferences.toggleCompact}>
       {$.preferences.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
     </button>
   ));
 
-  const Toolbar = workspaceView(
+  const Toolbar = workspaceComponent(
     ({ $, acts, refs }) => {
       diagnostics.viewRun("toolbar");
       const statusFilters: Array<{ value: IssueFilter; label: string }> = [
@@ -190,7 +190,7 @@ export function createWorkspace() {
     }
   );
 
-  const Summary = workspaceView(
+  const Summary = workspaceComponent(
     ({ state }) => {
       diagnostics.viewRun("summary");
       const items = state.issues.items;
@@ -213,7 +213,7 @@ export function createWorkspace() {
     }
   );
 
-  const EmptyState = workspaceView(
+  const EmptyState = workspaceComponent(
     ({ state }) => {
       const { query: rawQuery, filter } = state.filters;
       const query = rawQuery.trim().toLowerCase();
@@ -227,7 +227,7 @@ export function createWorkspace() {
     }
   );
 
-  const IssueList = view(
+  const IssueList = component(
     ({ $, acts }) => {
       diagnostics.viewRun("issue-list");
       const visibleIssues = $.$select((state) => {
@@ -282,7 +282,7 @@ export function createWorkspace() {
     [issues, filters]
   );
 
-  const Inspector = workspaceView(
+  const Inspector = workspaceComponent(
     ({ state, acts, refs }) => {
       diagnostics.viewRun("inspector");
       const { items, selectedIssueId } = state.issues;
@@ -329,7 +329,7 @@ export function createWorkspace() {
     }
   );
 
-  const App = workspaceView(
+  const App = workspaceComponent(
     ({ $, acts }) => {
       diagnostics.viewRun("app-shell");
       return (

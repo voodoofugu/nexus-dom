@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { createApp, store, view, type RenderRoot } from "nexus-dom";
+import { createApp, store, component, type RenderRoot } from "nexus-dom";
 
 type Strategy = "fine" | "view";
 type Mode = "one" | "all";
@@ -26,13 +26,13 @@ function mountFixture(strategy: Strategy, density: number, components: number) {
       return {};
     },
   });
-  const Fine = view(
+  const Fine = component(
     ({ $ }) => (
       <section>{selectedKeys.map((key) => <span>{$[key]}</span>)}</section>
     ),
     [data]
   );
-  const Whole = view(
+  const Whole = component(
     ({ state }) => (
       <section>{selectedKeys.map((key) => <span>{state[key]}</span>)}</section>
     ),

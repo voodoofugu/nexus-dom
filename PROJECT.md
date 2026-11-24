@@ -27,7 +27,7 @@ renderer instance. `createDOMRenderer` is a low-level escape hatch rather than a
 required setup step.
 
 The new primary authoring experiment uses standalone `store(...)` descriptors
-and `view(render, dependencies)` JSX components. `createApp()` owns the renderer
+and `component(render, dependencies)` JSX components. `createApp()` owns the renderer
 roots and lazily resolves each descriptor to one app-scoped Nexus instance;
 different apps stay isolated. Component input remains normal JSX attributes,
 destructured directly as the render callback's second argument. The previous
@@ -196,7 +196,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `13.80 KB gzip`; actual application cost still depends on imported APIs
+  about `13.50 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -221,7 +221,7 @@ drilling or a provider hierarchy.
    `566 B/row`. The remaining gap to Solid is primarily binding/subscription
    state rather than retained leaks; disposal still returns to baseline.
 3. **Control-flow ergonomics.** The dogfood workspace now runs on standalone
-   `view(render, stores)` components and lazy app-scoped stores. Normal JSX
+   `component(render, stores)` components and lazy app-scoped stores. Normal JSX
    attributes provide instance input while the render callback destructures
    values directly; shared state/actions/refs come from the explicit dependency
    tuple. Bounded positional reconciliation preserves stable plain DOM and
@@ -255,12 +255,15 @@ drilling or a provider hierarchy.
 ## First stable release
 
 `1.0.0` is a possible first public version once the supported API is clear.
-Before tagging, settle the legacy `app.view` contract and public exports,
-test SSR on a served application in real browsers, and verify the packed
-package in a separate consumer project. Ship a license, CI checks, and API
-reference examples that agree with the emitted declarations. Use the existing
-`nexus-state` and `morphing-scroll` docs as references for structure, editor
-documentation and examples.
+
+1. Check a live selector across store namespaces in the dogfood keyed list.
+   Measure whether tracking individual fields within a namespace earns its
+   complexity for ordinary component renders.
+2. Settle the legacy `app.view` contract and supported exports. Publish API
+   examples that agree with emitted declarations, following `nexus-state`
+   and `morphing-scroll`.
+3. Add CI and a license, run the browser smoke matrix, and install the release
+   tarball in a separate consumer project.
 
 The issue-triage browser smoke covers separate issue, filter and preference
 stores. Keep issue data and selection in one store because a single action
@@ -296,10 +299,10 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `8.49 KB
-gzip` for core, `11.66 KB` for `createApp`, and `12.25 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `13.80 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `6.67 KB` externalized
-or `7.74 KB` with `nexus-state`. Track these separately from the playground
+gzip` for core, `11.50 KB` for `createApp`, and `11.96 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `13.50 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `6.51 KB` externalized
+or `7.58 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

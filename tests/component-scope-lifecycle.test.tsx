@@ -1,21 +1,21 @@
 /** @jsxImportSource nexus-dom */
 import { expect, it, vi } from "vitest";
-import { createApp, defineView, store } from "nexus-dom";
+import { component, componentScope, createApp, store } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
-it("keeps an unread default store dormant and resolves only named stores", () => {
+it("keeps an unread store dormant and resolves only named stores", () => {
   const setup = vi.fn();
   const mount = vi.fn();
   const session = store({ state: { user: "Ada" }, setup, mount });
   const filters = store({ state: { query: "open" } });
-  const view = defineView({ session, filters }, { default: "session" });
-  const Static = view(({ state, $ }) => {
+  const workspaceComponent = componentScope({ session, filters });
+  const Static = workspaceComponent(({ state, $ }) => {
     // Taking the scope objects does not read their members.
     void state;
     void $;
     return <p>Welcome</p>;
   });
-  const Filter = view(({ state }) => <p>{state.query}</p>, ["filters"]);
+  const Filter = workspaceComponent(({ state }) => <p>{state.filters.query}</p>);
   const host = document.createElement("div");
   const app = createApp();
   app.render(<><Static /><Filter /></>, host);
@@ -25,23 +25,23 @@ it("keeps an unread default store dormant and resolves only named stores", () =>
   app.dispose();
 });
 
-it("tracks default state reads and shares writable bindings within one app", () => {
+it("shares store instances between flat and scoped components within one app", () => {
   const cleanup = vi.fn();
   const setup = vi.fn();
   const mount = vi.fn(() => cleanup);
   const session = store({ state: { count: 1, unrelated: 0 }, setup, mount });
-  const view = defineView({ session }, { default: "session" });
+  const workspaceComponent = componentScope({ session });
   const renderCount = vi.fn();
-  const Count = view(({ state }) => {
+  const Count = component(({ state }) => {
     renderCount();
     return <p>{state.count}</p>;
-  });
-  const Controls = view(({ $ }) => (
+  }, [session]);
+  const Controls = workspaceComponent(({ $ }) => (
     <>
-      <button onClick={() => $.count.set((value) => value + 1)}>{$.count}</button>
-      <button onClick={() => $.unrelated.set(1)}>Unrelated</button>
+      <button onClick={() => $.session.count.set((value) => value + 1)}>{$.session.count}</button>
+      <button onClick={() => $.session.unrelated.set(1)}>Unrelated</button>
     </>
-  ), ["session"]);
+  ));
   const app = createApp();
   const host = document.createElement("div");
   const root = app.render(<><Count /><Controls /></>, host, { schedule: "manual" });
@@ -66,12 +66,12 @@ it("tracks default state reads and shares writable bindings within one app", () 
   otherApp.dispose();
 });
 
-it("initializes a default store on the first binding read in a mounted handler", () => {
+it("initializes a scoped store on the first binding read in a mounted handler", () => {
   const mount = vi.fn();
   const model = store({ state: { count: 0 }, mount });
-  const view = defineView({ model }, { default: "model" });
-  const Open = view(({ $ }) => <button onClick={() => $.count.set(1)}>Open</button>);
-  const Count = view(({ state }) => <p>{state.count}</p>);
+  const workspaceComponent = componentScope({ model });
+  const Open = workspaceComponent(({ $ }) => <button onClick={() => $.model.count.set(1)}>Open</button>);
+  const Count = workspaceComponent(({ state }) => <p>{state.model.count}</p>);
   const app = createApp();
   const host = document.createElement("div");
   app.render(<Open />, host);
@@ -83,14 +83,14 @@ it("initializes a default store on the first binding read in a mounted handler",
   app.dispose();
 });
 
-it("transfers the default store only when a server view reads it", () => {
+it("transfers a scoped store only when a server view reads it", () => {
   const initial = { count: 7 };
   const mount = vi.fn();
   const model = store({ state: initial, mount });
-  const view = defineView({ model }, { default: "model" });
-  const Static = view(() => <p>Static</p>);
-  const Counter = view(({ $ }) => (
-    <button onClick={() => $.count.set((value) => value + 1)}>{$.count}</button>
+  const workspaceComponent = componentScope({ model });
+  const Static = workspaceComponent(() => <p>Static</p>);
+  const Counter = workspaceComponent(({ $ }) => (
+    <button onClick={() => $.model.count.set((value) => value + 1)}>{$.model.count}</button>
   ));
   expect(renderToString(<Static />, { hydration: true })).toBe("<p>Static</p>");
   const host = document.createElement("div");
@@ -107,12 +107,4 @@ it("transfers the default store only when a server view reads it", () => {
   root.flush();
   expect(button.textContent).toBe("8");
   app.dispose();
-});
-
-it("reports unknown names for plain JavaScript callers", () => {
-  const view = defineView({});
-  // @ts-expect-error The name is absent from the registry.
-  expect(() => view(() => null, ["missing"])).toThrowError(
-    expect.objectContaining({ code: "UNKNOWN_STORE_NAME" })
-  );
 });

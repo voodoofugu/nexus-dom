@@ -9,7 +9,7 @@ import {
   NexusDOMError,
   persist,
   store,
-  view,
+  component,
   when,
 } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
@@ -85,7 +85,7 @@ describe("nexus-dom hydration", () => {
         setups++;
       },
     });
-    const Counter = view(
+    const Counter = component(
       ({ id, state, acts }) => (
         <button id={id("button")} onClick={acts.increment}>{state.count}</button>
       ),
@@ -133,7 +133,7 @@ describe("nexus-dom hydration", () => {
         setupCount = nexus.get("count");
       },
     });
-    const Counter = view(
+    const Counter = component(
       ({ state, acts }) => (
         <button onClick={acts.increment}>{state.label}: {state.count}</button>
       ),
@@ -182,7 +182,7 @@ describe("nexus-dom hydration", () => {
       },
       [base]
     );
-    const Summary = view(
+    const Summary = component(
       ({ state }) => <p>{state.count}: {state.label}</p>,
       [base, detail]
     );
@@ -221,7 +221,7 @@ describe("nexus-dom hydration", () => {
         mountModel(dependencies.get("label"));
       },
     }, [preferences]);
-    const Panel = view(
+    const Panel = component(
       ({ state }) => <p>{state.label}</p>,
       [model, preferences]
     );
@@ -263,7 +263,7 @@ describe("nexus-dom hydration", () => {
   it("skips store mount when hydration rejects an unused snapshot", () => {
     const mount = vi.fn();
     const model = store({ state: { count: 1 }, mount });
-    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const Counter = component(({ state }) => <p>{state.count}</p>, [model]);
     const host = document.createElement("div");
     host.innerHTML = renderToString(<Counter />, { hydration: true });
     const marker = host.lastChild!;
@@ -283,7 +283,7 @@ describe("nexus-dom hydration", () => {
   it("keeps hydration state isolated between roots", () => {
     const initial = { count: 1 };
     const model = store({ state: initial });
-    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const Counter = component(({ state }) => <p>{state.count}</p>, [model]);
     const firstHTML = renderToString(<Counter />, {
       hydration: true,
       idPrefix: "first",
@@ -309,7 +309,7 @@ describe("nexus-dom hydration", () => {
   it("keeps restored state when a mismatch remounts the root", () => {
     const initial = { count: 7 };
     const model = store({ state: initial });
-    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const Counter = component(({ state }) => <p>{state.count}</p>, [model]);
     const host = document.createElement("div");
     host.innerHTML = renderToString(<Counter />, { hydration: true });
     host.querySelector("p")!.outerHTML = "<section>Mismatch</section>";
@@ -326,7 +326,7 @@ describe("nexus-dom hydration", () => {
 
   it("rejects a hydration snapshot for a different store shape", () => {
     const model = store({ state: { count: 1 } });
-    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const Counter = component(({ state }) => <p>{state.count}</p>, [model]);
     const host = document.createElement("div");
     host.innerHTML = renderToString(<Counter />, { hydration: true });
     const marker = Array.from(host.childNodes).find(
@@ -345,7 +345,7 @@ describe("nexus-dom hydration", () => {
 
   it("rejects state that cannot be represented by the JSON contract", () => {
     const model = store({ state: { value: 1n } });
-    const Value = view(({ state }) => <p>{state.value}</p>, [model]);
+    const Value = component(({ state }) => <p>{state.value}</p>, [model]);
 
     expect(() =>
       renderToString(<Value />, { hydration: true })
@@ -357,7 +357,7 @@ describe("nexus-dom hydration", () => {
     { value: Number.NaN },
   ])("rejects lossy hydration state %#", (state) => {
     const model = store({ state });
-    const Value = view(({ state }) => <p>{String(state.value)}</p>, [model]);
+    const Value = component(({ state }) => <p>{String(state.value)}</p>, [model]);
 
     expect(() =>
       renderToString(<Value />, { hydration: true })
@@ -373,7 +373,7 @@ describe("nexus-dom hydration", () => {
         if (attempts === 1) throw new Error("setup failed");
       },
     });
-    const Counter = view(({ state }) => <p>{state.count}</p>, [model]);
+    const Counter = component(({ state }) => <p>{state.count}</p>, [model]);
     const html = renderToString(<Counter />, { hydration: true });
     const host = document.createElement("div");
     host.innerHTML = html;

@@ -1,6 +1,6 @@
 /** @jsxImportSource nexus-dom */
 import { expect, it, vi } from "vitest";
-import { createApp, defineViews, store } from "nexus-dom";
+import { createApp, componentScope, store } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
 it("opens only stores accessed by the component and adds local namespaces", () => {
@@ -10,14 +10,14 @@ it("opens only stores accessed by the component and adds local namespaces", () =
   const issues = store({ state: { items: [{ id: 1, title: "First issue" }] } });
   const session = store({ state: { user: "Ada" }, setup: idle, mount: idle });
   const draft = store({ state: { theme: "local" } });
-  const view = defineViews({ preferences, issues, session });
-  const Title = view(({ state }, { issueId }: { issueId: number }) => (
+  const workspaceComponent = componentScope({ preferences, issues, session });
+  const Title = workspaceComponent(({ state }, { issueId }: { issueId: number }) => (
     <p class={state.preferences.theme}>
       {state.issues.items.find((issue) => issue.id === issueId)?.title}
       {state.draft.theme}
     </p>
   ), { draft });
-  const Plain = view(({ state }) => <p>{Object.keys(state).length}</p>);
+  const Plain = workspaceComponent(({ state }) => <p>{Object.keys(state).length}</p>);
   expect(renderToString(<Plain />, { hydration: true })).toBe("<p>3</p>");
   const app = createApp();
   const host = document.createElement("div");
@@ -33,18 +33,18 @@ it("updates tracked views and bindings only from the namespaces they read", () =
   const opened = vi.fn();
   const panel = store({ state: { showDetails: false } });
   const details = store({ state: { title: "Details" }, mount: opened });
-  const view = defineViews({ panel, details });
+  const workspaceComponent = componentScope({ panel, details });
   const visited = vi.fn();
-  const Title = view(({ state }) => {
+  const Title = workspaceComponent(({ state }) => {
     visited();
     return <p>{state.panel.showDetails ? state.details.title : "Hidden"}</p>;
   });
-  const Toggle = view(({ $ }) => (
+  const Toggle = workspaceComponent(({ $ }) => (
     <button onClick={() => $.panel.showDetails.set((value) => !value)}>
       {$.panel.showDetails.map(String)}
     </button>
   ));
-  const Rename = view(({ $ }) => <button onClick={() => $.details.title.set("New")}>Rename</button>);
+  const Rename = workspaceComponent(({ $ }) => <button onClick={() => $.details.title.set("New")}>Rename</button>);
   const host = document.createElement("div");
   const app = createApp();
   const root = app.render(<><Title /><Toggle /><Rename /></>, host, { schedule: "manual" });
@@ -71,8 +71,8 @@ it("hydrates snapshots in namespace access order", () => {
   const second = { value: "second" };
   const a = store({ state: first });
   const b = store({ state: second });
-  const view = defineViews({ a, b });
-  const Output = view(({ state, $ }) => <p>{state.b.value}: {$.a.value}</p>);
+  const workspaceComponent = componentScope({ a, b });
+  const Output = workspaceComponent(({ state, $ }) => <p>{state.b.value}: {$.a.value}</p>);
   const host = document.createElement("div");
   host.innerHTML = renderToString(<Output />, { hydration: true });
   const node = host.firstChild;
@@ -87,9 +87,9 @@ it("hydrates snapshots in namespace access order", () => {
 
 it("rejects a local namespace that conflicts with a shared one", () => {
   const model = store({ state: { value: 1 } });
-  const view = defineViews({ model });
+  const workspaceComponent = componentScope({ model });
   // @ts-expect-error Shared namespace names cannot be redefined.
-  expect(() => view(() => null, { model })).toThrowError(
+  expect(() => workspaceComponent(() => null, { model })).toThrowError(
     expect.objectContaining({ code: "STORE_DEPENDENCY_CONFLICT" })
   );
 });

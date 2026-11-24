@@ -231,19 +231,19 @@ type ViewComponent<Input extends object = EmptyRecord> = (
 ) => VNode | null;
 
 /**
- * Defines a tracked JSX component with explicit store dependencies.
- * @param render renders from a typed store scope and JSX props.
+ * Defines a JSX component that tracks reads from its declared stores.
+ * @param render reads tracked state and returns JSX for the current props.
  * @param dependencies stores available in the render scope.
  * @example
  * ```tsx
- * const Title = view(
+ * const Title = component(
  *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.title}</h1>,
  *   [documentStore]
  * );
  * // <Title prefix="Editing: " />
  * ```
  */
-export function view<
+export function component<
   const D extends readonly AnyStore[] = readonly [],
   Input extends object = EmptyRecord,
 >(
@@ -251,76 +251,18 @@ export function view<
   dependencies: D & ValidDependencies<D> = [] as unknown as D &
     ValidDependencies<D>
 ): ViewComponent<Input> {
-  return createStoreView(render as StoreViewVNode["render"], dependencies);
-}
-
-function createStoreView<Input extends object>(
-  render: StoreViewVNode["render"],
-  dependencies: readonly AnyStore[],
-  lazy?: true
-): ViewComponent<Input> {
   return (input) => ({
     kind: "store-view",
     dependencies,
-    ...(lazy ? { lazy } : {}),
     input,
-    render,
+    render: render as StoreViewVNode["render"],
     id: captureOwnerId(),
   });
 }
 
 type StoreRegistry = Record<string, AnyStore>;
-type StoreName<R extends StoreRegistry> = Extract<keyof R, string>;
-type NamedStores<R extends StoreRegistry, N extends readonly StoreName<R>[]> = {
-  [K in keyof N]: R[N[K]];
-};
-type DefaultStores<R extends StoreRegistry, D> =
-  D extends StoreName<R> ? readonly [R[D]] : readonly [];
 
-/** A JSX component factory bound to a named store registry. */
-export interface ViewFactory<R extends StoreRegistry, D = undefined> {
-  <Input extends object = EmptyRecord>(
-    render: (scope: ViewScope<DefaultStores<R, D>>, input: Input) => Renderable
-  ): ViewComponent<Input>;
-  <const N extends readonly StoreName<R>[], Input extends object = EmptyRecord>(
-    render: (scope: ViewScope<NamedStores<R, N>>, input: Input) => Renderable,
-    dependencies: N & ValidDependencies<NamedStores<R, N>>
-  ): ViewComponent<Input>;
-}
-
-/**
- * Creates a view factory with typed store names.
- * @param stores descriptors available to this factory.
- * @param options.default store available when a view omits its dependency list.
- * @example
- * ```tsx
- * const workspaceView = defineView({ issues, preferences }, { default: "issues" });
- * const Count = workspaceView(({ state }) => <p>{state.issues.length}</p>);
- * const Density = workspaceView(({ $ }) => <output>{$.compact.map(String)}</output>, ["preferences"]);
- * ```
- */
-export function defineView<
-  const R extends StoreRegistry,
-  const D extends StoreName<R> | undefined = undefined,
->(stores: R, options?: { default: D }): ViewFactory<R, D> {
-  const registry = new Map(Object.entries(stores));
-  const lookup = (name: string) => {
-    const descriptor = registry.get(name);
-    if (!descriptor) {
-      throw nexusDOMError("UNKNOWN_STORE_NAME", `No store named "${name}" in this view factory.`);
-    }
-    return descriptor;
-  };
-  const defaultName = options?.default;
-  const defaults = defaultName === undefined ? [] : [lookup(defaultName)];
-  const factory = (render: StoreViewVNode["render"], names?: readonly string[]) =>
-    names === undefined
-      ? createStoreView(render, defaults, defaults.length ? true : undefined)
-      : createStoreView(render, names.map(lookup));
-  return factory as ViewFactory<R, D>;
-}
-
-/** Store namespaces exposed to a component created by `defineViews`. */
+/** Store namespaces exposed to a component created by `componentScope`. */
 export type WorkspaceScope<R extends StoreRegistry> = {
   readonly id: (localKey: string) => string;
   readonly state: { readonly [K in keyof R]: Readonly<StoreState<R[K]>> };
@@ -345,13 +287,13 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
  * @param stores shared store descriptors keyed by namespace.
  * @example
  * ```tsx
- * const view = defineViews({ preferences, issues });
- * const Title = view(({ state }) => (
+ * const workspaceComponent = componentScope({ preferences, issues });
+ * const Title = workspaceComponent(({ state }) => (
  *   <p class={state.preferences.theme}>{state.issues.items[0]?.title}</p>
  * ));
  * ```
  */
-export function defineViews<const R extends StoreRegistry>(stores: R): WorkspaceViewFactory<R> {
+export function componentScope<const R extends StoreRegistry>(stores: R): WorkspaceViewFactory<R> {
   const shared = new Map(Object.entries(stores).map(([name, store]) => [name, [store]]));
   const factory = (render: StoreViewVNode["render"], extra?: StoreRegistry): ViewComponent<object> => {
     const registry = extra ? new Map(shared) : shared;
@@ -371,18 +313,6 @@ export function defineViews<const R extends StoreRegistry>(stores: R): Workspace
     });
   };
   return factory as WorkspaceViewFactory<R>;
-}
-
-function lazyObject<T extends object>(read: () => T): T {
-  return new Proxy(Object.create(null), {
-    get: (_target, key) => Reflect.get(read(), key),
-    has: (_target, key) => Reflect.has(read(), key),
-    ownKeys: () => Reflect.ownKeys(read()),
-    getOwnPropertyDescriptor(_target, key) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(read(), key);
-      return descriptor && { ...descriptor, configurable: true };
-    },
-  });
 }
 
 interface ResolvedStore {
@@ -683,40 +613,6 @@ export function createStoreViewRegistry(
     return scope;
   };
 
-  const lazyScope = (dependencies: readonly unknown[]): ResolvedScope => {
-    let scope: ResolvedScope | undefined;
-    let mounted = false;
-    const read = () => {
-      if (scope) return scope;
-      if (disposed) {
-        throw nexusDOMError("APP_DISPOSED", "Cannot resolve a store after app disposal.");
-      }
-      scope = resolveScope(dependencies);
-      // An event may read its first binding after the view has mounted.
-      if (mounted) scope.mount?.();
-      return scope;
-    };
-    return {
-      source: {
-        get() {
-          if (scope) return scope.source.get();
-          let snapshot: RecordAny | undefined;
-          return lazyObject(() => snapshot ??= read().source.get());
-        },
-        subscribe(listener, keys) {
-          return keys.length ? read().source.subscribe(listener, keys) : () => {};
-        },
-      },
-      $: lazyObject(() => read().$),
-      acts: lazyObject(() => read().acts),
-      refs: lazyObject(() => read().refs),
-      mount() {
-        mounted = true;
-        scope?.mount?.();
-      },
-    };
-  };
-
   const resolveWorkspace = (
     vnode: StoreViewVNode,
     registry: NonNullable<StoreViewVNode["registry"]>
@@ -815,7 +711,7 @@ export function createStoreViewRegistry(
     },
     resolve(vnode): TrackedViewVNode {
       if (vnode.registry) return resolveWorkspace(vnode, vnode.registry);
-      const scope = vnode.lazy ? lazyScope(vnode.dependencies) : resolveScope(vnode.dependencies);
+      const scope = resolveScope(vnode.dependencies);
       return {
         kind: "tracked-view",
         source: scope.source,

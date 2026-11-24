@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { store, view } from "nexus-dom";
+import { store, component } from "nexus-dom";
 
 type IssueStatus = "backlog" | "active" | "done";
 type IssueFilter = "all" | IssueStatus;
@@ -61,7 +61,7 @@ const filters = store({
 });
 
 // No props: all application data comes from the declared store dependency.
-export const Summary = view(
+export const Summary = component(
   ({ state }) => {
     const counts = state.issues.reduce(
       (result, issue) => {
@@ -84,7 +84,7 @@ export const Summary = view(
 );
 
 // Multiple stores form one fully typed scope.
-export const Toolbar = view(
+export const Toolbar = component(
   ({ state, $, acts, refs }) => (
     <section class={$.compact.map((compact) => (compact ? "compact" : ""))}>
       <input
@@ -104,7 +104,7 @@ export const Toolbar = view(
 
 // Requiring the same descriptor in another view reuses the app-scoped store;
 // the dependency remains explicit so the callback is independently typed.
-export const Inspector = view(
+export const Inspector = component(
   ({ state, acts, refs }) => {
     const issue = state.issues.find(
       (candidate) => candidate.id === state.selectedIssueId
@@ -120,7 +120,7 @@ export const Inspector = view(
 );
 
 // The store-driven form is concise for the dogfood's single active selection.
-export const SelectedIssueTitle = view(
+export const SelectedIssueTitle = component(
   ({ state }) => {
     const issue = state.issues.find(
       (candidate) => candidate.id === state.selectedIssueId
@@ -138,7 +138,7 @@ interface IssueTitleInput {
 
 // JSX attributes remain the explicit per-instance input. Destructuring keeps
 // the values direct inside user logic rather than requiring `props.issueId`.
-export const IssueTitle = view(
+export const IssueTitle = component(
   (
     { state },
     { issueId, emphasis = "normal", children }: IssueTitleInput
@@ -165,7 +165,7 @@ const invalidInputProof = <IssueTitle issueId={1} emphasis="loud" />;
 void invalidInputProof;
 
 // The complete screen is also a view; no component closes over an `app` value.
-export const DogfoodApp = view(
+export const DogfoodApp = component(
   ({ $ }) => (
     <main class={$.compact.map((compact) => (compact ? "compact" : ""))}>
       <Toolbar />
@@ -177,7 +177,7 @@ export const DogfoodApp = view(
   [issues, filters]
 );
 
-view(
+component(
   ({ state }) => {
     // @ts-expect-error filters was not declared as a dependency.
     state.query;
@@ -190,7 +190,7 @@ const conflictingIssues = store({
   state: { issues: "not an issue array" },
 });
 
-view(
+component(
   () => null,
   // @ts-expect-error duplicate state keys are rejected before runtime.
   [issues, conflictingIssues]

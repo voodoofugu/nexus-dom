@@ -26,6 +26,8 @@ for (const [name, entry] of [
 ]) {
   for (const exported of [
     "createApp",
+    "component",
+    "componentScope",
     "createDOMRenderer",
     "bind",
     "hydrate",

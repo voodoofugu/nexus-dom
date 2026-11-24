@@ -7,7 +7,7 @@ import {
   NexusDOMError,
   onCleanup,
   store,
-  view,
+  component,
 } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
@@ -23,11 +23,11 @@ describe("nexus-dom server rendering", () => {
         setups++;
       },
     });
-    const Row = view(
+    const Row = component(
       ({ id }, { label }: { label: string }) =>
         <li id={id("row")} title={'say "hello"'}>{label}</li>
     );
-    const App = view(
+    const App = component(
       ({ state, $ }) => (
         <main aria-label={state.title}>
           <h1>{$.title}</h1>
@@ -49,8 +49,8 @@ describe("nexus-dom server rendering", () => {
   });
 
   it("matches browser component ids with the same prefix", () => {
-    const Field = view(({ id }) => <input id={id("input")} />);
-    const App = view(() => <section><Field /><Field /></section>);
+    const Field = component(({ id }) => <input id={id("input")} />);
+    const App = component(() => <section><Field /><Field /></section>);
     const server = renderToString(<App />, { idPrefix: "form" });
     const host = document.createElement("div");
 
@@ -72,10 +72,10 @@ describe("nexus-dom server rendering", () => {
         items: [{ id: 1 }, { id: 2 }],
       },
     });
-    const Field = view(
+    const Field = component(
       ({ id }, { name }: { name: string }) => <span id={id("field")}>{name}</span>
     );
-    const App = view(
+    const App = component(
       ({ $ }) => (
         <main>
           <Field name="plain" />
@@ -102,7 +102,7 @@ describe("nexus-dom server rendering", () => {
   });
 
   it("derives keyed component ids from keys instead of list positions", () => {
-    const Row = view(
+    const Row = component(
       ({ id }, { itemId }: { itemId: number }) =>
         <li id={id("row")} data-item={itemId}>{itemId}</li>
     );
@@ -132,7 +132,7 @@ describe("nexus-dom server rendering", () => {
       return <li>Row</li>;
     };
     const model = store({ state: { items: [{ id: 1 }, { id: 2 }] } });
-    const List = view(
+    const List = component(
       ({ $ }) => <ul>{$.items.each((item) => item.id, () => <Row />)}</ul>,
       [model]
     );

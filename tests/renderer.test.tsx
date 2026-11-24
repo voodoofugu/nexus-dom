@@ -11,7 +11,7 @@ import {
   render,
   Show,
   store,
-  view,
+  component,
   when,
   type CommitEvent,
   type LiveItem,
@@ -36,7 +36,7 @@ describe("nexus-dom rendering model", () => {
     });
     const labels = store({ state: { label: "Count" } });
     let counterRuns = 0;
-    const Counter = view(
+    const Counter = component(
       ({ state, $, acts }, { suffix }: { suffix?: string }) => {
         counterRuns++;
         return (
@@ -53,12 +53,12 @@ describe("nexus-dom rendering model", () => {
       },
       [counter, labels]
     );
-    const Mirror = view(({ state }) => <output>{state.count}</output>, [counter]);
-    const Reset = view(
+    const Mirror = component(({ state }) => <output>{state.count}</output>, [counter]);
+    const Reset = component(
       ({ acts }) => <button aria-label="Reset" onClick={acts.resetCount} />,
       [counter]
     );
-    const App = view(() => (
+    const App = component(() => (
       <main><Counter suffix="!" /><Mirror /><Reset /></main>
     ));
     const app = createApp();
@@ -96,11 +96,11 @@ describe("nexus-dom rendering model", () => {
   it("rejects store views outside an app and runtime key conflicts", () => {
     const left = store({ state: { value: 1 } });
     const right = store({ state: { value: 2 } });
-    const Conflicted = (view as any)(
+    const Conflicted = (component as any)(
       ({ state }: any) => <p>{state.value}</p>,
       [left, right]
     );
-    const Standalone = view(({ state }) => <p>{state.value}</p>, [left]);
+    const Standalone = component(({ state }) => <p>{state.value}</p>, [left]);
 
     expect(() => render(<Standalone />, document.createElement("div"))).toThrowError(
       expect.objectContaining({ code: "STORE_VIEW_OUTSIDE_APP" })
@@ -136,7 +136,7 @@ describe("nexus-dom rendering model", () => {
       },
       [session]
     );
-    const Panel = view(
+    const Panel = component(
       ({ state, acts }) => (
         <button onClick={acts.assignCurrentUser}>
           {state.currentUser}: {state.assignee}
@@ -180,7 +180,7 @@ describe("nexus-dom rendering model", () => {
       [profile]
     );
     let runs = 0;
-    const Panel = view(
+    const Panel = component(
       ({ state, acts }) => {
         runs++;
         return (
@@ -216,7 +216,7 @@ describe("nexus-dom rendering model", () => {
     const left = store({ state: { left: true } }, leftDependencies);
     const right = store({ state: { right: true } }, [left]);
     leftDependencies.push(right);
-    const Cyclic = view(({ state }) => <p>{String(state.left)}</p>, [left]);
+    const Cyclic = component(({ state }) => <p>{String(state.left)}</p>, [left]);
 
     expect(() =>
       createApp().render(<Cyclic />, document.createElement("div"))
@@ -234,7 +234,7 @@ describe("nexus-dom rendering model", () => {
         throw new Error("setup failed");
       },
     });
-    const Broken = view(({ state }) => <p>{String(state.ready)}</p>, [broken]);
+    const Broken = component(({ state }) => <p>{String(state.ready)}</p>, [broken]);
 
     expect(() =>
       createApp().render(<Broken />, document.createElement("div"))
@@ -247,7 +247,7 @@ describe("nexus-dom rendering model", () => {
       state: { value: 1 },
       acts: ({ set }) => ({ setValue(value: number) { set({ value }); } }),
     });
-    const Field = view(
+    const Field = component(
       ({ id, state }, { name }: { name: string }) => {
         const inputId = id("input");
         expect(id("input")).toBe(inputId);
@@ -255,7 +255,7 @@ describe("nexus-dom rendering model", () => {
       },
       [values]
     );
-    const App = view(() => <main><Field name="First" /><Field name="Second" /></main>);
+    const App = component(() => <main><Field name="First" /><Field name="Second" /></main>);
     const app = createApp();
     const host = document.createElement("div");
     const root = app.render(<App />, host, { schedule: "manual", idPrefix: "account" });
@@ -265,7 +265,7 @@ describe("nexus-dom rendering model", () => {
     expect(new Set(before).size).toBe(2);
     expect(before.every((id) => /^nxs-[A-Za-z0-9]{7}$/.test(id))).toBe(true);
     // Update through the writable binding path used by the public component scope.
-    const Increment = view(({ $ }) => <button onClick={() => $.value.set(2)} />, [values]);
+    const Increment = component(({ $ }) => <button onClick={() => $.value.set(2)} />, [values]);
     const controlHost = document.createElement("div");
     const control = app.render(<Increment />, controlHost, { schedule: "manual" });
     controlHost.querySelector("button")?.click();
@@ -280,11 +280,11 @@ describe("nexus-dom rendering model", () => {
       state: { items: [{ id: 1 }, { id: 2 }, { id: 3 }] },
       acts: ({ list }) => ({ reverse() { list("items").reverse(); } }),
     });
-    const Row = view(
+    const Row = component(
       ({ id }, { itemId }: { itemId: number }) =>
         <li id={id("row")} data-item={itemId}>{itemId}</li>
     );
-    const List = view(
+    const List = component(
       ({ $, acts }) => (
         <section>
           <button onClick={acts.reverse}>Reverse</button>

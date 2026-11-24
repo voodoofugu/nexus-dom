@@ -1,11 +1,11 @@
-# `view` / lazy-store design validation
+# Component and lazy-store design
 
-This directory checks the standalone `view` and lazy-store authoring model
+This directory checks the standalone `component` and lazy-store authoring model
 against focused issue-triage examples with the normal project TypeScript
 configuration. The live playground uses the same public API.
 
 ```tsx
-const Summary = view(
+const Summary = component(
   ({ state, $, acts, refs }) => {
     return <section>{state.issues.length}</section>;
   },
@@ -17,7 +17,7 @@ const Summary = view(
 
 - `store(options)` declares state, actions and refs but does not create a
   module-global state instance.
-- `view(render, dependencies)` defines a component. Its dependency tuple is
+- `component(render, dependencies)` defines a component. Its dependency tuple is
   static and supplies the complete types of `state`, `$`, `acts` and `refs`.
 - On first mount in an app, a descriptor is resolved to a new app-scoped store.
   Later views requiring the same descriptor reuse that instance and its current
@@ -32,7 +32,7 @@ const Summary = view(
 
 ### Read-based store namespaces
 
-`defineViews({ issues, preferences })` puts the groups under
+`componentScope({ issues, preferences })` puts the groups under
 `state.issues` and `state.preferences`, with the same names under `$`,
 `acts` and `refs`. A second map such as `{ draft }` adds groups for one
 component. Reading one group's state subscribes the view to that store.
@@ -43,41 +43,6 @@ The keyed list still uses the flat view for a live selector across two stores.
 Evaluate field-level tracking inside a group and cross-store selectors
 before choosing the release API.
 
-### Named dependencies
-
-A typed registry provides autocomplete for `["issues"]` and infers the
-scope from that tuple. `named-store-dependencies.tsx` checks that a typo,
-access to an undeclared store and incorrect JSX props fail type checking.
-
-The dogfood uses a view factory bound to a feature registry.
-
-```tsx
-// workspace/model.ts
-export const workspaceView = defineView({ issues, preferences }, { default: "issues" });
-
-// workspace/IssueCount.tsx
-import { workspaceView } from "./model";
-
-export const IssueCount = workspaceView(
-  ({ state }) => <p>{state.issues.length} issues</p>,
-  ["issues"]
-);
-```
-
-`defineView` resolves explicit names to descriptors at definition time.
-Omitting the dependency list makes the default store available on first
-read. Both paths keep the same app-scoped lifetime as `view`.
-
-Ancestor lookup would be a different contract. The registry can tell
-TypeScript which fields an `"issues"` consumer receives. JSX composition does
-not guarantee that the component is mounted under a provider. A component
-could move into a preview, test or separate root and fail at runtime. A
-tree-scoped API would also need rules for missing providers and duplicate
-names in nested scopes.
-
-Use descriptor tuples for components that already import their stores. Use a
-named factory when views across a feature share the same registry.
-
 ### Instance input
 
 The dogfood screens need no props: selection, filters and issue data naturally
@@ -86,7 +51,7 @@ example, the selected issue title reads `selectedIssueId` from the same
 dependency as the issue collection:
 
 ```tsx
-const SelectedIssueTitle = view(
+const SelectedIssueTitle = component(
   ({ state }) => {
     return <strong>{findSelectedIssue(state)?.title}</strong>;
   },
@@ -98,7 +63,7 @@ That is a good fit for one globally selected issue. Independently parameterized
 instances use normal JSX attributes, destructured directly into local values:
 
 ```tsx
-const IssueTitle = view(
+const IssueTitle = component(
   ({ state }, { issueId }: { issueId: number }) => {
     return <strong>{findIssue(state.issues, issueId)?.title}</strong>;
   },
@@ -114,11 +79,6 @@ directly rather than `props.issueId`. Required and optional attributes and
 
 ## Still unresolved
 
-- Whether stores merge into one flat scope or retain namespaces.
-- The exact internal type signature needed to keep JSX input and dependency
-  scope inference stable without exposing overload complexity to users.
-- How one store explicitly depends on another store inside its actions.
-- Cross-store batching and update provenance.
-- Reset, persistence, devtools and initialization cleanup for late stores.
-- Whether `refs` belong in a store descriptor or in a DOM-specific companion.
-- The final bootstrap surface: keep `createApp()` or rename the runtime/root.
+- Field-level tracking inside component scopes.
+- Live selectors that read several store namespaces.
+- Whether `app.view` still earns a public entry before the first stable release.

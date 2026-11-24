@@ -5,7 +5,6 @@
 - [About](#about)
 - [Quick start](#quick-start)
 - [API](#api)
-- [Named and default stores](#named-and-default-stores)
 - [Store namespaces](#store-namespaces)
 - [Server rendering](#server-rendering)
 - [Local error recovery](#local-error-recovery)
@@ -25,10 +24,10 @@ The package is currently in development. Set `jsx` to `react-jsx` and
 `jsxImportSource` to `nexus-dom` in your TypeScript configuration.
 
 ```tsx
-import { createApp, store, view } from "nexus-dom";
+import { createApp, store, component } from "nexus-dom";
 
 const counter = store({ state: { count: 0 } });
-const Counter = view(({ $ }) => (
+const Counter = component(({ $ }) => (
   <button onClick={() => $.count.set((count) => count + 1)}>
     Clicks: {$.count}
   </button>
@@ -116,7 +115,7 @@ mount several roots through the same renderer.
 
 The current authoring model separates application bootstrap from component
 definitions. `store(...)` declares state, actions and refs without creating a
-module-global instance. `view(render, stores)` defines a normal JSX component:
+module-global instance. `component(render, stores)` defines a normal JSX component:
 
 ```tsx
 const issues = store({
@@ -128,7 +127,7 @@ const issues = store({
   }),
 });
 
-const IssueTitle = view(
+const IssueTitle = component(
   ({ state }, { issueId }: { issueId: number }) => {
     const issue = state.issues.find((item) => item.id === issueId);
     return <strong>{issue?.title}</strong>;
@@ -234,7 +233,7 @@ and canvas contexts are non-serializable resources with app lifecycle instead.
 Views also receive a stable component-local ID factory:
 
 ```tsx
-const Field = view(({ id }) => {
+const Field = component(({ id }) => {
   const inputId = id("input");
   return <label for={inputId}><input id={inputId} /></label>;
 });
@@ -251,45 +250,16 @@ explicit `idPrefix` is shared by browser and server rendering; client-only
 roots get an automatic unique prefix. The hash is an identifier encoding, not
 a security boundary for sensitive keys.
 
-### Named and default stores
-
-`defineView(stores, options?)` gives a feature one component factory. The
-registry keys autocomplete in the dependency list. Each application still
-gets its own store instances.
-
-```tsx
-import { defineView } from "nexus-dom";
-
-export const workspaceView = defineView({ session, issues }, { default: "session" });
-
-const UserBadge = workspaceView(({ state }) => <span>{state.userName}</span>);
-const IssueCount = workspaceView(
-  ({ state }) => <p>{state.issues.length} issues</p>,
-  ["issues"]
-);
-```
-
-Omit the list to use the default store. The first property read through
-`state`, `$`, `acts` or `refs` creates the app's store instance if needed.
-A view can destructure these four objects and leave the store dormant. The
-same rule applies on the server. An unused default store adds no hydration
-snapshot. Reading `state.userName` tracks that key, while a JSX binding such
-as `{$.userName}` updates its DOM node directly.
-
-An explicit list defines the entire scope. Use `["session", "issues"]`
-for both stores and `[]` for an empty scope. Any view created with the factory
-can mount in a preview or a separate root without its original parent.
-
 ### Store namespaces
 
-`defineViews(stores)` groups state, bindings, actions and refs by the names in
+`componentScope(stores)` groups state, bindings, actions and refs by the names in
 your store map. Each application creates its own instances when a view reads
 a group.
 
 ```tsx
-const workspaceView = defineViews({ main, preferences, issues });
+const workspaceComponent = componentScope({ main, preferences, issues });
 
-const IssueTitle = workspaceView(
+const IssueTitle = workspaceComponent(
   ({ state }, { issueId }: { issueId: number }) => (
     <strong class={state.preferences.theme}>
       {state.issues.items.find((issue) => issue.id === issueId)?.title}
@@ -300,14 +270,14 @@ const IssueTitle = workspaceView(
 
 This render opens `preferences` and `issues`. The first read of `main` can
 happen in another component. Add a store to one view with a second map,
-such as `workspaceView(render, { draft })`. Its namespaces include both maps,
+such as `workspaceComponent(render, { draft })`. Its namespaces include both maps,
 and duplicate namespace names are errors.
 
 Reading `state.preferences.theme` subscribes the view to the preferences
 store. Use `$.preferences.theme` for a binding to that field alone. Reading
 an action or ref opens its store without subscribing the view. Each binding
 group has its own `$select`. For a live selector that reads several stores,
-use the flat `view(render, [descriptors])` scope.
+use the flat `component(render, [descriptors])` scope.
 
 ### Server rendering
 
@@ -711,8 +681,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.49 KB gzip` for
-low-level core exports, `11.66 KB` for `createApp`, `12.25 KB` for the complete
-main entry, and `13.80 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.67 KB` externalized or `7.74 KB` with
+low-level core exports, `11.50 KB` for `createApp`, `11.96 KB` for the complete
+main entry, and `13.50 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.51 KB` externalized or `7.58 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

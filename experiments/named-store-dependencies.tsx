@@ -1,53 +1,34 @@
 /** @jsxImportSource nexus-dom */
-import { defineView, store, view } from "nexus-dom";
+import { componentScope, store } from "nexus-dom";
 
 const issues = store({
-  state: { issues: [{ id: 1, title: "Review the renderer" }] },
+  state: { items: [{ id: 1, title: "Review the renderer" }] },
 });
 const preferences = store({ state: { compact: false } });
-const namedView = defineView({ issues, preferences }, { default: "issues" });
+const draft = store({ state: { editing: false } });
+const workspaceComponent = componentScope({ issues, preferences });
 
-export const IssueTitle = view(
-  ({ state }, { issueId }: { issueId: number }) =>
-    <strong>{state.issues.find((issue) => issue.id === issueId)?.title}</strong>,
-  [issues]
+const IssueTitle = workspaceComponent(
+  ({ state }, { issueId }: { issueId: number }) => {
+    const issue = state.issues.items.find((item) => item.id === issueId);
+    return <strong class={state.preferences.compact ? "compact" : ""}>
+      {state.draft.editing ? "Editing" : issue?.title}
+    </strong>;
+  },
+  { draft }
 );
 
-export function checkNamedDependencies() {
-  const NamedIssueTitle = namedView(
-    ({ state, $ }, { issueId }: { issueId: number }) => {
-      // @ts-expect-error preferences is outside this dependency tuple.
-      void $.compact;
-      return <strong>{state.issues.find((issue) => issue.id === issueId)?.title}</strong>;
-    },
-    ["issues"]
-  );
-
-  const IssueCount = namedView(
-    ({ state }) => <p class={state.compact ? "compact" : ""}>{state.issues.length}</p>,
-    ["issues", "preferences"]
-  );
-
-  const DefaultCount = namedView(({ state }) => {
-    // @ts-expect-error Only issues is available through the default scope.
-    void state.compact;
-    return <p>{state.issues.length}</p>;
+export function checkComponentScopeTypes() {
+  workspaceComponent(({ state }) => {
+    // @ts-expect-error Draft is local to IssueTitle.
+    void state.draft;
+    // @ts-expect-error Typo in the registry key.
+    void state.isssues;
+    return null;
   });
 
-  namedView(({ state }) => {
-    // @ts-expect-error An explicit list replaces the default scope.
-    void state.issues;
-    return <p>{String(state.compact)}</p>;
-  }, ["preferences"]);
-
-  // @ts-expect-error Typo in the default name.
-  defineView({ issues, preferences }, { default: "isssues" });
-
-  // @ts-expect-error Typo in the registry key.
-  namedView(() => <p />, ["isssues"]);
-
   // @ts-expect-error JSX still requires the correct prop type.
-  const invalidTitle = <NamedIssueTitle issueId="1" />;
+  const invalidTitle = <IssueTitle issueId="1" />;
   void invalidTitle;
-  return <><NamedIssueTitle issueId={1} /><IssueCount /><DefaultCount /></>;
+  return <IssueTitle issueId={1} />;
 }

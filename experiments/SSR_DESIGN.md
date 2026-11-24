@@ -6,7 +6,7 @@ counter cannot promise the same output on the server and client.
 ## Public surface
 
 ```tsx
-const Field = view(
+const Field = component(
   ({ id }, { name }: { name: string }) => {
     const inputId = id("input");
     const hintId = id("hint");
