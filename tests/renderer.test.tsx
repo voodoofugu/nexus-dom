@@ -208,7 +208,9 @@ describe("nexus-dom rendering model", () => {
     const root = app.render(<App />, host, { schedule: "manual", idPrefix: "account" });
     const before = Array.from(host.querySelectorAll("input"), (input) => input.id);
 
-    expect(before).toEqual(["nxs-account-c0-input", "nxs-account-c1-input"]);
+    expect(before).toHaveLength(2);
+    expect(new Set(before).size).toBe(2);
+    expect(before.every((id) => /^nxs-[A-Za-z0-9]{7}$/.test(id))).toBe(true);
     // Update through the writable binding path used by the public component scope.
     const Increment = view(({ $ }) => <button onClick={() => $.value.set(2)} />, [values]);
     const controlHost = document.createElement("div");

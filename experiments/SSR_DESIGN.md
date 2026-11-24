@@ -26,18 +26,25 @@ in one component returns the same value.
 ## Identity contract
 
 - Every mounted component has an owner path scoped to one root.
-- A root has an explicit or generated `idPrefix`; multiple roots cannot collide.
-- Component IDs derive from `idPrefix + ownerPath + localKey`, not randomness.
-- Keyed rows use keyed owner segments, so moves preserve IDs.
-- A disposed and remounted unkeyed component may receive a new client identity.
+- A root has an explicit or generated `idPrefix`; generated prefixes are unique,
+  while callers must keep explicit prefixes unique when roots share a document.
+- Component IDs hash `contractVersion + idPrefix + ownerPath + localKey`; the
+  fixed markup form is `nxs-` plus seven alphanumeric base62 characters.
+- Keyed rows use type-preserving keyed owner segments, so moves and initial
+  order changes preserve IDs.
+- A per-root claim map detects a hash collision before duplicate DOM IDs can be
+  emitted. Hashing keeps markup compact but does not protect sensitive inputs.
+- A disposed and remounted component at the same structural owner path reuses
+  its ID; moving it to a different unkeyed path changes the ID.
 - Server and hydration traversal must produce identical owner paths.
 - View reruns and bounded reconciliation reuse the existing owner path.
 
 ## Rendering phases
 
 1. **Implemented:** add owner identity and `id(localKey)` to the browser renderer
-   without changing DOM output unless requested. Explicit `idPrefix` produces
-   IDs such as `nxs-account-c0-input`; reruns retain the owner token.
+   without changing DOM output unless requested. Tracked, dynamic, keyed and
+   boundary traversals now match on browser and server; reruns and keyed moves
+   retain their identity.
 2. **Implemented:** synchronous `renderToString` for elements, fragments,
    components, store views, text, keyed/dynamic regions, boundaries and current
    `LiveValue` values. Each call gets independent lazy stores; setup is skipped
@@ -52,7 +59,6 @@ in one component returns the same value.
 
 ## Open decisions
 
-- Encoding owner paths without leaking user data from keys into HTML IDs.
 - Whether server rendering may await store initialization; the first version
   should remain synchronous unless an explicit async contract is introduced.
 - Marker format and the cost of comment-free hydration.

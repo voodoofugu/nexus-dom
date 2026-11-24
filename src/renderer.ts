@@ -99,6 +99,7 @@ export function createDOMRenderer<C = unknown>(
   ) => {
     const document = target.ownerDocument ?? (target as Document);
     const boundaryOwner = new Owner(owner);
+    const branchId = boundaryOwner.reserveIdSegment("b");
     const end = document.createTextNode("");
     target.appendChild(end);
     let active = true;
@@ -107,7 +108,7 @@ export function createDOMRenderer<C = unknown>(
     let branchNodes: Node[] = [];
 
     const replaceBranch = (view: Renderable, catchesErrors: boolean) => {
-      const nextOwner = new Owner(boundaryOwner);
+      const nextOwner = new Owner(boundaryOwner, true, branchId);
       const fragment = document.createDocumentFragment();
       if (catchesErrors) nextOwner.setErrorHandler(showFallback);
       try {
@@ -400,6 +401,7 @@ export function createDOMRenderer<C = unknown>(
     const document = target.ownerDocument ?? (target as Document);
     const end = document.createTextNode("");
     target.appendChild(end);
+    const branchId = owner.reserveIdSegment("d");
 
     let active = true;
     let nextValue = source.get();
@@ -416,7 +418,7 @@ export function createDOMRenderer<C = unknown>(
     };
 
     const mountBranch = () => {
-      const nextOwner = new Owner(owner);
+      const nextOwner = new Owner(owner, true, branchId);
       const fragment = document.createDocumentFragment();
       try {
         renderInto(project(nextValue), fragment, nextOwner);

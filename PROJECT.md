@@ -122,9 +122,12 @@ memoization, but they do not reduce the physical work of a full reverse.
     marked framework DOM?
 
 Owners now expose `id(localKey)` through standalone view scope. IDs use
-`nxs-<root>-c<owner>-<local>` and survive tracked reruns. Browser and server
-rendering produce matching IDs when given the same explicit `idPrefix` and
-initial tree; hydration still needs to reuse that traversal contract.
+the fixed `nxs-<7-character hash>` form derived from a versioned root prefix,
+owner path and exact local key. Typed keyed-row segments make identity
+independent of list position. Browser and server rendering now mirror tracked,
+dynamic, keyed and boundary ownership and produce matching IDs for the same
+explicit `idPrefix` and initial tree. A per-root claim map rejects the unlikely
+case of a 42-bit collision; hydration still needs to reuse the traversal.
 
 ## Current assessment
 
@@ -180,7 +183,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `10.27 KB gzip`; actual application cost still depends on imported APIs
+  about `10.95 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -220,8 +223,8 @@ drilling or a provider hierarchy.
    A density benchmark over 500 components now confirms the trade-off: targeted
    `$` updates remain nearly flat as fields increase, while dense all-field
    updates cross tracked-view reconciliation between eight and sixteen fields.
-   After component IDs, the sixteen-field run measured `6.2 ms` for bindings
-   versus `4.6 ms` for the view, with roughly `12.1 KB` versus `2.2
+   After deterministic owner paths, the sixteen-field run measured `4.8 ms` for
+   bindings versus `3.9 ms` for the view, with roughly `12.2 KB` versus `2.3
    KB` retained JS per component.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
@@ -245,11 +248,11 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `6.45 KB
-gzip` for core, `8.34 KB` for `createApp`, and `8.69 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `10.27 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `4.39 KB` externalized
-or `5.48 KB` with `nexus-state`. Track these separately from the playground
+The isolated Rollup/Terser ESM benchmark currently measures roughly `7.14 KB
+gzip` for core, `9.03 KB` for `createApp`, and `9.40 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `10.95 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `5.08 KB` externalized
+or `6.16 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

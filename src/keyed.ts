@@ -173,6 +173,7 @@ export function mountKeyedRegion<C>({
   let nextOperation: ListOperation | undefined;
   let initialFragment: DocumentFragment | undefined =
     document.createDocumentFragment();
+  const regionId = owner.reserveIdSegment("l");
 
   const renderInitialNodes = (view: Renderable, blockOwner: Owner) => {
     const fragment = initialFragment!;
@@ -197,7 +198,7 @@ export function mountKeyedRegion<C>({
     const block: KeyedBlock = {
       key,
       // Blocks are disposed by the keyed region, but retain its error scope.
-      owner: new Owner(owner, false),
+      owner: new Owner(owner, false, owner.keyedIdSegment(regionId, key)),
       nodes: end,
       live: mutable.live,
       controller: mutable.controller,

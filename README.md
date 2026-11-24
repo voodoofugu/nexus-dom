@@ -173,12 +173,16 @@ const Field = view(({ id }) => {
 });
 
 app.render(<Field />, target, { idPrefix: "account" });
-// nxs-account-c0-input
+// nxs-ByvN82F
 ```
 
 The ID survives tracked reruns and uses a different owner token for each
-component instance. An explicit `idPrefix` is shared by browser and server
-rendering; client-only roots get an automatic unique prefix.
+component instance. Its fixed `nxs-<7-character hash>` form is derived from the contract
+version, root prefix, deterministic owner path and exact local key. The input
+stays available to collision diagnostics but is not exposed in markup. An
+explicit `idPrefix` is shared by browser and server rendering; client-only
+roots get an automatic unique prefix. The hash is an identifier encoding, not
+a security boundary for sensitive keys.
 
 ### Server rendering
 
@@ -517,9 +521,9 @@ and 16 fields using either individual `$` bindings or one tracked `state` view.
 It measures one-field and all-field updates plus forced-GC heap. In the first
 local Chrome run after writable bindings, targeted `$` updates stayed around
 `0.3–0.4 ms`; dense updates crossed over between eight and sixteen fields, and
-at sixteen fields the tracked view measured `4.6 ms` versus `6.2 ms` for
+at sixteen fields the tracked view measured `3.9 ms` versus `4.8 ms` for
 bindings. Retained JS heap at sixteen fields was
-about `2.2 KB/component` for the view versus `12.1 KB/component` for bindings.
+about `2.3 KB/component` for the view versus `12.2 KB/component` for bindings.
 These values are machine-specific; the shape of the crossover is the useful
 result.
 
@@ -540,9 +544,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `6.45 KB gzip` for
-low-level core exports, `8.34 KB` for `createApp`, `8.69 KB` for the complete
-main entry, and `10.27 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `4.39 KB` externalized or `5.48 KB` with
+included. The current local measurement is approximately `7.14 KB gzip` for
+low-level core exports, `9.03 KB` for `createApp`, `9.40 KB` for the complete
+main entry, and `10.95 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `5.08 KB` externalized or `6.16 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

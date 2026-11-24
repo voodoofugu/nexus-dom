@@ -1,6 +1,14 @@
 /** @jsxImportSource nexus-dom */
 import { describe, expect, it } from "vitest";
-import { createApp, NexusDOMError, onCleanup, store, view } from "nexus-dom";
+import {
+  bind,
+  createApp,
+  createNexus,
+  NexusDOMError,
+  onCleanup,
+  store,
+  view,
+} from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
 describe("nexus-dom server rendering", () => {
@@ -33,8 +41,8 @@ describe("nexus-dom server rendering", () => {
 
     expect(html).toBe(
       '<main aria-label="A &lt; B"><h1>A &lt; B</h1><ul>' +
-      '<li id="nxs-account-c0-row" title="say &quot;hello&quot;">One</li>' +
-      '<li id="nxs-account-c1-row" title="say &quot;hello&quot;">Two</li>' +
+      '<li id="nxs-re1mZLO" title="say &quot;hello&quot;">One</li>' +
+      '<li id="nxs-MWpvxI8" title="say &quot;hello&quot;">Two</li>' +
       "</ul></main>"
     );
     expect(setups).toBe(0);
@@ -46,15 +54,75 @@ describe("nexus-dom server rendering", () => {
     const server = renderToString(<App />, { idPrefix: "form" });
     const host = document.createElement("div");
 
-    createApp().render(<App />, host, { idPrefix: "form" });
+    const app = createApp();
+    app.render(<App />, host, { idPrefix: "form" });
 
-    expect(server).toBe(
-      '<section><input id="nxs-form-c0-input"><input id="nxs-form-c1-input"></section>'
-    );
+    expect(server).toBe(host.innerHTML);
     expect(Array.from(host.querySelectorAll("input"), (input) => input.id)).toEqual([
-      "nxs-form-c0-input",
-      "nxs-form-c1-input",
+      "nxs-ByvN82F",
+      "nxs-0ZJnesR",
     ]);
+    app.dispose();
+  });
+
+  it("matches nested tracked, keyed and dynamic owner paths", () => {
+    const model = store({
+      state: {
+        visible: true,
+        items: [{ id: 1 }, { id: 2 }],
+      },
+    });
+    const Field = view(
+      ({ id }, { name }: { name: string }) => <span id={id("field")}>{name}</span>
+    );
+    const App = view(
+      ({ $ }) => (
+        <main>
+          <Field name="plain" />
+          <ul>
+            {$.items.each(
+              (item) => item.id,
+              ($item) => <li><Field name={`row-${$item.id.get()}`} /></li>
+            )}
+          </ul>
+          {$.visible.render(() => <Field name="dynamic" />)}
+        </main>
+      ),
+      [model]
+    );
+    const server = renderToString(<App />, { idPrefix: "nested" });
+    const host = document.createElement("div");
+    const app = createApp();
+
+    app.render(<App />, host, { idPrefix: "nested" });
+
+    expect(server).toBe(host.innerHTML);
+    expect(new Set(Array.from(host.querySelectorAll("span"), (node) => node.id)).size).toBe(4);
+    app.dispose();
+  });
+
+  it("derives keyed component ids from keys instead of list positions", () => {
+    const Row = view(
+      ({ id }, { itemId }: { itemId: number }) =>
+        <li id={id("row")} data-item={itemId}>{itemId}</li>
+    );
+    const renderItems = (items: readonly { id: number }[]) => {
+      const $ = bind(createNexus({ state: { items } }));
+      const html = renderToString(
+        <ul>{$.items.each((item) => item.id, ($item) => <Row itemId={$item.id.get()} />)}</ul>,
+        { idPrefix: "keyed" }
+      );
+      const host = document.createElement("div");
+      host.innerHTML = html;
+      return new Map(
+        Array.from(host.querySelectorAll("li"), (row) => [row.dataset.item, row.id])
+      );
+    };
+
+    const forward = renderItems([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    const reverse = renderItems([{ id: 3 }, { id: 2 }, { id: 1 }]);
+
+    expect(reverse).toEqual(forward);
   });
 
   it("disposes keyed server owners and rejects unsafe markup names", () => {

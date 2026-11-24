@@ -36,6 +36,7 @@ export function mountTrackedView<C>({
   let branchView: Renderable = undefined;
   let dependencies: ["*"] | string[] | undefined;
   let unsubscribe = () => {};
+  const branchId = owner.reserveIdSegment("t");
 
   const clearBranch = () => {
     branchOwner?.dispose();
@@ -74,7 +75,7 @@ export function mountTrackedView<C>({
       return;
     }
 
-    const nextOwner = new Owner(owner);
+    const nextOwner = new Owner(owner, true, branchId);
     const fragment = document.createDocumentFragment();
     try {
       renderInto(tracked.value, fragment, nextOwner);

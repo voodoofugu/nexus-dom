@@ -64,39 +64,64 @@ export function renderToString(
       return render(storeViews.resolve(vnode), owner);
     }
     if (vnode.kind === "tracked-view") {
-      return render(vnode.project(vnode.source.get()), owner);
+      const branchOwner = new Owner(
+        owner,
+        true,
+        owner.reserveIdSegment("t")
+      );
+      return render(vnode.project(vnode.source.get()), branchOwner);
     }
     if (vnode.kind === "fragment") {
       return render(vnode.props.children as Renderable, owner);
     }
     if (vnode.kind === "dynamic") {
-      return render(vnode.project(vnode.source.get()), owner);
+      const branchOwner = new Owner(
+        owner,
+        true,
+        owner.reserveIdSegment("d")
+      );
+      return render(vnode.project(vnode.source.get()), branchOwner);
     }
     if (vnode.kind === "show") {
-      return render(vnode.when.get() ? vnode.children : vnode.fallback, owner);
+      const branchOwner = new Owner(
+        owner,
+        true,
+        owner.reserveIdSegment("d")
+      );
+      return render(
+        vnode.when.get() ? vnode.children : vnode.fallback,
+        branchOwner
+      );
     }
     if (vnode.kind === "keyed") {
+      const regionId = owner.reserveIdSegment("l");
       return vnode.source
         .get()
         .map((item) => {
-          const rowOwner = new Owner(owner, false);
+          const key = vnode.key(item);
+          const rowOwner = new Owner(
+            owner,
+            true,
+            owner.keyedIdSegment(regionId, key)
+          );
           const { live } = createMutableLiveItem<unknown, unknown>(item);
-          try {
-            return render(vnode.project(live), rowOwner);
-          } finally {
-            rowOwner.dispose();
-          }
+          return render(vnode.project(live), rowOwner);
         })
         .join("");
     }
     if (vnode.kind === "error-boundary") {
+      const boundaryOwner = new Owner(owner);
+      const branchId = boundaryOwner.reserveIdSegment("b");
+      const childOwner = new Owner(boundaryOwner, true, branchId);
       try {
-        return render(vnode.children, owner);
+        return render(vnode.children, childOwner);
       } catch (error) {
+        childOwner.dispose();
         const fallback = typeof vnode.fallback === "function"
           ? vnode.fallback(error, () => {})
           : vnode.fallback;
-        return render(fallback, owner);
+        const fallbackOwner = new Owner(boundaryOwner, true, branchId);
+        return render(fallback, fallbackOwner);
       }
     }
 
