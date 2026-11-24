@@ -6,6 +6,7 @@
 - [Quick start](#quick-start)
 - [API](#api)
 - [Named and default stores](#named-and-default-stores)
+- [Store namespaces](#store-namespaces)
 - [Server rendering](#server-rendering)
 - [Local error recovery](#local-error-recovery)
 - [Development](#development)
@@ -278,6 +279,35 @@ as `{$.userName}` updates its DOM node directly.
 An explicit list defines the entire scope. Use `["session", "issues"]`
 for both stores and `[]` for an empty scope. Any view created with the factory
 can mount in a preview or a separate root without its original parent.
+
+### Store namespaces
+
+`defineViews(stores)` groups state, bindings, actions and refs by the names in
+your store map. Each application creates its own instances when a view reads
+a group.
+
+```tsx
+const workspaceView = defineViews({ main, preferences, issues });
+
+const IssueTitle = workspaceView(
+  ({ state }, { issueId }: { issueId: number }) => (
+    <strong class={state.preferences.theme}>
+      {state.issues.items.find((issue) => issue.id === issueId)?.title}
+    </strong>
+  )
+);
+```
+
+This render opens `preferences` and `issues`. The first read of `main` can
+happen in another component. Add a store to one view with a second map,
+such as `workspaceView(render, { draft })`. Its namespaces include both maps,
+and duplicate namespace names are errors.
+
+Reading `state.preferences.theme` subscribes the view to the preferences
+store. Use `$.preferences.theme` for a binding to that field alone. Reading
+an action or ref opens its store without subscribing the view. Each binding
+group has its own `$select`. For a live selector that reads several stores,
+use the flat `view(render, [descriptors])` scope.
 
 ### Server rendering
 
@@ -680,9 +710,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.48 KB gzip` for
-low-level core exports, `11.38 KB` for `createApp`, `11.89 KB` for the complete
-main entry, and `13.43 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.40 KB` externalized or `7.48 KB` with
+included. The current local measurement is approximately `8.49 KB gzip` for
+low-level core exports, `11.66 KB` for `createApp`, `12.25 KB` for the complete
+main entry, and `13.80 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.67 KB` externalized or `7.74 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

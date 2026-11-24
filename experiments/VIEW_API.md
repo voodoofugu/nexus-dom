@@ -30,6 +30,19 @@ const Summary = view(
 
 ## Props experiment
 
+### Read-based store namespaces
+
+`defineViews({ issues, preferences })` puts the groups under
+`state.issues` and `state.preferences`, with the same names under `$`,
+`acts` and `refs`. A second map such as `{ draft }` adds groups for one
+component. Reading one group's state subscribes the view to that store.
+Conditional reads add or remove subscriptions on the next render.
+
+The dogfood uses this form for the toolbar, summary, inspector and shell.
+The keyed list still uses the flat view for a live selector across two stores.
+Evaluate field-level tracking inside a group and cross-store selectors
+before choosing the release API.
+
 ### Named dependencies
 
 A typed registry provides autocomplete for `["issues"]` and infers the

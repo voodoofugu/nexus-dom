@@ -320,6 +320,59 @@ export function defineView<
   return factory as ViewFactory<R, D>;
 }
 
+/** Store namespaces exposed to a component created by `defineViews`. */
+export type WorkspaceScope<R extends StoreRegistry> = {
+  readonly id: (localKey: string) => string;
+  readonly state: { readonly [K in keyof R]: Readonly<StoreState<R[K]>> };
+  readonly $: { readonly [K in keyof R]: WritableBoundState<StoreState<R[K]>, UpdateContext> };
+  readonly acts: { readonly [K in keyof R]: StoreActs<R[K]> };
+  readonly refs: { readonly [K in keyof R]: AppRefs<StoreRefs<R[K]>> };
+};
+
+/** A view factory with lazy store namespaces and optional local additions. */
+export interface WorkspaceViewFactory<R extends StoreRegistry> {
+  <Input extends object = EmptyRecord>(
+    render: (scope: WorkspaceScope<R>, input: Input) => Renderable
+  ): ViewComponent<Input>;
+  <const Extra extends StoreRegistry, Input extends object = EmptyRecord>(
+    render: (scope: WorkspaceScope<R & Extra>, input: Input) => Renderable,
+    extra: Extra & Record<Extract<keyof Extra, keyof R>, never>
+  ): ViewComponent<Input>;
+}
+
+/**
+ * Creates JSX components that resolve store namespaces on first access.
+ * @param stores shared store descriptors keyed by namespace.
+ * @example
+ * ```tsx
+ * const view = defineViews({ preferences, issues });
+ * const Title = view(({ state }) => (
+ *   <p class={state.preferences.theme}>{state.issues.items[0]?.title}</p>
+ * ));
+ * ```
+ */
+export function defineViews<const R extends StoreRegistry>(stores: R): WorkspaceViewFactory<R> {
+  const shared = new Map(Object.entries(stores).map(([name, store]) => [name, [store]]));
+  const factory = (render: StoreViewVNode["render"], extra?: StoreRegistry): ViewComponent<object> => {
+    const registry = extra ? new Map(shared) : shared;
+    for (const [name, store] of Object.entries(extra ?? {})) {
+      if (registry.has(name)) {
+        throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", `Store namespace "${name}" is already defined.`);
+      }
+      registry.set(name, [store]);
+    }
+    return (input) => ({
+      kind: "store-view",
+      dependencies: [],
+      registry,
+      render,
+      input,
+      id: captureOwnerId(),
+    });
+  };
+  return factory as WorkspaceViewFactory<R>;
+}
+
 function lazyObject<T extends object>(read: () => T): T {
   return new Proxy(Object.create(null), {
     get: (_target, key) => Reflect.get(read(), key),
@@ -664,6 +717,76 @@ export function createStoreViewRegistry(
     };
   };
 
+  const resolveWorkspace = (
+    vnode: StoreViewVNode,
+    registry: NonNullable<StoreViewVNode["registry"]>
+  ): TrackedViewVNode => {
+    const scopes = new Map<string, ResolvedScope>();
+    let mounted = false;
+    const read = (name: string) => {
+      let scope = scopes.get(name);
+      if (scope) return scope;
+      if (disposed) {
+        throw nexusDOMError("APP_DISPOSED", "Cannot resolve a store after app disposal.");
+      }
+      scope = resolveScope(registry.get(name)!);
+      scopes.set(name, scope);
+      if (mounted) scope.mount?.();
+      return scope;
+    };
+    const namespace = (get: (name: string) => unknown): RecordAny =>
+      new Proxy(Object.create(null), {
+        get(_target, name) {
+          if (typeof name === "string" && registry.has(name)) return get(name);
+        },
+        has: (_target, name) => typeof name === "string" && registry.has(name),
+        ownKeys: () => [...registry.keys()],
+        getOwnPropertyDescriptor(_target, name) {
+          if (typeof name === "string" && registry.has(name)) {
+            return { enumerable: true, configurable: true, get: () => get(name) };
+          }
+        },
+      });
+    const snapshot = (used?: Set<string>) => {
+      let values: Map<string, RecordAny> | undefined;
+      return namespace((name) => {
+        used?.add(name);
+        let value = values?.get(name);
+        if (!value) {
+          value = read(name).source.get();
+          (values ??= new Map()).set(name, value);
+        }
+        return value;
+      });
+    };
+    const $ = namespace((name) => read(name).$);
+    const acts = namespace((name) => read(name).acts);
+    const refs = namespace((name) => read(name).refs);
+    const project = (state: RecordAny) =>
+      vnode.render({ id: vnode.id, state, $, acts, refs }, vnode.input);
+    return {
+      kind: "tracked-view",
+      source: {
+        get: snapshot,
+        subscribe(listener, names) {
+          const stop = names.map((name) =>
+            read(name).source.subscribe((_state, context) => listener(snapshot(), context), ["*"])
+          );
+          return () => stop.forEach((unsubscribe) => unsubscribe());
+        },
+      },
+      project,
+      track() {
+        const used = new Set<string>();
+        return { value: project(snapshot(used)), dependencies: [...used] };
+      },
+      mountStores() {
+        mounted = true;
+        for (const scope of scopes.values()) scope.mount?.();
+      },
+    };
+  };
+
   return {
     restore(snapshots) {
       if (stores.size > 0) {
@@ -691,6 +814,7 @@ export function createStoreViewRegistry(
       });
     },
     resolve(vnode): TrackedViewVNode {
+      if (vnode.registry) return resolveWorkspace(vnode, vnode.registry);
       const scope = vnode.lazy ? lazyScope(vnode.dependencies) : resolveScope(vnode.dependencies);
       return {
         kind: "tracked-view",

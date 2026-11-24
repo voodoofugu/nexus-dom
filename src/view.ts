@@ -74,7 +74,7 @@ export function mountTrackedView<C>({
 
   function mountBranch() {
     if (!active) return;
-    const tracked = trackSelector(vnode.source.get(), vnode.project);
+    const tracked = vnode.track?.() ?? trackSelector(vnode.source.get(), vnode.project);
 
     if (
       branchOwner &&
@@ -106,7 +106,7 @@ export function mountTrackedView<C>({
 
   let hydrationNext: Node | null | undefined;
   if (hydration) {
-    const tracked = trackSelector(vnode.source.get(), vnode.project);
+    const tracked = vnode.track?.() ?? trackSelector(vnode.source.get(), vnode.project);
     const nextOwner = new Owner(owner, true, branchId);
     const previous = hydration.node
       ? hydration.node.previousSibling

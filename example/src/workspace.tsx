@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { defineView, persist, store } from "nexus-dom";
+import { defineViews, persist, store, view } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 
 type IssueStatus = "backlog" | "active" | "done";
@@ -64,7 +64,7 @@ const filters = store({
 
 const issues = store({
   state: {
-    issues: initialIssues,
+    items: initialIssues,
     selectedIssueId: 1 as number | null,
     nextIssueId: 6,
   },
@@ -74,7 +74,7 @@ const issues = store({
   },
   acts: ({ get, set, refs, list }) => {
     const findIssue = (id: number) =>
-      get("issues").findIndex((issue) => issue.id === id);
+      get("items").findIndex((issue) => issue.id === id);
     const focusInspector = () =>
       requestAnimationFrame(() => refs.inspector.current?.focus());
 
@@ -89,7 +89,7 @@ const issues = store({
       },
       createIssue() {
         const id = get("nextIssueId");
-        list("issues").insert(0, {
+        list("items").insert(0, {
           id,
           code: `ND-${30 + id}`,
           title: `Untitled renderer experiment ${id}`,
@@ -105,16 +105,16 @@ const issues = store({
       cycleStatus(id: number) {
         const index = findIssue(id);
         if (index < 0) return;
-        const issue = get("issues")[index]!;
-        list("issues").replace(index, { ...issue, status: nextStatus[issue.status] });
+        const issue = get("items")[index]!;
+        list("items").replace(index, { ...issue, status: nextStatus[issue.status] });
       },
       renameSelected(title: string) {
         const id = get("selectedIssueId");
         if (id === null || title.trim() === "") return;
         const index = findIssue(id);
         if (index < 0) return;
-        list("issues").replace(index, {
-          ...get("issues")[index]!,
+        list("items").replace(index, {
+          ...get("items")[index]!,
           title: title.trim(),
         });
       },
@@ -122,16 +122,16 @@ const issues = store({
         const id = get("selectedIssueId");
         if (id === null) return;
         const index = findIssue(id);
-        if (index > 0) list("issues").move(index, 0);
+        if (index > 0) list("items").move(index, 0);
       },
       removeSelected() {
         const id = get("selectedIssueId");
         if (id === null) return;
-        const issues = get("issues");
-        const index = issues.findIndex((issue) => issue.id === id);
+        const items = get("items");
+        const index = items.findIndex((issue) => issue.id === id);
         if (index < 0) return;
-        const nextSelected = issues[index + 1]?.id ?? issues[index - 1]?.id ?? null;
-        list("issues").remove(index);
+        const nextSelected = items[index + 1]?.id ?? items[index - 1]?.id ?? null;
+        list("items").remove(index);
         set({ selectedIssueId: nextSelected });
         if (nextSelected !== null) focusInspector();
       },
@@ -141,17 +141,17 @@ const issues = store({
 
 export function createWorkspace() {
   const diagnostics = createPlaygroundDiagnostics();
-  const view = defineView({ issues, filters, preferences }, { default: "preferences" });
+  const workspaceView = defineViews({ issues, filters, preferences });
   const statusLabel = (status: IssueStatus) =>
     status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
 
-  const CompactToggle = view(({ $, acts }) => (
-    <button class="quiet-button" onClick={acts.toggleCompact}>
-      {$.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
+  const CompactToggle = workspaceView(({ $, acts }) => (
+    <button class="quiet-button" onClick={acts.preferences.toggleCompact}>
+      {$.preferences.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
     </button>
   ));
 
-  const Toolbar = view(
+  const Toolbar = workspaceView(
     ({ $, acts, refs }) => {
       diagnostics.viewRun("toolbar");
       const statusFilters: Array<{ value: IssueFilter; label: string }> = [
@@ -166,19 +166,19 @@ export function createWorkspace() {
           <label class="search-field">
             <span>Search issues</span>
             <input
-              ref={refs.search}
+              ref={refs.filters.search}
               type="search"
-              value={$.query}
+              value={$.filters.query}
               placeholder="Title, code or owner"
-              onInput={(event) => acts.setQuery((event.currentTarget as HTMLInputElement).value)}
+              onInput={(event) => acts.filters.setQuery((event.currentTarget as HTMLInputElement).value)}
             />
           </label>
-          <button class="quiet-button" onClick={acts.clearQuery}>Clear</button>
+          <button class="quiet-button" onClick={acts.filters.clearQuery}>Clear</button>
           <div class="filters" role="group" aria-label="Status">
             {statusFilters.map(({ value, label }) => (
               <button
-                aria-pressed={$.filter.map((filter) => filter === value)}
-                onClick={() => acts.setFilter(value)}
+                aria-pressed={$.filters.filter.map((filter) => filter === value)}
+                onClick={() => acts.filters.setFilter(value)}
               >
                 {label}
               </button>
@@ -187,14 +187,14 @@ export function createWorkspace() {
           <CompactToggle />
         </section>
       );
-    },
-    ["filters"]
+    }
   );
 
-  const Summary = view(
+  const Summary = workspaceView(
     ({ state }) => {
       diagnostics.viewRun("summary");
-      const counts = state.issues.reduce(
+      const items = state.issues.items;
+      const counts = items.reduce(
         (result, issue) => {
           result[issue.status]++;
           return result;
@@ -204,28 +204,27 @@ export function createWorkspace() {
 
       return (
         <section class="summary" aria-label="Issue summary">
-          <article><span>Total</span><strong>{state.issues.length}</strong></article>
+          <article><span>Total</span><strong>{items.length}</strong></article>
           <article><span>Backlog</span><strong>{counts.backlog}</strong></article>
           <article><span>In progress</span><strong>{counts.active}</strong></article>
           <article><span>Done</span><strong>{counts.done}</strong></article>
         </section>
       );
-    },
-    ["issues"]
+    }
   );
 
-  const EmptyState = view(
+  const EmptyState = workspaceView(
     ({ state }) => {
-      const query = state.query.trim().toLowerCase();
-      const count = state.issues.filter((issue) =>
-        (state.filter === "all" || issue.status === state.filter) &&
+      const { query: rawQuery, filter } = state.filters;
+      const query = rawQuery.trim().toLowerCase();
+      const count = state.issues.items.filter((issue) =>
+        (filter === "all" || issue.status === filter) &&
         (query === "" || issue.title.toLowerCase().includes(query) || issue.code.toLowerCase().includes(query) || issue.owner.toLowerCase().includes(query))
       ).length;
       return count === 0 ? (
         <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
       ) : null;
-    },
-    ["issues", "filters"]
+    }
   );
 
   const IssueList = view(
@@ -233,7 +232,7 @@ export function createWorkspace() {
       diagnostics.viewRun("issue-list");
       const visibleIssues = $.$select((state) => {
         const query = state.query.trim().toLowerCase();
-        return state.issues.filter((issue) => {
+        return state.items.filter((issue) => {
           const matchesFilter = state.filter === "all" || issue.status === state.filter;
           const matchesQuery = query === "" ||
             issue.title.toLowerCase().includes(query) ||
@@ -280,13 +279,14 @@ export function createWorkspace() {
         </section>
       );
     },
-    ["issues", "filters"]
+    [issues, filters]
   );
 
-  const Inspector = view(
+  const Inspector = workspaceView(
     ({ state, acts, refs }) => {
       diagnostics.viewRun("inspector");
-      const issue = state.issues.find((candidate) => candidate.id === state.selectedIssueId);
+      const { items, selectedIssueId } = state.issues;
+      const issue = items.find((candidate) => candidate.id === selectedIssueId);
 
       if (!issue) {
         return (
@@ -294,16 +294,16 @@ export function createWorkspace() {
             <p class="eyebrow">Tracked view</p>
             <h2>Select an issue</h2>
             <p>The inspector uses ordinary state reads, array methods and a normal conditional. Only this owned region reruns.</p>
-            <button onClick={acts.focusSearch}>Focus search</button>
+            <button onClick={acts.filters.focusSearch}>Focus search</button>
           </aside>
         );
       }
 
       return (
-        <aside class="inspector" tabIndex={-1} ref={refs.inspector}>
+        <aside class="inspector" tabIndex={-1} ref={refs.issues.inspector}>
           <div class="inspector-heading">
             <div><p class="eyebrow">{issue.code} · tracked view</p><h2>{issue.title}</h2></div>
-            <button class="icon-button" aria-label="Close inspector" onClick={acts.closeInspector}>×</button>
+            <button class="icon-button" aria-label="Close inspector" onClick={acts.issues.closeInspector}>×</button>
           </div>
           <p class="inspector-summary">{issue.summary}</p>
           <dl class="issue-facts">
@@ -313,12 +313,12 @@ export function createWorkspace() {
           </dl>
           <label class="title-editor">
             <span>Rename on blur</span>
-            <input value={issue.title} onChange={(event) => acts.renameSelected((event.currentTarget as HTMLInputElement).value)} />
+            <input value={issue.title} onChange={(event) => acts.issues.renameSelected((event.currentTarget as HTMLInputElement).value)} />
           </label>
           <div class="inspector-actions">
-            <button onClick={() => acts.cycleStatus(issue.id)}>Next status</button>
-            <button onClick={acts.moveSelectedToTop}>Move to top</button>
-            <button class="danger" onClick={acts.removeSelected}>Delete</button>
+            <button onClick={() => acts.issues.cycleStatus(issue.id)}>Next status</button>
+            <button onClick={acts.issues.moveSelectedToTop}>Move to top</button>
+            <button class="danger" onClick={acts.issues.removeSelected}>Delete</button>
           </div>
           <div class="view-note">
             <strong>What this tests</strong>
@@ -326,22 +326,21 @@ export function createWorkspace() {
           </div>
         </aside>
       );
-    },
-    ["issues", "filters"]
+    }
   );
 
-  const App = view(
+  const App = workspaceView(
     ({ $, acts }) => {
       diagnostics.viewRun("app-shell");
       return (
-        <main class={$.compact.map((compact) => compact ? "workspace is-compact" : "workspace")} ref={diagnostics.surfaceRef}>
+        <main class={$.preferences.compact.map((compact) => compact ? "workspace is-compact" : "workspace")} ref={diagnostics.surfaceRef}>
           <header class="page-header">
             <div>
               <p class="eyebrow">nexus-dom dogfood</p>
               <h1>Issue triage workspace</h1>
               <p>App-scoped state, actions and refs with tracked views for ordinary expressions and fine-grained bindings for hot DOM updates.</p>
             </div>
-            <button class="primary" onClick={acts.createIssue}>Create issue</button>
+          <button class="primary" onClick={acts.issues.createIssue}>Create issue</button>
           </header>
           <Toolbar />
           <Summary />
@@ -349,8 +348,7 @@ export function createWorkspace() {
           <diagnostics.Panel />
         </main>
       );
-    },
-    ["issues", "preferences"]
+    }
   );
 
   return { App, onCommit: diagnostics.onCommit };
