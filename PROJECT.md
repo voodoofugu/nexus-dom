@@ -223,8 +223,10 @@ drilling or a provider hierarchy.
    values directly; shared state/actions/refs come from the explicit dependency
    tuple. Bounded positional reconciliation preserves stable plain DOM and
    falls back to atomic replacement for structural changes. The next design
-   questions are atomic cross-store batching and whether the flat merged scope
-   remains clear as the application grows. Store descriptors can now depend on
+   question is whether the flat merged scope remains clear as the application
+   grows. Cross-store data writes deliberately remain separate Nexus updates;
+   synchronous dependency actions are coalesced into one DOM pass that reads
+   every store's final state. Store descriptors can now depend on
    other descriptors for typed action access; cycles fail explicitly, and lazy
    setup resources follow app disposal, including failed initialization.
    Plain `state` and fine-grained `$` are two subscription strategies over the

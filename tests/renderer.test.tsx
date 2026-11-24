@@ -158,6 +158,59 @@ describe("nexus-dom rendering model", () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
+  it("coalesces synchronous cross-store actions into one view pass", () => {
+    const profile = store({
+      state: { name: "Georg" },
+      acts: ({ set }) => ({
+        rename(name: string) {
+          set({ name });
+        },
+      }),
+    });
+    const task = store(
+      {
+        state: { done: false },
+        acts: ({ set, dependencies }) => ({
+          completeAs(name: string) {
+            dependencies.acts.rename(name);
+            set({ done: true });
+          },
+        }),
+      },
+      [profile]
+    );
+    let runs = 0;
+    const Panel = view(
+      ({ state, acts }) => {
+        runs++;
+        return (
+          <button onClick={() => acts.completeAs("Ada")}>
+            {state.name}: {String(state.done)}
+          </button>
+        );
+      },
+      [profile, task]
+    );
+    const commits = vi.fn();
+    const host = document.createElement("div");
+    const root = createApp().render(<Panel />, host, {
+      schedule: "manual",
+      onCommit: commits,
+    });
+
+    host.querySelector("button")!.click();
+    expect(host.textContent).toBe("Georg: false");
+    root.flush();
+
+    expect(host.textContent).toBe("Ada: true");
+    expect(runs).toBe(2);
+    expect(commits).toHaveBeenCalledOnce();
+    expect(commits.mock.calls[0]![0]).toMatchObject({
+      updates: 1,
+      contexts: [{ source: "completeAs" }],
+    });
+  });
+
   it("rejects cyclic store dependencies", () => {
     const leftDependencies: any[] = [];
     const left = store({ state: { left: true } }, leftDependencies);

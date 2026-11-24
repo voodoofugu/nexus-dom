@@ -133,8 +133,11 @@ const assignments = store(
 Dependency cycles fail during mount. Store setup runs once per app on first
 resolution and is disposed by `app.dispose()`. Updates across separate stores
 are not presented as one atomic Nexus transaction: each store keeps its own
-provenance, while synchronous DOM work is still coalesced by the renderer
-scheduler.
+notifications and provenance. Synchronous updates are nevertheless coalesced
+into one renderer pass, which reads the final state of every dependency. A
+coalesced view contributes its most recent causal context to `onCommit`. Keep
+invariants that require atomic observation inside one store; use dependency
+actions to coordinate commands whose visual result only needs one commit.
 
 `state` and `$` expose the same store values with different update costs.
 Reading `state.count` gives a plain value and makes the surrounding view rerun
