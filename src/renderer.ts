@@ -9,7 +9,7 @@ import {
 import { Owner, withOwner } from "./owner.js";
 import { createScheduler } from "./scheduler.js";
 import { mountTrackedView } from "./view.js";
-import { nexusDOMError } from "./errors.js";
+import { NexusDOMError, nexusDOMError } from "./errors.js";
 import { TEXT_END, TEXT_START } from "./hydration-markers.js";
 import type {
   DOMRenderer,
@@ -96,17 +96,27 @@ export function createDOMRenderer<C = unknown>(
     target: Node,
     owner: Owner,
     children: Renderable,
-    fallback: ErrorBoundaryFallback
+    fallback: ErrorBoundaryFallback,
+    hydration?: {
+      node: Node | null;
+      hydrateInto(
+        view: Renderable,
+        target: Node,
+        owner: Owner,
+        node: Node | null
+      ): Node | null;
+    }
   ) => {
     const document = target.ownerDocument ?? (target as Document);
     const boundaryOwner = new Owner(owner);
     const branchId = boundaryOwner.reserveIdSegment("b");
     const end = document.createTextNode("");
-    target.appendChild(end);
+    if (!hydration) target.appendChild(end);
     let active = true;
     let mounted = false;
     let branchOwner: Owner | undefined;
     let branchNodes: Node[] = [];
+    let hydrationNext: Node | null | undefined;
 
     const replaceBranch = (view: Renderable, catchesErrors: boolean) => {
       const nextOwner = new Owner(boundaryOwner, true, branchId);
@@ -149,7 +159,48 @@ export function createDOMRenderer<C = unknown>(
       replaceBranch(view, false);
     }
 
-    reset();
+    if (hydration) {
+      const hydrateBranch = (view: Renderable, catchesErrors: boolean) => {
+        const nextOwner = new Owner(boundaryOwner, true, branchId);
+        if (catchesErrors) nextOwner.setErrorHandler(showFallback);
+        const previous = hydration.node
+          ? hydration.node.previousSibling
+          : target.lastChild;
+        try {
+          hydrationNext = hydration.hydrateInto(
+            view,
+            target,
+            nextOwner,
+            hydration.node
+          );
+        } catch (error) {
+          nextOwner.dispose();
+          throw error;
+        }
+        target.insertBefore(end, hydrationNext);
+        const nextNodes: Node[] = [];
+        let current = previous ? previous.nextSibling : target.firstChild;
+        while (current && current !== end) {
+          nextNodes.push(current);
+          current = current.nextSibling;
+        }
+        branchOwner = nextOwner;
+        branchNodes = nextNodes;
+      };
+
+      try {
+        hydrateBranch(children, true);
+      } catch (error) {
+        if (
+          error instanceof NexusDOMError &&
+          error.code === "HYDRATION_MISMATCH"
+        ) throw error;
+        const view = typeof fallback === "function"
+          ? fallback(error, reset)
+          : fallback;
+        hydrateBranch(view, false);
+      }
+    } else reset();
     mounted = true;
 
     boundaryOwner.addCleanup(() => {
@@ -160,6 +211,8 @@ export function createDOMRenderer<C = unknown>(
       branchNodes = [];
       end.parentNode?.removeChild(end);
     });
+
+    return hydrationNext;
   };
 
   const attachEvent = (
@@ -397,11 +450,20 @@ export function createDOMRenderer<C = unknown>(
     owner: Owner,
     source: LiveValue<unknown, unknown>,
     project: (value: unknown) => Renderable,
-    structuralKey?: (value: unknown) => unknown
+    structuralKey?: (value: unknown) => unknown,
+    hydration?: {
+      node: Node | null;
+      hydrateInto(
+        view: Renderable,
+        target: Node,
+        owner: Owner,
+        node: Node | null
+      ): Node | null;
+    }
   ) => {
     const document = target.ownerDocument ?? (target as Document);
     const end = document.createTextNode("");
-    target.appendChild(end);
+    if (!hydration) target.appendChild(end);
     const branchId = owner.reserveIdSegment("d");
 
     let active = true;
@@ -435,7 +497,33 @@ export function createDOMRenderer<C = unknown>(
       if (owner.isMounted()) nextOwner.mount();
     };
 
-    mountBranch();
+    let hydrationNext: Node | null | undefined;
+    if (hydration) {
+      const nextOwner = new Owner(owner, true, branchId);
+      const previous = hydration.node
+        ? hydration.node.previousSibling
+        : target.lastChild;
+      try {
+        hydrationNext = hydration.hydrateInto(
+          project(nextValue),
+          target,
+          nextOwner,
+          hydration.node
+        );
+      } catch (error) {
+        nextOwner.dispose();
+        throw error;
+      }
+      target.insertBefore(end, hydrationNext);
+      const nextNodes: Node[] = [];
+      let current = previous ? previous.nextSibling : target.firstChild;
+      while (current && current !== end) {
+        nextNodes.push(current);
+        current = current.nextSibling;
+      }
+      branchOwner = nextOwner;
+      branchNodes = nextNodes;
+    } else mountBranch();
 
     const unsubscribe = source.subscribe((value, context) => {
       nextValue = value;
@@ -461,6 +549,8 @@ export function createDOMRenderer<C = unknown>(
       unsubscribe();
       clearBranch();
     });
+
+    return hydrationNext;
   };
 
   const renderVNode = (vnode: VNode, target: Node, owner: Owner) => {
@@ -603,13 +693,6 @@ export function createDOMRenderer<C = unknown>(
     );
   };
 
-  const unsupportedHydration = (kind: string): never => {
-    throw nexusDOMError(
-      "HYDRATION_UNSUPPORTED",
-      `Hydration for ${kind} regions is not implemented yet.`
-    );
-  };
-
   const hydrateTextNode = (
     value: string,
     target: Node,
@@ -713,7 +796,50 @@ export function createDOMRenderer<C = unknown>(
       });
       return next === undefined ? node : next;
     }
-    if (vnode.kind !== "element") return unsupportedHydration(vnode.kind);
+    if (vnode.kind === "dynamic") {
+      const next = renderRegion(
+        target,
+        owner,
+        vnode.source,
+        vnode.project,
+        vnode.key,
+        { node, hydrateInto }
+      );
+      return next === undefined ? node : next;
+    }
+    if (vnode.kind === "show") {
+      const condition = vnode.when.map(Boolean);
+      const next = renderRegion(
+        target,
+        owner,
+        condition,
+        (visible) => (visible ? vnode.children : vnode.fallback),
+        undefined,
+        { node, hydrateInto }
+      );
+      return next === undefined ? node : next;
+    }
+    if (vnode.kind === "keyed") {
+      const next = mountKeyedRegion({
+        target,
+        owner,
+        vnode,
+        scheduler,
+        renderInto,
+        hydration: { node, hydrateInto },
+      });
+      return next === undefined ? node : next;
+    }
+    if (vnode.kind === "error-boundary") {
+      const next = renderBoundary(
+        target,
+        owner,
+        vnode.children,
+        vnode.fallback,
+        { node, hydrateInto }
+      );
+      return next === undefined ? node : next;
+    }
     if (!(node instanceof Element) || node.localName !== vnode.type) {
       return mismatch(`<${vnode.type}>`, node);
     }
@@ -739,41 +865,45 @@ export function createDOMRenderer<C = unknown>(
     return node.nextSibling;
   };
 
+  const nextIdPrefix = () =>
+    options.idPrefix ?? `r${(nextRootId++).toString(36)}`;
+
+  const mountRoot = (
+    view: Renderable,
+    container: ParentNode,
+    idPrefix: string
+  ): MountedRoot => {
+    const owner = new Owner(undefined, true, idPrefix);
+    const document = container.ownerDocument ?? (container as Document);
+    const fragment = document.createDocumentFragment();
+    try {
+      renderInto(view, fragment, owner);
+    } catch (error) {
+      owner.dispose();
+      throw error;
+    }
+    const nodes = Array.from(fragment.childNodes);
+    container.appendChild(fragment);
+    owner.mount();
+
+    let disposed = false;
+    return {
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        owner.dispose();
+        for (const node of nodes) node.parentNode?.removeChild(node);
+      },
+    };
+  };
+
   return {
     mount(view, container): MountedRoot {
-      const owner = new Owner(
-        undefined,
-        true,
-        options.idPrefix ?? `r${(nextRootId++).toString(36)}`
-      );
-      const document = container.ownerDocument ?? (container as Document);
-      const fragment = document.createDocumentFragment();
-      try {
-        renderInto(view, fragment, owner);
-      } catch (error) {
-        owner.dispose();
-        throw error;
-      }
-      const nodes = Array.from(fragment.childNodes);
-      container.appendChild(fragment);
-      owner.mount();
-
-      let disposed = false;
-      return {
-        dispose() {
-          if (disposed) return;
-          disposed = true;
-          owner.dispose();
-          for (const node of nodes) node.parentNode?.removeChild(node);
-        },
-      };
+      return mountRoot(view, container, nextIdPrefix());
     },
     hydrate(view, container): MountedRoot {
-      const owner = new Owner(
-        undefined,
-        true,
-        options.idPrefix ?? `r${(nextRootId++).toString(36)}`
-      );
+      const idPrefix = nextIdPrefix();
+      const owner = new Owner(undefined, true, idPrefix);
       try {
         const remaining = hydrateInto(
           view,
@@ -784,6 +914,16 @@ export function createDOMRenderer<C = unknown>(
         if (remaining) mismatch("the end of the hydration root", remaining);
       } catch (error) {
         owner.dispose();
+        if (
+          error instanceof NexusDOMError &&
+          error.code === "HYDRATION_MISMATCH"
+        ) {
+          options.onError?.(error);
+          while (container.firstChild) {
+            container.removeChild(container.firstChild);
+          }
+          return mountRoot(view, container, idPrefix);
+        }
         throw error;
       }
       const nodes = Array.from(container.childNodes);

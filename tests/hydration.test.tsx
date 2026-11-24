@@ -4,10 +4,12 @@ import {
   bind,
   createApp,
   createNexus,
+  ErrorBoundary,
   hydrate,
   NexusDOMError,
   store,
   view,
+  when,
 } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
@@ -113,7 +115,193 @@ describe("nexus-dom hydration", () => {
     expect(host.childNodes).toHaveLength(0);
   });
 
-  it("disposes partial client behavior after a hydration mismatch", () => {
+  it("hydrates populated and empty dynamic regions", () => {
+    const state = createNexus({
+      state: { visible: true, deferred: false },
+    });
+    const $ = bind(state);
+    const App = () => (
+      <main>
+        {$.visible.render((visible) => visible ? <input value="kept" /> : null)}
+        {$.deferred.render((visible) => visible ? <strong>Ready</strong> : null)}
+        {when($.visible, <em>Shown</em>, <b>Hidden</b>)}
+        <span>After</span>
+      </main>
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<App />, { hydration: true });
+    const input = host.querySelector("input")!;
+    const after = host.querySelector("span")!;
+
+    const root = hydrate(<App />, host, { schedule: "manual" });
+
+    expect(host.querySelector("input")).toBe(input);
+    expect(host.querySelector("em")?.textContent).toBe("Shown");
+    expect(host.querySelector("span")).toBe(after);
+
+    state.set({ visible: false, deferred: true });
+    root.flush();
+
+    expect(host.querySelector("input")).toBe(null);
+    expect(host.querySelector("strong")?.textContent).toBe("Ready");
+    expect(host.querySelector("em")).toBe(null);
+    expect(host.querySelector("b")?.textContent).toBe("Hidden");
+    expect(host.querySelector("span")).toBe(after);
+  });
+
+  it("hydrates keyed multi-node rows and preserves them through reconciliation", () => {
+    const state = createNexus({
+      state: {
+        items: [
+          { id: 1, label: "One" },
+          { id: 2, label: "Two" },
+          { id: 3, label: "Three" },
+        ],
+      },
+    });
+    const $ = bind(state);
+    const App = () => (
+      <ul>
+        {$.items.each(
+          (item) => item.id,
+          ($item) => (
+            <>
+              <li data-item={$item.id.get()}>
+                <input value={$item.label} />
+                <span>{$item.label}</span>
+              </li>
+              <small data-tail={$item.id.get()}>tail</small>
+            </>
+          )
+        )}
+      </ul>
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<App />, { hydration: true });
+    const rows = new Map(
+      Array.from(host.querySelectorAll("li"), (row) => [row.dataset.item, row])
+    );
+    const input = rows.get("2")!.querySelector("input")!;
+
+    const root = hydrate(<App />, host, { schedule: "manual" });
+
+    expect(host.querySelector('[data-item="2"]')).toBe(rows.get("2"));
+
+    state.set({
+      items: [
+        { id: 3, label: "Third" },
+        { id: 2, label: "Second" },
+        { id: 1, label: "First" },
+      ],
+    });
+    root.flush();
+
+    expect(Array.from(host.querySelectorAll("li"), (row) => row.dataset.item)).toEqual([
+      "3",
+      "2",
+      "1",
+    ]);
+    expect(host.querySelector('[data-item="2"]')).toBe(rows.get("2"));
+    expect(rows.get("2")!.querySelector("input")).toBe(input);
+    expect(rows.get("2")!.textContent).toBe("Second");
+    expect(input.value).toBe("Second");
+    expect(Array.from(host.querySelectorAll("small"), (tail) => tail.dataset.tail)).toEqual([
+      "3",
+      "2",
+      "1",
+    ]);
+  });
+
+  it("creates a client anchor for an empty keyed row", () => {
+    const state = createNexus({
+      state: { items: [{ id: 1, visible: false }, { id: 2, visible: true }] },
+    });
+    const $ = bind(state);
+    const App = () => (
+      <ul>
+        {$.items.each(
+          (item) => item.id,
+          ($item) => $item.visible.get() ? <li>{$item.id}</li> : null
+        )}
+      </ul>
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<App />, { hydration: true });
+
+    const root = hydrate(<App />, host, { schedule: "manual" });
+    const list = host.querySelector("ul")!;
+
+    expect(list.childNodes).toHaveLength(3);
+    expect(list.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+
+    state.set({ items: [{ id: 2, visible: true }] });
+    root.flush();
+
+    expect(list.childNodes).toHaveLength(2);
+    expect(list.textContent).toBe("2");
+  });
+
+  it("hydrates an error fallback and supports client reset", () => {
+    const state = createNexus({ state: { broken: true } });
+    const $ = bind(state);
+    const Broken = () => {
+      if ($.broken.get()) throw new Error("broken");
+      return <p>Recovered</p>;
+    };
+    const App = () => (
+      <ErrorBoundary
+        fallback={(_error, reset) => (
+          <button onClick={() => {
+            state.set({ broken: false });
+            reset();
+          }}>
+            Retry
+          </button>
+        )}
+      >
+        <Broken />
+      </ErrorBoundary>
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<App />, { hydration: true });
+    const fallback = host.querySelector("button")!;
+
+    const root = hydrate(<App />, host, { schedule: "manual" });
+
+    expect(host.querySelector("button")).toBe(fallback);
+    fallback.click();
+
+    expect(host.querySelector("button")).toBe(null);
+    expect(host.querySelector("p")?.textContent).toBe("Recovered");
+    root.dispose();
+  });
+
+  it("does not turn a boundary hydration mismatch into a render fallback", () => {
+    const Broken = () => {
+      throw new Error("broken");
+    };
+    const App = () => (
+      <ErrorBoundary fallback={<button>Fallback</button>}>
+        <Broken />
+      </ErrorBoundary>
+    );
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(<App />);
+    host.querySelector("button")!.outerHTML = "<section>Mismatch</section>";
+    const mismatch = host.querySelector("section")!;
+    const errors = vi.fn();
+
+    hydrate(<App />, host, { onError: errors });
+
+    expect(errors).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "HYDRATION_MISMATCH" })
+    );
+    expect(host.querySelector("section")).toBe(null);
+    expect(mismatch.isConnected).toBe(false);
+    expect(host.querySelector("button")?.textContent).toBe("Fallback");
+  });
+
+  it("disposes partial behavior and replaces the root after a mismatch", () => {
     const click = vi.fn();
     const App = () => (
       <>
@@ -125,18 +313,19 @@ describe("nexus-dom hydration", () => {
     host.innerHTML = renderToString(<App />);
     host.querySelector("p")!.outerHTML = "<section>Unexpected</section>";
     const button = host.querySelector("button")!;
+    const errors = vi.fn();
 
-    let error: unknown;
-    try {
-      hydrate(<App />, host);
-    } catch (nextError) {
-      error = nextError;
-    }
+    hydrate(<App />, host, { onError: errors });
 
-    expect(error).toBeInstanceOf(NexusDOMError);
-    expect((error as NexusDOMError).code).toBe("HYDRATION_MISMATCH");
+    expect(errors).toHaveBeenCalledWith(expect.any(NexusDOMError));
+    expect((errors.mock.calls[0]![0] as NexusDOMError).code).toBe(
+      "HYDRATION_MISMATCH"
+    );
     button.click();
     expect(click).not.toHaveBeenCalled();
-    expect(host.querySelector("section")).not.toBe(null);
+    expect(host.querySelector("section")).toBe(null);
+    expect(host.querySelector("p")?.textContent).toBe("Expected");
+    host.querySelector("button")!.click();
+    expect(click).toHaveBeenCalledOnce();
   });
 });

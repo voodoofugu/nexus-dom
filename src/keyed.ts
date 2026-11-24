@@ -29,6 +29,15 @@ interface MountKeyedOptions<C> {
   vnode: KeyedVNode;
   scheduler: Scheduler<C>;
   renderInto(view: Renderable, target: Node, owner: Owner): void;
+  hydration?: {
+    node: Node | null;
+    hydrateInto(
+      view: Renderable,
+      target: Node,
+      owner: Owner,
+      node: Node | null
+    ): Node | null;
+  };
 }
 
 function firstNode(nodes: BlockNodes) {
@@ -160,10 +169,11 @@ export function mountKeyedRegion<C>({
   vnode,
   scheduler,
   renderInto,
+  hydration,
 }: MountKeyedOptions<C>) {
   const document = target.ownerDocument ?? (target as Document);
   const end = document.createTextNode("");
-  target.appendChild(end);
+  if (!hydration) target.appendChild(end);
 
   const token = {};
   const blocks = new Map<PropertyKey, KeyedBlock>();
@@ -171,8 +181,11 @@ export function mountKeyedRegion<C>({
   let active = true;
   let nextItems = vnode.source.get();
   let nextOperation: ListOperation | undefined;
-  let initialFragment: DocumentFragment | undefined =
-    document.createDocumentFragment();
+  let initialFragment: DocumentFragment | undefined = hydration
+    ? undefined
+    : document.createDocumentFragment();
+  let hydrationCursor = hydration?.node;
+  let initialHydration = hydration !== undefined;
   const regionId = owner.reserveIdSegment("l");
 
   const renderInitialNodes = (view: Renderable, blockOwner: Owner) => {
@@ -205,7 +218,29 @@ export function mountKeyedRegion<C>({
     };
     try {
       const view = vnode.project(block.live);
-      if (initialFragment) {
+      if (initialHydration) {
+        const previous = hydrationCursor
+          ? hydrationCursor.previousSibling
+          : target.lastChild;
+        hydrationCursor = hydration!.hydrateInto(
+          view,
+          target,
+          block.owner,
+          hydrationCursor ?? null
+        );
+        const nodes: Node[] = [];
+        let current = previous ? previous.nextSibling : target.firstChild;
+        while (current && current !== hydrationCursor) {
+          nodes.push(current);
+          current = current.nextSibling;
+        }
+        if (nodes.length === 0) {
+          const empty = document.createTextNode("");
+          target.insertBefore(empty, hydrationCursor ?? null);
+          nodes.push(empty);
+        }
+        block.nodes = nodes.length === 1 ? nodes[0]! : nodes;
+      } else if (initialFragment) {
         block.nodes = renderInitialNodes(view, block.owner);
       } else {
         const rendered = renderNodes(document, view, block.owner, renderInto);
@@ -262,6 +297,13 @@ export function mountKeyedRegion<C>({
     if (initialFragment) {
       end.parentNode?.insertBefore(initialFragment, end);
       initialFragment = undefined;
+      currentBlocks = nextBlocks;
+      return;
+    }
+
+    if (initialHydration) {
+      target.insertBefore(end, hydrationCursor ?? null);
+      initialHydration = false;
       currentBlocks = nextBlocks;
       return;
     }
@@ -502,4 +544,6 @@ export function mountKeyedRegion<C>({
     for (const block of blocks.values()) removeBlock(block);
     blocks.clear();
   });
+
+  return hydrationCursor;
 }

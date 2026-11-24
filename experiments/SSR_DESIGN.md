@@ -52,14 +52,15 @@ in one component returns the same value.
    components, store views, text, keyed/dynamic regions, boundaries and current
    `LiveValue` values. Each call gets independent lazy stores; setup is skipped
    because there is no server-safe opt-in contract yet.
-3. **Partially implemented:** opt-in server markers use
+3. **Implemented:** opt-in server markers use
    `<!--nxs:t-->...<!--nxs:/-->` around reactive text. They preserve empty text
-   and parser boundaries, then disappear after hydration. Dynamic and keyed
-   boundary markers remain to be defined.
-4. **Partially implemented:** hydration structurally reuses stable elements and
-   text and attaches events, refs, live subscriptions and tracked views. A
-   structured mismatch disposes partial client ownership and throws; local
-   replacement fallback remains to be implemented.
+   and parser boundaries, then disappear after hydration. Dynamic, keyed and
+   error-boundary regions recover their boundaries from expected traversal and
+   add only client-side text anchors, so they require no server comments.
+4. **Implemented at root scope:** hydration reuses the complete current VNode
+   model and attaches events, refs and subscriptions. A structured mismatch
+   disposes partial ownership, reports through `onError` and remounts the root
+   with the same prefix. Branch-local replacement remains an optimization.
 5. Verify identical HTML/IDs, keyed moves, multiple roots, nested boundaries,
    failed hydration cleanup and client-only store setup.
 
@@ -67,6 +68,6 @@ in one component returns the same value.
 
 - Whether server rendering may await store initialization; the first version
   should remain synchronous unless an explicit async contract is introduced.
-- Marker format for dynamic/keyed/boundary regions and its retained DOM cost.
 - Serialization/hydration of initial lazy-store state.
+- Whether branch-local mismatch recovery is worth the extra boundary state.
 - Development-only mismatch diagnostics versus production fallback behavior.

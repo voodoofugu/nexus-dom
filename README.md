@@ -207,17 +207,19 @@ resources such as sockets and DOM refs are not server-safe by default. Passing
 the same explicit `idPrefix` to `renderToString` and `app.hydrate` produces the
 same component IDs for the same initial tree.
 
-The current hydration slice reuses stable elements and text, then attaches live
-text/property subscriptions, events, refs and tracked store-view reconciliation.
-Reactive text uses short paired comments in the server response; hydration
-removes them after creating or adopting the concrete text node. A tag/text
-mismatch throws `NexusDOMError` with `HYDRATION_MISMATCH` and disposes any
-client behavior attached before the mismatch.
+Hydration reuses stable elements and text, then attaches live text/property
+subscriptions, events, refs and tracked store-view reconciliation. Dynamic and
+`when(...)` branches, keyed multi-node/empty rows and error-boundary fallbacks
+are accepted into their normal ownership model, so later updates use the same
+cleanup and reconciliation paths as a client mount.
 
-Dynamic, keyed and error-boundary regions are not hydrated yet and fail with
-`HYDRATION_UNSUPPORTED` instead of silently replacing server DOM. Initial store
-state transfer and automatic mismatch replacement also remain explicit follow-up
-work.
+Reactive text uses short paired comments in the server response; hydration
+removes them after creating or adopting the concrete text node. Other
+structural regions need no server markers because the expected VNode traversal
+provides their boundaries. A tag/text mismatch produces `HYDRATION_MISMATCH`,
+disposes partial client behavior, reports the error through `onError` and
+replaces the complete root using the same `idPrefix`. Initial store state
+transfer and branch-local mismatch replacement remain follow-up work.
 
 ### Legacy app-scoped tracked regions
 
@@ -430,7 +432,7 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 
 ## Deliberately missing
 
-- structural hydration, mismatch fallback and initial state transfer;
+- initial state transfer and branch-local mismatch fallback;
 - portals, suspense or transitions;
 - a style adapter;
 - full cold-navigation measurements including resource loading.
@@ -559,9 +561,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.01 KB gzip` for
-low-level core exports, `9.92 KB` for `createApp`, `10.30 KB` for the complete
-main entry, and `11.84 KB` for that entry plus the tree-shaken `nexus-state`
+included. The current local measurement is approximately `8.42 KB gzip` for
+low-level core exports, `10.32 KB` for `createApp`, `10.70 KB` for the complete
+main entry, and `12.23 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The server entry is `5.12 KB` externalized or `6.21 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.
