@@ -253,8 +253,8 @@ drilling or a provider hierarchy.
 
 ## First stable release
 
-`1.0.0` is prepared with an MIT license. The package remains private
-until publication. `component` and `componentScope` are the tracked component
+`1.0.0` is prepared with an MIT license and awaits publication to npm.
+`component` and `componentScope` are the tracked component
 API. Scoped `state` reads subscribe by namespace. Scoped `$.$select` provides
 field-level tracking for derived bindings. The README records the DOM
 property and hydration trust boundaries.

@@ -1,7 +1,6 @@
 {
   "name": "nexus-dom",
   "version": "1.0.0",
-  "private": true,
   "description": "JSX and fine-grained DOM rendering for nexus-state",
   "license": "MIT",
   "type": "module",
