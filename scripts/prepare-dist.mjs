@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const dist = path.join(process.cwd(), "dist");
@@ -12,5 +12,11 @@ await writeFile(
 );
 await writeFile(
   path.join(dist, "cjs", "package.json"),
+  `${JSON.stringify({ type: "commonjs" }, null, 2)}\n`
+);
+
+await cp(path.join(dist, "types"), path.join(dist, "types-cjs"), { recursive: true });
+await writeFile(
+  path.join(dist, "types-cjs", "package.json"),
   `${JSON.stringify({ type: "commonjs" }, null, 2)}\n`
 );

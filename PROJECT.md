@@ -262,8 +262,13 @@ drilling or a provider hierarchy.
 2. Settle the legacy `app.view` contract and supported exports. Publish API
    examples that agree with emitted declarations, following `nexus-state`
    and `morphing-scroll`.
-3. Add CI and a license, run the browser smoke matrix, and install the release
-   tarball in a separate consumer project.
+3. Choose a license, document the security contract for JSX props and
+   hydration, and verify the final release tarball. CI already runs package
+   consumer checks and the browser SSR matrix.
+
+The package smoke installs the tarball in an empty directory, then compiles
+and runs ESM and CommonJS consumers. Separate declaration trees let
+TypeScript resolve each module format independently.
 
 The issue-triage browser smoke covers separate issue, filter and preference
 stores. Keep issue data and selection in one store because a single action

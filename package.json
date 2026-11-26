@@ -13,24 +13,44 @@
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./jsx-runtime": {
-      "types": "./dist/types/jsx-runtime.d.ts",
-      "import": "./dist/esm/jsx-runtime.js",
-      "require": "./dist/cjs/jsx-runtime.js"
+      "import": {
+        "types": "./dist/types/jsx-runtime.d.ts",
+        "default": "./dist/esm/jsx-runtime.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/jsx-runtime.d.ts",
+        "default": "./dist/cjs/jsx-runtime.js"
+      }
     },
     "./jsx-dev-runtime": {
-      "types": "./dist/types/jsx-dev-runtime.d.ts",
-      "import": "./dist/esm/jsx-dev-runtime.js",
-      "require": "./dist/cjs/jsx-dev-runtime.js"
+      "import": {
+        "types": "./dist/types/jsx-dev-runtime.d.ts",
+        "default": "./dist/esm/jsx-dev-runtime.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/jsx-dev-runtime.d.ts",
+        "default": "./dist/cjs/jsx-dev-runtime.js"
+      }
     },
     "./server": {
-      "types": "./dist/types/server.d.ts",
-      "import": "./dist/esm/server.js",
-      "require": "./dist/cjs/server.js"
+      "import": {
+        "types": "./dist/types/server.d.ts",
+        "default": "./dist/esm/server.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/server.d.ts",
+        "default": "./dist/cjs/server.js"
+      }
     }
   },
   "files": [
@@ -44,6 +64,7 @@
     "build": "npm run typecheck && rollup -c rollup.config.mjs && npm run build:types && node scripts/prepare-dist.mjs",
     "build:dev": "npm run typecheck && NEXUS_DOM_BUILD=development rollup -c rollup.config.mjs && npm run build:types && node scripts/prepare-dist.mjs",
     "smoke:dist": "node scripts/smoke-dist.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs",
     "smoke:dogfood": "npm run example:build && node scripts/smoke-dogfood.mjs",
     "smoke:dogfood:ssr": "node scripts/smoke-dogfood.mjs --ssr",
     "typecheck": "tsc --noEmit",
