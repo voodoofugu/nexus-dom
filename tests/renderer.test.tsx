@@ -371,44 +371,41 @@ describe("nexus-dom rendering model", () => {
     expect(app.nexus.get("count")).toBe(1);
   });
 
-  it("renders tracked views with plain state and the complete app scope", () => {
-    const app = createApp({
-      state: {
-        useCount: true,
-        count: 1,
-        label: "Ready",
-        unrelated: 0,
-      },
+  it("tracks ordinary component reads and updates its subscriptions", () => {
+    const initial = { useCount: true, count: 1, label: "Ready", unrelated: 0 };
+    let update = (_value: Partial<typeof initial>) => {};
+    const model = store({
+      state: initial,
       refs: { marker: "runtime" },
-      acts: (get, set) => ({
+      acts: ({ get, set }) => ({
         increment() {
           set({ count: get("count") + 1 });
         },
       }),
+      setup({ nexus }) {
+        update = (value) => nexus.set(value);
+      },
     });
+    const app = createApp();
     const host = document.createElement("div");
     let runs = 0;
-    const root = app.render(
-      app.view(({ state, $, acts, refs }) => {
-        runs++;
-        expect($).toBe(app.$);
-        expect(acts).toBe(app.acts);
-        expect(refs).toBe(app.refs);
-        return (
-          <button onClick={acts.increment} data-marker={refs.marker.current}>
-            {state.useCount ? state.count : state.label}
-          </button>
-        );
-      }),
-      host,
-      { schedule: "manual" }
-    );
+    const scopes = vi.fn();
+    const Panel = component(({ state, $, acts, refs }) => {
+      runs++;
+      scopes($, acts, refs);
+      return (
+        <button onClick={acts.increment} data-marker={refs.marker.current}>
+          {state.useCount ? state.count : state.label}
+        </button>
+      );
+    }, [model]);
+    const root = app.render(<Panel />, host, { schedule: "manual" });
 
     expect(runs).toBe(1);
     expect(host.textContent).toBe("1");
     expect(host.querySelector("button")?.dataset.marker).toBe("runtime");
 
-    app.nexus.set({ unrelated: 1 });
+    update({ unrelated: 1 });
     root.flush();
     expect(runs).toBe(1);
 
@@ -416,38 +413,47 @@ describe("nexus-dom rendering model", () => {
     root.flush();
     expect(runs).toBe(2);
     expect(host.textContent).toBe("2");
+    for (const [index, value] of scopes.mock.calls[0]!.entries()) {
+      expect(scopes.mock.calls[1]![index]).toBe(value);
+    }
 
-    app.nexus.set({ useCount: false });
-    app.nexus.set({ label: "Latest" });
+    update({ useCount: false });
+    update({ label: "Latest" });
     root.flush();
     expect(runs).toBe(3);
     expect(host.textContent).toBe("Latest");
 
-    app.nexus.set({ count: 3 });
+    update({ count: 3 });
     root.flush();
     expect(runs).toBe(3);
 
-    app.nexus.set({ label: "Updated" });
+    update({ label: "Updated" });
     root.flush();
     expect(runs).toBe(4);
     expect(host.textContent).toBe("Updated");
   });
 
   it("routes tracked view update errors through the surrounding boundary", () => {
-    const app = createApp({ state: { broken: false } });
+    let fail = () => {};
+    const model = store({
+      state: { broken: false },
+      setup({ nexus }) { fail = () => nexus.set({ broken: true }); },
+    });
+    const Panel = component(({ state }) => {
+      if (state.broken) throw new Error("broken view");
+      return <strong>Working</strong>;
+    }, [model]);
+    const app = createApp();
     const host = document.createElement("div");
     const root = app.render(
       <ErrorBoundary fallback={<p role="alert">View failed</p>}>
-        {app.view(({ state }) => {
-          if (state.broken) throw new Error("broken view");
-          return <strong>Working</strong>;
-        })}
+        <Panel />
       </ErrorBoundary>,
       host,
       { schedule: "manual" }
     );
 
-    app.nexus.set({ broken: true });
+    fail();
     root.flush();
 
     expect(host.querySelector('[role="alert"]')?.textContent).toBe(
@@ -457,49 +463,54 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("locally reconciles stable view elements, events and refs", () => {
-    const app = createApp({
+    const initialRefs = {
+      button: null as HTMLButtonElement | null,
+      input: null as HTMLInputElement | null,
+    };
+    let readRefs = () => initialRefs;
+    let activate = () => {};
+    const model = store({
       state: { selected: 1, active: false },
-      refs: {
-        button: null as HTMLButtonElement | null,
-        input: null as HTMLInputElement | null,
+      refs: initialRefs,
+      setup({ nexus, refs }) {
+        readRefs = () => ({ button: refs.button.current, input: refs.input.current });
+        activate = () => nexus.set({ selected: 2, active: true });
       },
     });
+    const app = createApp();
     const host = document.createElement("div");
     document.body.appendChild(host);
     const selections: number[] = [];
-    const root = app.render(
-      app.view(({ state, refs }) => (
-        <section class={state.active ? "active" : "idle"}>
-          <input ref={refs.input} value={`Value ${state.selected}`} />
-          <button
-            data-selected={state.selected}
-            ref={(node) => (refs.button.current = node as HTMLButtonElement | null)}
-            onClick={() => selections.push(state.selected)}
-          >
-            {state.selected}
-          </button>
-        </section>
-      )),
-      host,
-      { schedule: "manual" }
-    );
+    const Panel = component(({ state, refs }) => (
+      <section class={state.active ? "active" : "idle"}>
+        <input ref={refs.input} value={`Value ${state.selected}`} />
+        <button
+          data-selected={state.selected}
+          ref={(node) => (refs.button.current = node as HTMLButtonElement | null)}
+          onClick={() => selections.push(state.selected)}
+        >
+          {state.selected}
+        </button>
+      </section>
+    ), [model]);
+    const root = app.render(<Panel />, host, { schedule: "manual" });
     const section = host.querySelector("section");
     const input = host.querySelector("input");
     const first = host.querySelector("button");
 
-    expect(app.refs.button.current).toBe(first);
-    expect(app.refs.input.current).toBe(input);
+    expect(readRefs().button).toBe(first);
+    expect(readRefs().input).toBe(input);
     input?.focus();
 
-    app.nexus.set({ selected: 2, active: true });
+    activate();
     root.flush();
 
     const second = host.querySelector("button");
     expect(host.querySelector("section")).toBe(section);
     expect(host.querySelector("input")).toBe(input);
     expect(second).toBe(first);
-    expect(app.refs.button.current).toBe(second);
-    expect(app.refs.input.current).toBe(input);
+    expect(readRefs().button).toBe(second);
+    expect(readRefs().input).toBe(input);
     expect(document.activeElement).toBe(input);
     expect(input?.value).toBe("Value 2");
     expect(section?.className).toBe("active");
@@ -509,36 +520,36 @@ describe("nexus-dom rendering model", () => {
     second?.click();
     expect(selections).toEqual([2]);
     root.dispose();
-    expect(app.refs.button.current).toBeNull();
-    expect(app.refs.input.current).toBeNull();
+    expect(readRefs()).toEqual(initialRefs);
     host.remove();
   });
 
   it("replaces a tracked view when its local shape or key changes", () => {
-    const app = createApp({
-      state: { expanded: false, version: 1 },
+    const initial = { expanded: false, version: 1 };
+    let update = (_value: Partial<typeof initial>) => {};
+    const model = store({
+      state: initial,
+      setup({ nexus }) { update = (value) => nexus.set(value); },
     });
+    const app = createApp();
     const host = document.createElement("div");
-    const root = app.render(
-      app.view(({ state }) => (
-        <section key={state.version}>
-          <strong>Stable root</strong>
-          {state.expanded ? <span>Extra</span> : null}
-        </section>
-      )),
-      host,
-      { schedule: "manual" }
-    );
+    const Panel = component(({ state }) => (
+      <section key={state.version}>
+        <strong>Stable root</strong>
+        {state.expanded ? <span>Extra</span> : null}
+      </section>
+    ), [model]);
+    const root = app.render(<Panel />, host, { schedule: "manual" });
     const collapsed = host.querySelector("section");
 
-    app.nexus.set({ expanded: true });
+    update({ expanded: true });
     root.flush();
     const expanded = host.querySelector("section");
 
     expect(expanded).not.toBe(collapsed);
     expect(expanded?.textContent).toBe("Stable rootExtra");
 
-    app.nexus.set({ version: 2 });
+    update({ version: 2 });
     root.flush();
 
     expect(host.querySelector("section")).not.toBe(expanded);

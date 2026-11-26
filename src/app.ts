@@ -21,7 +21,6 @@ import type {
   Renderable,
   RendererOptions,
   RenderRoot,
-  TrackedViewVNode,
 } from "./types.js";
 
 type RecordAny = Record<string, any>;
@@ -57,19 +56,6 @@ export interface AppSetupContext<
   onCleanup(cleanup: () => void): () => void;
 }
 
-export interface AppViewContext<
-  S extends RecordAny,
-  A extends RecordAny,
-  R extends RecordAny,
-> {
-  /** Plain current values. Top-level reads determine this view's subscriptions. */
-  readonly state: Readonly<S>;
-  /** Fine-grained bindings for hot values that should not rerun this view. */
-  readonly $: BoundState<S, UpdateContext>;
-  readonly refs: AppRefs<R>;
-  readonly acts: A;
-}
-
 export interface NexusDOMApp<
   S extends RecordAny,
   A extends RecordAny,
@@ -79,10 +65,6 @@ export interface NexusDOMApp<
   readonly $: BoundState<S, UpdateContext>;
   readonly refs: AppRefs<R>;
   readonly acts: A;
-  /** Creates an owned reactive region using ordinary expressions over app state. */
-  view(
-    project: (context: AppViewContext<S, A, R>) => Renderable
-  ): TrackedViewVNode;
   list<K extends ArrayKey<S>>(key: K): ListController<ArrayItem<S[K]>>;
   onCleanup(cleanup: () => void): () => void;
   dispose(): void;
@@ -172,19 +154,6 @@ export function createApp<
     $: binding,
     refs,
     acts: typedNexus.acts,
-    view(project) {
-      return {
-        kind: "tracked-view",
-        source: typedNexus as unknown as TrackedViewVNode["source"],
-        project: (state) =>
-          project({
-            state: state as S,
-            $: binding,
-            refs,
-            acts: typedNexus.acts,
-          }),
-      };
-    },
     list: helpers.list,
     onCleanup(cleanup) {
       if (disposed) {

@@ -12,6 +12,7 @@
 - [Security](#security)
 - [Local error recovery](#local-error-recovery)
 - [Development](#development)
+- [License](#license)
 
 ## About
 
@@ -23,7 +24,7 @@ Keyed lists preserve row identity across reorders.
 ## Quick start
 
 Run the playground from a checkout with `npm install` and `npm run dev`.
-The package is currently in development. Set `jsx` to `react-jsx` and
+Set `jsx` to `react-jsx` and
 `jsxImportSource` to `nexus-dom` in your TypeScript configuration.
 
 ```tsx
@@ -44,6 +45,10 @@ Call `app.dispose()` when the application is removed to dispose its DOM roots
 and store resources.
 
 ## API
+
+Use `nexus-dom` for the browser API, stores and components. JSX tooling uses
+`nexus-dom/jsx-runtime` and `nexus-dom/jsx-dev-runtime`. Import
+`renderToString` from `nexus-dom/server`. Each entry supports ESM and CommonJS.
 
 ### App roots and low-level bindings
 
@@ -393,15 +398,14 @@ that state as public to the recipient and keep credentials and server-only
 data outside those stores. Authorize actions on your server and treat state
 received from the client as untrusted.
 
-### Legacy app-scoped tracked regions
+### Tracked component updates
 
-`app.view(...)` creates an owned reactive region and passes the complete app
-scope into its callback. Reads from `state` are plain values and determine the
-region's top-level Nexus subscriptions dynamically:
+Use `component` to render a branch from ordinary state reads. In a flat
+component scope, the renderer tracks the top-level keys the callback reads.
 
 ```tsx
-function Inspector() {
-  return app.view(({ state, $, acts, refs }) => {
+const Inspector = component(
+  ({ state, acts, refs }) => {
     const issue = state.issues.find(
       (candidate) => candidate.id === state.selectedIssueId
     );
@@ -414,8 +418,9 @@ function Inspector() {
     ) : (
       <p>Select an issue</p>
     );
-  });
-}
+  },
+  [issuesStore]
+);
 ```
 
 The callback reruns through the renderer scheduler only when a state key it
@@ -433,7 +438,7 @@ branch replacement. This is deliberately positional local reconciliation, not
 a general Virtual DOM or keyed/component diff. Update errors still follow owner
 cleanup and local `ErrorBoundary` propagation.
 
-Refs can use either callback form or the app's object cells directly:
+Refs can use a callback or a store's object cells.
 
 ```tsx
 <input ref={refs.search} />
@@ -593,7 +598,7 @@ thrown later by event handlers or arbitrary asynchronous callbacks.
 - LIS-based general keyed reordering and exact context-driven list operations;
 - integrated app root and resource disposal through `app.dispose()`.
 - local owned error boundaries with fallback propagation and manual reset;
-- tracked `app.view(...)` regions with plain state expressions, bounded local
+- tracked components with plain state expressions, bounded local
   reconciliation and injected
   bindings, actions and refs;
 - SVG namespace support, including HTML descendants of `foreignObject`;
@@ -747,8 +752,12 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.81 KB gzip` for
-low-level core exports, `12.06 KB` for `createApp`, `12.63 KB` for the complete
-main entry, and `14.20 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `12.04 KB` for `createApp`, `12.61 KB` for the complete
+main entry, and `14.18 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The server entry is `7.08 KB` externalized or `8.15 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.
+
+## License
+
+[MIT](./LICENSE)

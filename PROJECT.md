@@ -34,11 +34,10 @@ destructured directly as the render callback's second argument. The previous
 `createApp({ state, refs, acts })` facade remains available while the new model
 is validated and still owns the convenient `app.render(...)` entry point.
 
-`app.view(({ state, $, acts, refs }) => JSX)` is the first hybrid-rendering
-experiment. It tracks ordinary top-level state reads, reruns only the owned
-region through the renderer scheduler, and injects the complete application
-scope so the component tree does not have to transport state, actions or
-runtime refs. Stable local trees of plain elements, text and unchanged live
+Tracked components rerun their owned region through the renderer scheduler.
+`component` takes explicit dependencies, and `componentScope` shares a map
+of store namespaces across components. Stable local trees of plain elements,
+text and unchanged live
 bindings are reconciled positionally in place; text, properties, events and
 refs update without losing element identity or focus. Structural changes and
 component, keyed or dynamic boundaries still use atomic owned replacement.
@@ -114,7 +113,7 @@ memoization, but they do not reduce the physical work of a full reverse.
 8. Can keyed reordering preserve identity without making worst-case full-list
    permutations disproportionately expensive?
 9. Is the current stable plain-DOM reconciliation boundary sufficient for
-   useful `app.view(...)` regions without growing into a general VDOM?
+   useful tracked components without growing into a general VDOM?
 10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
     commands such as focus, rather than relying on scheduler timing?
 11. Can one deterministic owner-path contract support browser identity,
@@ -158,7 +157,7 @@ It is especially useful when focus, selection, element identity or explicit
 update provenance matters more than recreating component trees. `createApp`
 also gives existing Nexus users one integrated state, action, ref and render
 lifecycle instead of another reactive runtime to coordinate.
-`app.view(...)` makes that scope available at the rendering boundary, so plain
+`componentScope(...)` makes shared stores available at the rendering boundary, so plain
 tracked state, actions, fine-grained bindings and runtime refs do not need prop
 drilling or a provider hierarchy.
 
@@ -196,7 +195,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `14.20 KB gzip`; actual application cost still depends on imported APIs
+  about `14.18 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -254,17 +253,11 @@ drilling or a provider hierarchy.
 
 ## First stable release
 
-`1.0.0` is a possible first public version once the supported API is clear.
-
-1. Decide whether ordinary component reads need field-level tracking inside a
-   namespace. Scoped live selectors already track fields and pass the
-   selection benchmark and browser smoke checks.
-2. Settle the legacy `app.view` contract and supported exports. Publish API
-   examples that agree with emitted declarations, following `nexus-state`
-   and `morphing-scroll`.
-3. Choose a license and verify the final release tarball. The README describes
-   the DOM property and hydration trust boundaries. CI runs package
-   consumer checks and the browser SSR matrix.
+`1.0.0` is prepared with an MIT license. The package remains private
+until publication. `component` and `componentScope` are the tracked component
+API. Scoped `state` reads subscribe by namespace. Scoped `$.$select` provides
+field-level tracking for derived bindings. The README records the DOM
+property and hydration trust boundaries.
 
 The package smoke installs the tarball in an empty directory, then compiles
 and runs ESM and CommonJS consumers. Separate declaration trees let
@@ -318,8 +311,8 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `8.81 KB
-gzip` for core, `12.06 KB` for `createApp`, and `12.63 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `14.20 KB gzip` when the
+gzip` for core, `12.04 KB` for `createApp`, and `12.61 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `14.18 KB gzip` when the
 tree-shaken dependency is bundled. The server entry is `7.08 KB` externalized
 or `8.15 KB` with `nexus-state`. Track these separately from the playground
 bundle.

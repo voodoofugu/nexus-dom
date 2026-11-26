@@ -25,7 +25,6 @@ export type {
   AppActsCreate,
   AppRefs,
   AppSetupContext,
-  AppViewContext,
   NexusDOMApp,
   RefValue,
 } from "./app.js";

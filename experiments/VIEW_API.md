@@ -80,4 +80,3 @@ directly rather than `props.issueId`. Required and optional attributes and
 ## Still unresolved
 
 - Field-level tracking inside component scopes.
-- Whether `app.view` still earns a public entry before the first stable release.
