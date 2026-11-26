@@ -1,5 +1,7 @@
 # nexus-dom
 
+![nexus-dom banner](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/01-banner-logo.svg)
+
 ## Table of contents
 
 - [About](#about)
@@ -7,6 +9,7 @@
 - [API](#api)
 - [Store namespaces](#store-namespaces)
 - [Server rendering](#server-rendering)
+- [Security](#security)
 - [Local error recovery](#local-error-recovery)
 - [Development](#development)
 
@@ -364,6 +367,19 @@ replaces the complete root using the same `idPrefix`. Initial store state
 transfer is automatic for lazy stores; branch-local mismatch replacement
 remains follow-up work.
 
+### Security
+
+Use application-owned JSX templates and pass untrusted text as children.
+The browser renderer writes text nodes, and server rendering escapes
+text and attribute values. Validate untrusted URLs before binding them
+to navigation or resource properties. Keep raw HTML and arbitrary DOM
+property maps from untrusted sources out of JSX props.
+
+Hydration sends lazy-store snapshots to the browser in the HTML. Treat
+that state as public to the recipient and keep credentials and server-only
+data outside those stores. Authorize actions on your server and treat state
+received from the client as untrusted.
+
 ### Legacy app-scoped tracked regions
 
 `app.view(...)` creates an owned reactive region and passes the complete app
@@ -588,6 +604,7 @@ These should only be added after the basic binding model proves understandable a
 npm install
 npm run dev
 npm run check
+npm run smoke:package
 npm run smoke:dogfood
 npm run smoke:dogfood:ssr
 npm run benchmark

@@ -89,6 +89,8 @@ export interface StoreDefinition<
 }
 
 /**
+ * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ *
  * Declares a lazy store shared by the views of one application.
  * @param options initial state, actions, refs and store lifecycle.
  * @param dependencies stores available to this store's actions and lifecycle.
@@ -226,6 +228,8 @@ type ViewComponent<Input extends object = EmptyRecord> = (
 ) => VNode | null;
 
 /**
+ * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ *
  * Defines a JSX component that tracks reads from its declared stores.
  * @param render reads tracked state and returns JSX for the current props.
  * @param dependencies stores available in the render scope. Object keys become namespaces.
@@ -297,6 +301,8 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
 }
 
 /**
+ * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ *
  * Creates JSX components that resolve store namespaces on first access.
  * @param stores shared store descriptors keyed by namespace.
  * @example
