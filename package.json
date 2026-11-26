@@ -1,8 +1,9 @@
 {
   "name": "nexus-dom",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Experimental DOM rendering models for nexus-state",
+  "description": "JSX and fine-grained DOM rendering for nexus-state",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -55,7 +56,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "dev": "vite --config example/vite.config.ts",

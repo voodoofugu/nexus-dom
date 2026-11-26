@@ -7,13 +7,18 @@ import { fileURLToPath } from "node:url";
 const directory = await mkdtemp(join(tmpdir(), "nexus-dom-package-"));
 const tsc = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
 const source = `
-import { component, store } from "nexus-dom";
+import { component, componentScope, createApp, store } from "nexus-dom";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { jsxDEV } from "nexus-dom/jsx-dev-runtime";
 import { renderToString } from "nexus-dom/server";
 
 const message = store({ state: { text: "ready" } });
-const Title = component(({ state }) => jsx("p", { children: state.message.text }), { message });
+const view = componentScope({ message });
+const Text = component((_, { text }: { text: string }) => jsx("p", { children: text }));
+const Title = view(({ state }) => jsx(Text, { text: state.message.text }));
+const app = createApp();
+if ("view" in app) throw new Error("Unexpected legacy app.view method");
+app.dispose();
 const html = renderToString(jsxDEV(Title, {}));
 if (html !== "<p>ready</p>") throw new Error("Unexpected SSR output: " + html);
 `;
@@ -22,7 +27,12 @@ try {
   const packed = execFileSync("npm", ["pack", "--ignore-scripts", "--json", "--pack-destination", directory], {
     encoding: "utf8",
   });
-  const [{ filename }] = JSON.parse(packed);
+  const [{ filename, files }] = JSON.parse(packed);
+  for (const required of ["LICENSE", "CHANGELOG.md"]) {
+    if (!files.some(({ path }) => path === required)) {
+      throw new Error(`Missing ${required} in the package tarball`);
+    }
+  }
   execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", join(directory, filename)], {
     cwd: directory,
     stdio: "inherit",
