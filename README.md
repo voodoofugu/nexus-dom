@@ -289,9 +289,11 @@ const visibleIssues = $.$select(({ filters, issues }) =>
 );
 ```
 
-The selector subscribes to the stores it reads on each run. If a condition
-stops reading a store, the selector drops that subscription. `$select` is
-reserved as a store name within a component scope.
+The selector tracks the fields it reads inside each store. Here, changing
+`issues.selectedIssueId` leaves the filter untouched. Reading a whole
+namespace or enumerating its fields subscribes to the store as a whole.
+Conditional reads update subscriptions on each run. `$select` is reserved
+as a store name within a component scope.
 
 ### Server rendering
 
@@ -696,8 +698,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.47 KB gzip` for
-low-level core exports, `11.55 KB` for `createApp`, `12.07 KB` for the complete
-main entry, and `13.63 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.56 KB` externalized or `7.64 KB` with
+low-level core exports, `11.73 KB` for `createApp`, `12.26 KB` for the complete
+main entry, and `13.82 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `6.76 KB` externalized or `7.83 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

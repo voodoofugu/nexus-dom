@@ -88,17 +88,19 @@ it("hydrates snapshots in namespace access order", () => {
 it("tracks conditional namespaces in a cross-store live selector", () => {
   const openDetails = vi.fn();
   const filters = store({ state: { show: false } });
-  const details = store({ state: { title: "Details" }, mount: openDetails });
+  const details = store({ state: { title: "Details", selected: false }, mount: openDetails });
   const workspaceComponent = componentScope({ filters, details });
   const project = vi.fn();
   const commits = vi.fn();
   let rename = (_title: string) => {};
+  let select = () => {};
   const Panel = workspaceComponent(({ $ }) => {
     const title = $.$select((state) => {
       project();
       return state.filters.show ? state.details.title : "Hidden";
     });
     rename = (title) => $.details.title.set(title, "rename");
+    select = () => $.details.selected.set(true);
     return <><p>{title}</p><button onClick={() => $.filters.show.set((show) => !show)}>Toggle</button></>;
   });
   const host = document.createElement("div");
@@ -110,6 +112,10 @@ it("tracks conditional namespaces in a cross-store live selector", () => {
   root.flush();
   expect(host.querySelector("p")?.textContent).toBe("Details");
   expect(openDetails).toHaveBeenCalledOnce();
+  project.mockClear();
+  select();
+  root.flush();
+  expect(project).not.toHaveBeenCalled();
   rename("Edited");
   root.flush();
   expect(host.querySelector("p")?.textContent).toBe("Edited");
@@ -128,6 +134,32 @@ it("tracks conditional namespaces in a cross-store live selector", () => {
   project.mockClear();
   rename("After disposal");
   expect(project).not.toHaveBeenCalled();
+});
+
+it("keeps whole-store subscriptions for bare and enumerated selector reads", () => {
+  const model = store({ state: { count: 0 } });
+  const scope = componentScope({ model });
+  const enumerated = vi.fn();
+  const Panel = scope(({ $ }) => (
+    <>
+      <p>{$.$select(({ model }) => model).map(({ count }) => count)}</p>
+      <output>{$.$select(({ model }) => {
+        enumerated();
+        return Object.entries(model).map(([key, value]) => `${key}=${value}`).join();
+      })}</output>
+      <button onClick={() => $.model.count.set(1)}>Update</button>
+    </>
+  ));
+  const host = document.createElement("div");
+  const app = createApp();
+  const root = app.render(<Panel />, host, { schedule: "manual" });
+  enumerated.mockClear();
+  host.querySelector("button")!.click();
+  root.flush();
+  expect(host.querySelector("p")?.textContent).toBe("1");
+  expect(host.querySelector("output")?.textContent).toBe("count=1");
+  expect(enumerated).toHaveBeenCalledOnce();
+  app.dispose();
 });
 
 it("rejects a local namespace that conflicts with a shared one", () => {

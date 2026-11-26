@@ -31,7 +31,7 @@ try {
   if (process.argv.includes("--selector-selection")) {
     const results = [];
     for (const size of [1_000, 10_000]) {
-      for (const strategy of ["namespace", "field"]) {
+      for (const strategy of ["namespace", "scope-field", "field"]) {
         const result = await page.evaluate(
           ({ strategy, size }) => window.runSelectorSelectionCase(strategy, size),
           { strategy, size }

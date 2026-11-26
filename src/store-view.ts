@@ -661,13 +661,12 @@ export function createStoreViewRegistry(
           return Reflect.getOwnPropertyDescriptor(_target, name);
         },
       });
-    const snapshot = (used?: Set<string>) => {
+    const snapshot = (readState: (name: string) => RecordAny = (name) => read(name).source.get()) => {
       let values: Map<string, RecordAny> | undefined;
       return namespace((name) => {
-        used?.add(name);
         let value = values?.get(name);
         if (!value) {
-          value = read(name).source.get();
+          value = readState(name);
           (values ??= new Map()).set(name, value);
         }
         return value;
@@ -675,10 +674,14 @@ export function createStoreViewRegistry(
     };
     const track = <R>(select: (state: RecordAny) => R) => {
       const used = new Set<string>();
-      return { value: select(snapshot(used)), dependencies: [...used] };
+      const value = select(snapshot((name) => {
+        used.add(name);
+        return read(name).source.get();
+      }));
+      return { value, dependencies: [...used] };
     };
     const source: NexusSource<RecordAny, UpdateContext> = {
-      get: snapshot,
+      get: () => snapshot(),
       subscribe(listener, names) {
         const stop = names.map((name) =>
           read(name).source.subscribe((_state, context) => listener(snapshot(), context), ["*"])
@@ -686,10 +689,61 @@ export function createStoreViewRegistry(
         return () => stop.forEach((unsubscribe) => unsubscribe());
       },
     };
+    const trackFields = <R>(select: (state: RecordAny) => R) => {
+      const stores = new Map<string, Set<string> | null>();
+      const value = select(snapshot((name) => {
+        const keys = new Set<string>();
+        stores.set(name, keys);
+        const record = (key: PropertyKey) => {
+          if (typeof key === "string") keys.add(key);
+          else stores.set(name, null);
+        };
+        return new Proxy(read(name).source.get(), {
+          get(target, key, receiver) {
+            record(key);
+            return Reflect.get(target, key, receiver);
+          },
+          has(target, key) {
+            record(key);
+            return Reflect.has(target, key);
+          },
+          getOwnPropertyDescriptor(target, key) {
+            record(key);
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          },
+          ownKeys(target) {
+            stores.set(name, null);
+            return Reflect.ownKeys(target);
+          },
+        });
+      }));
+      const dependencies: string[] = [];
+      for (const [name, keys] of stores) {
+        if (!keys?.size) dependencies.push(JSON.stringify([name, null]));
+        else for (const key of keys) dependencies.push(JSON.stringify([name, key]));
+      }
+      return { value, dependencies };
+    };
+    const fieldSource: NexusSource<RecordAny, UpdateContext> = {
+      get: source.get,
+      subscribe(listener, dependencies) {
+        const byStore = new Map<string, string[]>();
+        for (const dependency of dependencies) {
+          const [name, key] = JSON.parse(dependency) as [string, string | null];
+          let keys = byStore.get(name);
+          if (!keys) byStore.set(name, (keys = []));
+          keys.push(key ?? "*");
+        }
+        const stop = Array.from(byStore, ([name, keys]) =>
+          read(name).source.subscribe((_state, context) => listener(snapshot(), context), keys)
+        );
+        return () => stop.forEach((unsubscribe) => unsubscribe());
+      },
+    };
     const $ = namespace((name) => read(name).$, {
       __proto__: null,
       $select: <R>(select: (state: RecordAny) => R, isEqual?: (left: R, right: R) => boolean) =>
-        createTrackedSelector(source, select, () => track(select), isEqual),
+        createTrackedSelector(fieldSource, select, () => trackFields(select), isEqual),
     });
     const acts = namespace((name) => read(name).acts);
     const refs = namespace((name) => read(name).refs);

@@ -76,7 +76,7 @@ async function runDensityCase(
   return median(samples);
 }
 
-function runSelectorSelectionCase(strategy: "namespace" | "field", rows: number) {
+function runSelectorSelectionCase(strategy: "namespace" | "scope-field" | "field", rows: number) {
   let selectNext = () => {};
   const issues = store({
     state: {
@@ -98,7 +98,10 @@ function runSelectorSelectionCase(strategy: "namespace" | "field", rows: number)
   const Scoped = scope(({ $ }) => (
     <>
       <output>{$.issues.selectedIssueId}</output>
-      <ul>{$.$select(({ issues, filters }) => filter(issues.items, filters.query))
+      <ul>{$.$select(({ issues, filters }) => {
+        if (strategy === "namespace") Reflect.ownKeys(issues);
+        return filter(issues.items, filters.query);
+      })
         .each((item) => item.id, ($item) => <li>{$item.title}</li>)}</ul>
     </>
   ));
@@ -112,7 +115,7 @@ function runSelectorSelectionCase(strategy: "namespace" | "field", rows: number)
   const app = createApp();
   const target = document.querySelector("#app")!;
   try {
-    const root = app.render(strategy === "namespace" ? <Scoped /> : <Flat />, target, { schedule: "manual" });
+    const root = app.render(strategy === "field" ? <Flat /> : <Scoped />, target, { schedule: "manual" });
     const first = target.querySelector("li");
     const update = () => {
       selectNext();
