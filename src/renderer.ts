@@ -1,4 +1,5 @@
 import { isLiveValue } from "./live.js";
+import { checkedDOMValue } from "./dom-prop-policy.js";
 import { mountKeyedRegion } from "./keyed.js";
 import {
   eventName,
@@ -852,6 +853,8 @@ export function createDOMRenderer<C = unknown>(
         attachLive(value, owner, (next, previous) =>
           writeProperty(node, property, next, previous)
         );
+      } else {
+        checkedDOMValue(node.localName, property, value);
       }
     }
 

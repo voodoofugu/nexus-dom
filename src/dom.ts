@@ -1,7 +1,9 @@
+import { checkedDOMValue } from "./dom-prop-policy.js";
+
+export { isEventProperty } from "./dom-prop-policy.js";
+
 export const eventName = (property: string) =>
   property.slice(2).toLowerCase();
-
-export const isEventProperty = (property: string) => /^on[A-Z]/.test(property);
 
 export const formatText = (value: unknown) =>
   value === null || value === undefined || value === false ? "" : String(value);
@@ -43,9 +45,10 @@ function writeStyle(
 export function writeProperty(
   element: Element,
   property: string,
-  value: unknown,
+  input: unknown,
   previous: unknown
 ) {
+  const value = checkedDOMValue(element.localName, property, input);
   if (property === "className" || property === "class") {
     if (value === null || value === undefined || value === false) {
       element.removeAttribute("class");

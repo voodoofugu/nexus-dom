@@ -2,6 +2,7 @@ import { isLiveValue, createMutableLiveItem } from "./live.js";
 import { Owner, withOwner } from "./owner.js";
 import { createStoreViewRegistry } from "./store-view.js";
 import { nexusDOMError } from "./errors.js";
+import { checkedDOMValue, isEventProperty } from "./dom-prop-policy.js";
 import { hydrationText } from "./hydration-markers.js";
 import { serializeHydrationState } from "./hydration-state.js";
 import type { Renderable, VNode } from "./types.js";
@@ -145,9 +146,11 @@ export function renderToString(
         rawName === "children" ||
         rawName === "key" ||
         rawName === "ref" ||
-        rawName.toLowerCase().startsWith("on")
+        isEventProperty(rawName)
       ) continue;
-      const value = isLiveValue(rawValue) ? rawValue.get() : rawValue;
+      const value = checkedDOMValue(
+        vnode.type, rawName, isLiveValue(rawValue) ? rawValue.get() : rawValue
+      );
       if (
         value === null ||
         value === undefined ||

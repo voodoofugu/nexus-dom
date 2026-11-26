@@ -369,11 +369,24 @@ remains follow-up work.
 
 ### Security
 
-Use application-owned JSX templates and pass untrusted text as children.
-The browser renderer writes text nodes, and server rendering escapes
-text and attribute values. Validate untrusted URLs before binding them
-to navigation or resource properties. Keep raw HTML and arbitrary DOM
-property maps from untrusted sources out of JSX props.
+Use application-owned JSX templates and pass untrusted text as children
+of ordinary elements. The browser writes text nodes and the server escapes
+text and attribute values.
+
+The renderer rejects `innerHTML`, `outerHTML`, `srcdoc` and
+`dangerouslySetInnerHTML`. Use function handlers such as `onClick` for
+events. The browser and server reject inline event attributes such as `onclick`.
+
+The URL check covers `href`, `src`, `action`, `formAction`, `poster`,
+SVG `xlink:href` and `data` on `object` elements. These accept relative
+URLs and the `http:`, `https:`, `mailto:` and `tel:` schemes. A rejected
+live update leaves the previous URL in place and follows the renderer's
+error handling path.
+
+Apply your own origin and resource rules before binding untrusted URLs.
+Keep arbitrary property maps, CSS, executable element content and markup
+from untrusted sources outside your templates. Hydrate HTML generated from
+trusted templates and state.
 
 Hydration sends lazy-store snapshots to the browser in the HTML. Treat
 that state as public to the recipient and keep credentials and server-only
@@ -733,9 +746,9 @@ measurements, not universal rankings.
 
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.47 KB gzip` for
-low-level core exports, `11.73 KB` for `createApp`, `12.29 KB` for the complete
-main entry, and `13.85 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `6.76 KB` externalized or `7.83 KB` with
+included. The current local measurement is approximately `8.81 KB gzip` for
+low-level core exports, `12.06 KB` for `createApp`, `12.63 KB` for the complete
+main entry, and `14.20 KB` for that entry plus the tree-shaken `nexus-state`
+runtime. The server entry is `7.08 KB` externalized or `8.15 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

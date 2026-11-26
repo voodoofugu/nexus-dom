@@ -14,7 +14,9 @@ export type NexusDOMErrorCode =
   | "HYDRATION_STATE_INVALID"
   | "HYDRATION_STATE_LATE"
   | "INVALID_SERVER_ELEMENT"
-  | "INVALID_SERVER_ATTRIBUTE";
+  | "INVALID_SERVER_ATTRIBUTE"
+  | "UNSAFE_DOM_PROPERTY"
+  | "UNSAFE_DOM_URL";
 
 /** An actionable error raised by nexus-dom itself, not by user render code. */
 export class NexusDOMError extends Error {
