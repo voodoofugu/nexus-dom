@@ -273,9 +273,24 @@ const IssueTitle = workspaceComponent(
 ```
 
 This render opens `preferences` and `issues`. The first read of `main` can
-happen in another component. Add a store to one view with a second map,
-such as `workspaceComponent(render, { draft })`. Its namespaces include both maps,
-and duplicate namespace names are errors.
+happen in another component. Give a descriptor a `name` to pass it directly
+in a dependency array.
+
+```tsx
+const titleStates = store({ name: "title", state: { text: "Title" } });
+const subTitleStates = store({ name: "subtitle", state: { text: "Subtitle" } });
+
+const Title = component(({ state }) => <h1>{state.title.text}</h1>, [titleStates]);
+const titleComponent = componentScope({ title: titleStates });
+const SubTitle = titleComponent(
+  ({ state }) => <p>{state.title.text} · {state.subtitle.text}</p>,
+  [subTitleStates]
+);
+```
+
+The array in `SubTitle` adds `subtitle` to the shared `title` scope. Names
+must be unique within a component. An array of unnamed descriptors still
+gives `component` its flat scope. Use one form per array.
 
 Reading `state.preferences.theme` subscribes the view to the preferences
 store. Use `$.preferences.theme` for a binding to that field alone. Reading
@@ -698,8 +713,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.47 KB gzip` for
-low-level core exports, `11.73 KB` for `createApp`, `12.26 KB` for the complete
-main entry, and `13.82 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `11.73 KB` for `createApp`, `12.37 KB` for the complete
+main entry, and `13.93 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The server entry is `6.76 KB` externalized or `7.83 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

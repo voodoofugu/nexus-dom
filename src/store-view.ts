@@ -90,11 +90,11 @@ export interface StoreDefinition<
 
 /**
  * Declares a lazy store shared by the views of one application.
- * @param options initial state, actions, refs and client lifecycle callbacks.
+ * @param options initial state, optional namespace name, and store lifecycle.
  * @param dependencies stores available to this store's actions and lifecycle.
  * @example
  * ```ts
- * const preferences = store({ state: { compact: false } });
+ * const preferences = store({ name: "preferences", state: { compact: false } });
  * ```
  */
 export function store<
@@ -102,17 +102,19 @@ export function store<
   R extends RecordAny = EmptyRecord,
   A extends RecordAny = EmptyRecord,
   const D extends readonly AnyStore[] = readonly [],
+  const Name extends string | undefined = undefined,
 >(
-  options: StoreOptions<S, A, R, D>,
+  options: StoreOptions<S, A, R, D> & { name?: Name },
   dependencies: D & ValidDependencies<D> = [] as unknown as D &
     ValidDependencies<D>
-): StoreDefinition<S, A, R, D> {
-  return { [STORE_OPTIONS]: options, dependencies } as unknown as StoreDefinition<
-    S,
-    A,
-    R,
-    D
-  >;
+): StoreDefinition<S, A, R, D> & (Name extends string ? { readonly name: Name } : {}) {
+  const { name } = options;
+  return {
+    [STORE_OPTIONS]: options,
+    dependencies,
+    ...(name === undefined ? {} : { name }),
+  } as unknown as StoreDefinition<S, A, R, D> &
+    (Name extends string ? { readonly name: Name } : {});
 }
 
 type AnyStore = StoreDefinition<RecordAny, RecordAny, RecordAny, any>;
@@ -233,27 +235,44 @@ type ViewComponent<Input extends object = EmptyRecord> = (
 /**
  * Defines a JSX component that tracks reads from its declared stores.
  * @param render reads tracked state and returns JSX for the current props.
- * @param dependencies stores available in the render scope.
+ * @param dependencies stores available in the render scope. Named descriptors use their names as namespaces.
  * @example
  * ```tsx
  * const Title = component(
- *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.title}</h1>,
+ *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.document.title}</h1>,
  *   [documentStore]
  * );
  * // <Title prefix="Editing: " />
  * ```
  */
 export function component<
-  const D extends readonly AnyStore[] = readonly [],
+  const D extends readonly NamedStore[],
+  Input extends object = EmptyRecord,
+>(
+  render: (scope: WorkspaceScope<RegistryFrom<D>>, input: Input) => Renderable,
+  dependencies: D & ValidNamedDependencies<D>
+): ViewComponent<Input>;
+export function component<
+  const D extends readonly UnnamedStore[] = readonly [],
   Input extends object = EmptyRecord,
 >(
   render: (scope: ViewScope<D>, input: Input) => Renderable,
-  dependencies: D & ValidDependencies<D> = [] as unknown as D &
-    ValidDependencies<D>
+  dependencies?: D & ValidDependencies<D>
+): ViewComponent<Input>;
+export function component<Input extends object>(
+  render: (...args: never[]) => Renderable,
+  dependencies: readonly AnyStore[] = []
 ): ViewComponent<Input> {
+  if (!Array.isArray(dependencies)) {
+    throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", "Component store dependencies must be an array.");
+  }
+  const registry = dependencies.some((store) => "name" in store)
+    ? extendRegistry(new Map(), dependencies)
+    : undefined;
   return (input) => ({
     kind: "store-view",
-    dependencies,
+    dependencies: registry ? [] : dependencies,
+    ...(registry ? { registry } : {}),
     input,
     render: render as StoreViewVNode["render"],
     id: captureOwnerId(),
@@ -261,7 +280,20 @@ export function component<
 }
 
 type StoreRegistry = Record<string, AnyStore>;
-type ValidNamespaceNames<R> = Record<Extract<keyof R, "$select">, never>;
+type NamedStore = AnyStore & { readonly name: string };
+type UnnamedStore = AnyStore & { readonly name?: never };
+type RegistryFrom<D extends readonly NamedStore[]> = {
+  [S in D[number] as S["name"]]: S;
+};
+type NamespaceConflicts<D extends readonly NamedStore[], Seen extends string> =
+  D extends readonly [infer S extends NamedStore, ...infer Rest extends readonly NamedStore[]]
+    ? Extract<S["name"], Seen> | NamespaceConflicts<Rest, Seen | S["name"]>
+    : never;
+type ValidNamedDependencies<D extends readonly NamedStore[], Seen extends string = "$select" | ""> =
+  [NamespaceConflicts<D, Seen>] extends [never]
+    ? unknown
+    : { readonly "nexus-dom: duplicate or reserved namespace": NamespaceConflicts<D, Seen> };
+type ValidNamespaceNames<R> = Record<Extract<keyof R, "$select" | "">, never>;
 type WorkspaceState<R extends StoreRegistry> = {
   readonly [K in keyof R]: Readonly<StoreState<R[K]>>;
 };
@@ -282,9 +314,9 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
   <Input extends object = EmptyRecord>(
     render: (scope: WorkspaceScope<R>, input: Input) => Renderable
   ): ViewComponent<Input>;
-  <const Extra extends StoreRegistry, Input extends object = EmptyRecord>(
-    render: (scope: WorkspaceScope<R & Extra>, input: Input) => Renderable,
-    extra: Extra & ValidNamespaceNames<Extra> & Record<Extract<keyof Extra, keyof R>, never>
+  <const Extra extends readonly NamedStore[], Input extends object = EmptyRecord>(
+    render: (scope: WorkspaceScope<R & RegistryFrom<Extra>>, input: Input) => Renderable,
+    extra: Extra & ValidNamedDependencies<Extra, "$select" | "" | Extract<keyof R, string>>
   ): ViewComponent<Input>;
 }
 
@@ -302,22 +334,10 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
 export function componentScope<const R extends StoreRegistry>(
   stores: R & ValidNamespaceNames<R>
 ): WorkspaceViewFactory<R> {
-  const checkName = (name: string) => {
-    if (name === "$select") {
-      throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", 'Store namespace "$select" is reserved.');
-    }
-  };
   const shared = new Map(Object.entries(stores).map(([name, store]) => [name, [store]]));
   for (const name of shared.keys()) checkName(name);
-  const factory = (render: StoreViewVNode["render"], extra?: StoreRegistry): ViewComponent<object> => {
-    const registry = extra ? new Map(shared) : shared;
-    for (const [name, store] of Object.entries(extra ?? {})) {
-      checkName(name);
-      if (registry.has(name)) {
-        throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", `Store namespace "${name}" is already defined.`);
-      }
-      registry.set(name, [store]);
-    }
+  const factory = (render: StoreViewVNode["render"], extra?: readonly NamedStore[]): ViewComponent<object> => {
+    const registry = extra ? extendRegistry(new Map(shared), extra) : shared;
     return (input) => ({
       kind: "store-view",
       dependencies: [],
@@ -328,6 +348,30 @@ export function componentScope<const R extends StoreRegistry>(
     });
   };
   return factory as WorkspaceViewFactory<R>;
+}
+
+function checkName(name: string) {
+  if (name === "$select" || name === "") {
+    throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", `Store namespace "${name}" is reserved.`);
+  }
+}
+
+function extendRegistry(registry: Map<string, AnyStore[]>, stores: readonly AnyStore[]) {
+  if (!Array.isArray(stores)) {
+    throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", "Component store dependencies must be an array.");
+  }
+  for (const store of stores) {
+    const name = "name" in store ? store.name : undefined;
+    if (typeof name !== "string") {
+      throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", "Give each store in a namespaced dependency array a name.");
+    }
+    checkName(name);
+    if (registry.has(name)) {
+      throw nexusDOMError("STORE_DEPENDENCY_CONFLICT", `Store namespace "${name}" is already defined.`);
+    }
+    registry.set(name, [store]);
+  }
+  return registry;
 }
 
 interface ResolvedStore {

@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { componentScope, persist, store } from "nexus-dom";
+import { component, componentScope, persist, store } from "nexus-dom";
 import { createPlaygroundDiagnostics } from "./diagnostics.js";
 
 type IssueStatus = "backlog" | "active" | "done";
@@ -31,6 +31,7 @@ const nextStatus: Record<IssueStatus, IssueStatus> = {
 };
 
 const preferences = store({
+  name: "preferences",
   state: { compact: false },
   acts: ({ get, set }) => ({
     toggleCompact() {
@@ -145,11 +146,11 @@ export function createWorkspace() {
   const statusLabel = (status: IssueStatus) =>
     status === "backlog" ? "Backlog" : status === "active" ? "In progress" : "Done";
 
-  const CompactToggle = workspaceComponent(({ $, acts }) => (
+  const CompactToggle = component(({ $, acts }) => (
     <button class="quiet-button" onClick={acts.preferences.toggleCompact}>
       {$.preferences.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
     </button>
-  ));
+  ), [preferences]);
 
   const Toolbar = workspaceComponent(
     ({ $, acts, refs }) => {

@@ -34,8 +34,9 @@ const Summary = component(
 
 `componentScope({ issues, preferences })` puts the groups under
 `state.issues` and `state.preferences`, with the same names under `$`,
-`acts` and `refs`. A second map such as `{ draft }` adds groups for one
-component. Reading one group's state subscribes the view to that store.
+`acts` and `refs`. An array such as `[draft]` adds named stores to one
+component. `component(render, [draft])` uses the same namespace from the
+descriptor's `name`. Reading one group's state subscribes the view to that store.
 Conditional reads add or remove subscriptions on the next render.
 
 The dogfood uses this form throughout. The keyed list uses `$.$select` to
