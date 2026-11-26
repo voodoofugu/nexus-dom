@@ -273,24 +273,28 @@ const IssueTitle = workspaceComponent(
 ```
 
 This render opens `preferences` and `issues`. The first read of `main` can
-happen in another component. Give a descriptor a `name` to pass it directly
-in a dependency array.
+happen in another component. Pass a named object directly to `component`
+for a standalone component. The same syntax adds stores to a scoped component.
 
 ```tsx
-const titleStates = store({ name: "title", state: { text: "Title" } });
-const subTitleStates = store({ name: "subtitle", state: { text: "Subtitle" } });
+const titleStates = store({ state: { text: "Title" } });
+const subTitleStates = store({ state: { text: "Subtitle" } });
 
-const Title = component(({ state }) => <h1>{state.title.text}</h1>, [titleStates]);
+const Title = component(
+  ({ state }) => <h1>{state.title.text}</h1>,
+  { title: titleStates }
+);
 const titleComponent = componentScope({ title: titleStates });
 const SubTitle = titleComponent(
   ({ state }) => <p>{state.title.text} · {state.subtitle.text}</p>,
-  [subTitleStates]
+  { subtitle: subTitleStates }
 );
 ```
 
-The array in `SubTitle` adds `subtitle` to the shared `title` scope. Names
-must be unique within a component. An array of unnamed descriptors still
-gives `component` its flat scope. Use one form per array.
+The keys in these objects become the names used under `state`, `$`, `acts`
+and `refs`. The object in `SubTitle` adds `subtitle` to the shared `title`
+scope. Names must be unique within a component. Use a descriptor array
+in `component` when you want a flat scope.
 
 Reading `state.preferences.theme` subscribes the view to the preferences
 store. Use `$.preferences.theme` for a binding to that field alone. Reading
@@ -713,8 +717,8 @@ measurements, not universal rankings.
 The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
 `nexus-state` externalized and also builds the full entry with the dependency
 included. The current local measurement is approximately `8.47 KB gzip` for
-low-level core exports, `11.73 KB` for `createApp`, `12.37 KB` for the complete
-main entry, and `13.93 KB` for that entry plus the tree-shaken `nexus-state`
+low-level core exports, `11.73 KB` for `createApp`, `12.29 KB` for the complete
+main entry, and `13.85 KB` for that entry plus the tree-shaken `nexus-state`
 runtime. The server entry is `6.76 KB` externalized or `7.83 KB` with
 `nexus-state`. The larger playground bundle also contains the example UI and
 diagnostics, so it is not a library-size measurement.

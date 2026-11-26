@@ -31,7 +31,6 @@ const nextStatus: Record<IssueStatus, IssueStatus> = {
 };
 
 const preferences = store({
-  name: "preferences",
   state: { compact: false },
   acts: ({ get, set }) => ({
     toggleCompact() {
@@ -150,7 +149,7 @@ export function createWorkspace() {
     <button class="quiet-button" onClick={acts.preferences.toggleCompact}>
       {$.preferences.compact.map((compact) => (compact ? "Comfortable" : "Compact"))}
     </button>
-  ), [preferences]);
+  ), { preferences });
 
   const Toolbar = workspaceComponent(
     ({ $, acts, refs }) => {

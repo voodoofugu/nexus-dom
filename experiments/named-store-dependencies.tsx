@@ -5,7 +5,7 @@ const issues = store({
   state: { items: [{ id: 1, title: "Review the renderer" }] },
 });
 const preferences = store({ state: { compact: false } });
-const draft = store({ name: "draft", state: { editing: false } });
+const draft = store({ state: { editing: false } });
 const workspaceComponent = componentScope({ issues, preferences });
 
 const IssueTitle = workspaceComponent(
@@ -15,7 +15,7 @@ const IssueTitle = workspaceComponent(
       {state.draft.editing ? "Editing" : issue?.title}
     </strong>;
   },
-  [draft]
+  { draft }
 );
 
 export function checkComponentScopeTypes() {

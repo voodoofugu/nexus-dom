@@ -9,14 +9,14 @@ it("opens only stores accessed by the component and adds local namespaces", () =
   const preferences = store({ state: { theme: "light" }, mount });
   const issues = store({ state: { items: [{ id: 1, title: "First issue" }] } });
   const session = store({ state: { user: "Ada" }, setup: idle, mount: idle });
-  const draft = store({ name: "draft", state: { theme: "local" } });
+  const draft = store({ state: { theme: "local" } });
   const workspaceComponent = componentScope({ preferences, issues, session });
   const Title = workspaceComponent(({ state }, { issueId }: { issueId: number }) => (
     <p class={state.preferences.theme}>
       {state.issues.items.find((issue) => issue.id === issueId)?.title}
       {state.draft.theme}
     </p>
-  ), [draft]);
+  ), { draft });
   const Plain = workspaceComponent(({ state }) => <p>{Object.keys(state).length}</p>);
   expect(renderToString(<Plain />, { hydration: true })).toBe("<p>3</p>");
   const app = createApp();
@@ -163,21 +163,21 @@ it("keeps whole-store subscriptions for bare and enumerated selector reads", () 
 });
 
 it("rejects a local namespace that conflicts with a shared one", () => {
-  const model = store({ name: "model", state: { value: 1 } });
+  const model = store({ state: { value: 1 } });
   const workspaceComponent = componentScope({ model });
   // @ts-expect-error Shared namespace names cannot be redefined.
-  expect(() => workspaceComponent(() => null, [model])).toThrowError(
+  expect(() => workspaceComponent(() => null, { model })).toThrowError(
     expect.objectContaining({ code: "STORE_DEPENDENCY_CONFLICT" })
   );
 });
 
-it("uses the same named stores in direct and scoped dependency arrays", () => {
-  const titleStates = store({ name: "title", state: { text: "Title" } });
-  const subTitleStates = store({ name: "subtitle", state: { text: "Subtitle" } });
+it("shares stores between direct and scoped dependency maps", () => {
+  const titleStates = store({ state: { text: "Title" } });
+  const subTitleStates = store({ state: { text: "Subtitle" } });
   const titleComponent = componentScope({ title: titleStates });
   const SubTitle = titleComponent(
     ({ state }) => <p>{state.title.text} · {state.subtitle.text}</p>,
-    [subTitleStates]
+    { subtitle: subTitleStates }
   );
   const Title = component(({ state, $ }) => (
     <>
@@ -185,7 +185,7 @@ it("uses the same named stores in direct and scoped dependency arrays", () => {
       <button onClick={() => $.title.text.set("Updated")}>Rename</button>
       <SubTitle />
     </>
-  ), [titleStates]);
+  ), { title: titleStates });
   const app = createApp();
   const host = document.createElement("div");
   const root = app.render(<Title />, host, { schedule: "manual" });
@@ -197,16 +197,10 @@ it("uses the same named stores in direct and scoped dependency arrays", () => {
   app.dispose();
 });
 
-it("rejects ambiguous direct dependency arrays", () => {
-  const title = store({ name: "title", state: { text: "Title" } });
-  const duplicate = store({ name: "title", state: { count: 0 } });
-  const unnamed = store({ state: { subtitle: "Subtitle" } });
-  // @ts-expect-error Namespace names must be unique.
-  expect(() => component(() => null, [title, duplicate])).toThrowError(
-    expect.objectContaining({ code: "STORE_DEPENDENCY_CONFLICT" })
-  );
-  // @ts-expect-error A dependency array uses either named or unnamed stores.
-  expect(() => component(() => null, [title, unnamed])).toThrowError(
+it("rejects reserved keys in direct dependency maps", () => {
+  const title = store({ state: { text: "Title" } });
+  // @ts-expect-error $select is reserved for the cross-store selector.
+  expect(() => component(() => null, { $select: title })).toThrowError(
     expect.objectContaining({ code: "STORE_DEPENDENCY_CONFLICT" })
   );
 });
