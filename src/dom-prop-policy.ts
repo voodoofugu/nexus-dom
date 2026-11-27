@@ -17,6 +17,9 @@ export function checkedDOMValue(element: string, property: string, value: unknow
       `Cannot use "${property}" as a DOM property. Use JSX children or a function event handler.`
     );
   }
+  if (typeof value === "boolean" && name.startsWith("aria-")) {
+    return String(value);
+  }
   if (
     value === null ||
     value === undefined ||

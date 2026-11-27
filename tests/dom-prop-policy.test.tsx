@@ -4,6 +4,33 @@ import { bind, createNexus, hydrate, render } from "nexus-dom";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { renderToString } from "nexus-dom/server";
 
+it("preserves explicit ARIA boolean values during rendering and hydration", () => {
+  const state = createNexus({ state: { pressed: false as boolean | null } });
+  const $ = bind(state);
+  const view = <button aria-pressed={$.pressed} aria-expanded={true}>Toggle</button>;
+  const client = document.createElement("main");
+  const clientRoot = render(view, client);
+  const clientButton = client.querySelector("button")!;
+  expect(clientButton.getAttribute("aria-pressed")).toBe("false");
+  expect(clientButton.getAttribute("aria-expanded")).toBe("true");
+  clientRoot.dispose();
+
+  const host = document.createElement("main");
+  host.innerHTML = renderToString(view, { hydration: true });
+  const button = host.querySelector("button")!;
+  expect(button.getAttribute("aria-pressed")).toBe("false");
+  expect(button.getAttribute("aria-expanded")).toBe("true");
+  const root = hydrate(view, host, { schedule: "manual" });
+  expect(host.querySelector("button")).toBe(button);
+  state.set({ pressed: true });
+  root.flush();
+  expect(button.getAttribute("aria-pressed")).toBe("true");
+  state.set({ pressed: null });
+  root.flush();
+  expect(button.hasAttribute("aria-pressed")).toBe(false);
+  root.dispose();
+});
+
 it.each(["innerHTML", "outerHTML", "srcDoc", "dangerouslySetInnerHTML", "onclick"])(
   "rejects %s in DOM rendering, SSR and hydration",
   (property) => {
