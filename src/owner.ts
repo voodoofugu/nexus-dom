@@ -234,7 +234,20 @@ export function captureOwnerId() {
   };
 }
 
-/** Registers component cleanup against its current owner scope. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***onCleanup***:
+ * registers cleanup with the component that is currently rendering.
+ * @param cleanup callback run when that owner is disposed.
+ * @example
+ * ```tsx
+ * function Clock() {
+ *   const timer = window.setInterval(tick, 1000);
+ *   onCleanup(() => window.clearInterval(timer));
+ *   return <time />;
+ * }
+ * ```
+ */
 export function onCleanup(cleanup: Cleanup) {
   if (!currentOwner) {
     throw nexusDOMError(

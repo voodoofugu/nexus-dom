@@ -28,6 +28,11 @@ type EmptyRecord = {};
 const STORE_OPTIONS = Symbol("nexus-dom.store-options");
 declare const STORE_TYPES: unique symbol;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreActsContext***:
+ * provides state operations, refs, list helpers and declared dependencies to a store action factory.
+ */
 export interface StoreActsContext<
   S extends RecordAny,
   R extends RecordAny,
@@ -41,6 +46,11 @@ export interface StoreActsContext<
   readonly dependencies: StoreDependencyScope<D>;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreOptions***:
+ * defines the initial data, commands, refs and client lifecycle of a lazy store.
+ */
 export interface StoreOptions<
   S extends RecordAny,
   A extends RecordAny,
@@ -73,6 +83,11 @@ export interface StoreOptions<
   ) => void | (() => void);
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreDefinition***:
+ * describes a lazy store that can be shared by components in an app.
+ */
 export interface StoreDefinition<
   S extends RecordAny,
   A extends RecordAny = EmptyRecord,
@@ -88,12 +103,16 @@ export interface StoreDefinition<
   };
 }
 
-/**
- * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- *
- * Declares a lazy store shared by the views of one application.
- * @param options initial state, actions, refs and store lifecycle.
- * @param dependencies stores available to this store's actions and lifecycle.
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***store***:
+ * declares a lazy store shared by components in one application.
+ * @description
+ * Each app resolves the descriptor once on first use and disposes its
+ * client resources with the app.
+ * @param options initial state, actions, refs and lifecycle callbacks.
+ * @param dependencies optional stores available in actions and lifecycle callbacks.
+ * @returns the descriptor to pass to components or other stores.
  * @example
  * ```ts
  * const preferences = store({ state: { compact: false } });
@@ -126,20 +145,49 @@ type MergeStores<D extends readonly AnyStore[], Values> = D[number] extends neve
   : UnionToIntersection<Values>;
 type EnsureRecord<T> = T extends RecordAny ? T : never;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***DependencyState***:
+ * combines the state fields of a flat store dependency list.
+ */
 export type DependencyState<D extends readonly AnyStore[]> = EnsureRecord<
   MergeStores<D, StoreState<D[number]>>
 >;
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***DependencyActs***:
+ * combines the named actions of a flat store dependency list.
+ */
 export type DependencyActs<D extends readonly AnyStore[]> = EnsureRecord<
   MergeStores<D, StoreActs<D[number]>>
 >;
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***DependencyRefs***:
+ * combines the ref values of a flat store dependency list.
+ */
 export type DependencyRefs<D extends readonly AnyStore[]> = EnsureRecord<
   MergeStores<D, StoreRefs<D[number]>>
 >;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***WritableLiveValue***:
+ * binds a store field and allows writing it through `set`.
+ * @example
+ * ```tsx
+ * <button onClick={() => $.count.set((count) => count + 1)}>{$.count}</button>
+ * ```
+ */
 export interface WritableLiveValue<T, C = unknown> extends LiveValue<T, C> {
   set(value: T | ((current: T) => T), context?: SetContext): void;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***WritableBoundState***:
+ * exposes writable fields and read-only derived selectors for a store.
+ */
 export type WritableBoundState<S extends RecordAny, C = unknown> = {
   readonly [K in keyof S]: WritableLiveValue<S[K], C>;
 } & Pick<BoundState<S, C>, "$select">;
@@ -189,6 +237,11 @@ type ValidDependencies<D extends readonly AnyStore[]> =
         readonly "nexus-dom: conflicting store dependencies": StoreConflicts<D>;
       };
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ViewScope***:
+ * passes tracked state, bindings, actions, refs and an ID factory to a component with flat dependencies.
+ */
 export interface ViewScope<D extends readonly AnyStore[]> {
   /** Returns a stable DOM id for a local key within this component instance. */
   readonly id: (localKey: string) => string;
@@ -202,6 +255,11 @@ export interface ViewScope<D extends readonly AnyStore[]> {
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreDependencyScope***:
+ * exposes the stores declared as dependencies of another store.
+ */
 export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly get: Getter<DependencyState<D>>;
   readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
@@ -209,6 +267,11 @@ export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly refs: AppRefs<DependencyRefs<D>>;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreSetupContext***:
+ * provides the resolved store and its resources to `setup` and `mount`.
+ */
 export interface StoreSetupContext<
   S extends RecordAny,
   A extends RecordAny,
@@ -227,17 +290,18 @@ type ViewComponent<Input extends object = EmptyRecord> = (
   input: Input & { children?: Renderable }
 ) => VNode | null;
 
-/**
- * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- *
- * Defines a JSX component that tracks reads from its declared stores.
- * @param render reads tracked state and returns JSX for the current props.
- * @param dependencies stores available in the render scope. Object keys become namespaces.
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***component***:
+ * defines a JSX component with named store dependencies.
+ * @param render callback that receives the store scope and JSX props.
+ * @param dependencies store descriptors keyed by namespace.
+ * @returns a component that tracks plain state reads.
  * @example
  * ```tsx
  * const Title = component(
- *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.document.title}</h1>,
- *   { document: documentStore }
+ *   ({ state }, { prefix }: { prefix: string }) => <h1>{prefix}{state.page.title}</h1>,
+ *   { page: pageStore }
  * );
  * // <Title prefix="Editing: " />
  * ```
@@ -249,6 +313,18 @@ export function component<
   render: (scope: WorkspaceScope<R>, input: Input) => Renderable,
   dependencies: R & ValidNamespaceNames<R>
 ): ViewComponent<Input>;
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***component***:
+ * defines a JSX component with a flat store scope.
+ * @param render callback that receives the store scope and JSX props.
+ * @param dependencies optional store descriptors. Each exposed field name must be unique.
+ * @returns a component that tracks plain state reads.
+ * @example
+ * ```tsx
+ * const Count = component(({ state }) => <p>{state.count}</p>, [counter]);
+ * ```
+ */
 export function component<
   const D extends readonly AnyStore[] = readonly [],
   Input extends object = EmptyRecord,
@@ -278,7 +354,11 @@ type WorkspaceState<R extends StoreRegistry> = {
   readonly [K in keyof R]: Readonly<StoreState<R[K]>>;
 };
 
-/** Store namespaces exposed to a component created by `componentScope`. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***WorkspaceScope***:
+ * passes store namespaces and the component ID factory to a scoped component.
+ */
 export type WorkspaceScope<R extends StoreRegistry> = {
   readonly id: (localKey: string) => string;
   readonly state: WorkspaceState<R>;
@@ -289,7 +369,11 @@ export type WorkspaceScope<R extends StoreRegistry> = {
   readonly refs: { readonly [K in keyof R]: AppRefs<StoreRefs<R[K]>> };
 };
 
-/** A view factory with lazy store namespaces and optional local additions. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***WorkspaceViewFactory***:
+ * creates components with a shared store map and optional named local stores.
+ */
 export interface WorkspaceViewFactory<R extends StoreRegistry> {
   <Input extends object = EmptyRecord>(
     render: (scope: WorkspaceScope<R>, input: Input) => Renderable
@@ -300,11 +384,12 @@ export interface WorkspaceViewFactory<R extends StoreRegistry> {
   ): ViewComponent<Input>;
 }
 
-/**
- * ![nexus-dom logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- *
- * Creates JSX components that resolve store namespaces on first access.
- * @param stores shared store descriptors keyed by namespace.
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***componentScope***:
+ * creates a component factory with shared lazy store namespaces.
+ * @param stores store descriptors keyed by namespace.
+ * @returns a factory that can also accept named local stores per component.
  * @example
  * ```tsx
  * const workspaceComponent = componentScope({ preferences, issues });

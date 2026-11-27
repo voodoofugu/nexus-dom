@@ -384,9 +384,17 @@ function selectorLive<S extends object, R, C>(
   return live;
 }
 
-/**
- * Creates stable live values for the keys and selectors of a nexus store.
- * `$select` is reserved by the binding proxy.
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***bind***:
+ * creates stable live bindings for the fields of an existing Nexus store.
+ * @param nexus store to read and subscribe to.
+ * @returns the cached binding object with each field and `$select`.
+ * @example
+ * ```tsx
+ * const $ = bind(nexus);
+ * render(<span>{$.count}</span>, "#app");
+ * ```
  */
 export function bind<
   S extends Record<string, any>,
@@ -394,6 +402,13 @@ export function bind<
 >(
   nexus: Nexus<S, A>
 ): BoundState<S, UpdateContext>;
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***bind***:
+ * creates stable live bindings from a compatible state source.
+ * @param nexus source implementing `get` and `subscribe`.
+ * @returns the cached binding object with each field and `$select`.
+ */
 export function bind<S extends object, C = unknown>(
   nexus: NexusSource<S, C>
 ): BoundState<S, C>;
@@ -430,6 +445,13 @@ export function bind<S extends object, C = unknown>(
   return binding;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***isLiveValue***:
+ * checks whether a value is a Nexus DOM live binding.
+ * @param value the value to narrow.
+ * @returns whether the value implements the live-value protocol.
+ */
 export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown> {
   return (
     typeof value === "object" &&
@@ -438,7 +460,19 @@ export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown
   );
 }
 
-/** Creates a boolean structural branch without a control-flow component. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***when***:
+ * chooses an owned JSX branch from the truthiness of a live value.
+ * @param source a live condition.
+ * @param truthy JSX to mount while the condition is truthy.
+ * @param fallback optional JSX to mount otherwise.
+ * @returns a renderable dynamic branch.
+ * @example
+ * ```tsx
+ * const panel = when($.signedIn, <Profile />, <SignIn />);
+ * ```
+ */
 export function when<T, C>(
   source: LiveValue<T, C>,
   truthy: Renderable,
@@ -449,6 +483,16 @@ export function when<T, C>(
     .render((visible) => (visible ? truthy : fallback));
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createLiveSelector***:
+ * creates a standalone live value derived from a state source.
+ * @param source store or compatible source to observe.
+ * @param selector computes a value from the current state.
+ * @param isEqual optional comparison for successive results. Defaults to `Object.is`.
+ * @param sourceKey optional known top-level dependency.
+ * @returns a live value that notifies when its selected result changes.
+ */
 export function createLiveSelector<S extends object, R, C>(
   source: NexusSource<S, C>,
   selector: (state: S) => R,

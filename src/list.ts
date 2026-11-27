@@ -3,12 +3,27 @@ import { nexusDOMError } from "./errors.js";
 
 type RecordAny = Record<string, any>;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ArrayKey***:
+ * selects the state keys whose values are arrays.
+ */
 export type ArrayKey<S extends RecordAny> = {
   [K in keyof S]: S[K] extends readonly unknown[] ? K : never;
 }[keyof S];
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ArrayItem***:
+ * infers the element type of a mutable or readonly array.
+ */
 export type ArrayItem<T> = T extends readonly (infer Item)[] ? Item : never;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ListOperation***:
+ * describes a typed array mutation carried in `UpdateContext.meta`.
+ */
 export type ListOperation =
   | { id: number; key: PropertyKey; type: "insert"; index: number; count: number }
   | { id: number; key: PropertyKey; type: "remove"; index: number; count: number }
@@ -29,6 +44,20 @@ type ListOperationWithoutId = ListOperation extends infer Operation
     : never
   : never;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ListController***:
+ * updates a Nexus array and records the operation for keyed rendering.
+ * @description
+ * `batch()` groups synchronous operations into one store notification.
+ * @example
+ * ```ts
+ * app.list("tasks").batch((tasks) => {
+ *   tasks.move(2, 0);
+ *   tasks.remove(1);
+ * });
+ * ```
+ */
 export interface ListController<Item> {
   append(...items: Item[]): void;
   insert(index: number, ...items: Item[]): void;
@@ -40,6 +69,11 @@ export interface ListController<Item> {
   batch(run: (list: ListController<Item>) => void): void;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***AppHelpers***:
+ * provides typed list operations for arrays in a Nexus store.
+ */
 export interface AppHelpers<S extends RecordAny> {
   list<K extends ArrayKey<S>>(key: K): ListController<ArrayItem<S[K]>>;
 }

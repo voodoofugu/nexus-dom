@@ -7,6 +7,11 @@ import { hydrationText } from "./hydration-markers.js";
 import { serializeHydrationState } from "./hydration-state.js";
 import type { Renderable, VNode } from "./types.js";
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***ServerRenderOptions***:
+ * configures the root ID prefix and hydration output for `renderToString`.
+ */
 export interface ServerRenderOptions {
   idPrefix?: string;
   /** Emits structural markers required by hydrate(). */
@@ -40,6 +45,22 @@ const styleText = (value: Record<string, unknown>) =>
     )
     .join(";");
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***renderToString***:
+ * renders JSX to an HTML string without a browser DOM.
+ * @description
+ * Each call resolves its own lazy stores. Set `hydration: true`
+ * to include the markers and store snapshots the client uses.
+ * @param view JSX, a live value or another renderable value.
+ * @param options hydration output and the root ID prefix.
+ * @returns the serialized HTML fragment.
+ * @example
+ * ```tsx
+ * import { renderToString } from "nexus-dom/server";
+ * const html = renderToString(<App />, { hydration: true, idPrefix: "app" });
+ * ```
+ */
 export function renderToString(
   view: Renderable,
   options: ServerRenderOptions = {}

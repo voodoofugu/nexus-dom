@@ -1,3 +1,8 @@
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***NexusDOMErrorCode***:
+ * identifies a library error independently of its message text.
+ */
 export type NexusDOMErrorCode =
   | "APP_DISPOSED"
   | "CLEANUP_OUTSIDE_COMPONENT"
@@ -18,7 +23,14 @@ export type NexusDOMErrorCode =
   | "UNSAFE_DOM_PROPERTY"
   | "UNSAFE_DOM_URL";
 
-/** An actionable error raised by nexus-dom itself, not by user render code. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***NexusDOMError***:
+ * describes a renderer or application contract failure.
+ * @description
+ * Use `code` to handle a particular library failure. Errors thrown by
+ * application components keep their original type and message.
+ */
 export class NexusDOMError extends Error {
   override readonly name = "nexus-dom";
 

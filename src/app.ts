@@ -25,14 +25,29 @@ import type {
 
 type RecordAny = Record<string, any>;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***RefValue***:
+ * a mutable `current` cell for a DOM node or another runtime value.
+ */
 export interface RefValue<T> {
   current: T;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***AppRefs***:
+ * non-reactive runtime cells keyed by the names supplied in `refs`.
+ */
 export type AppRefs<R extends RecordAny> = {
   readonly [K in keyof R]: RefValue<R[K]>;
 };
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***AppActsCreate***:
+ * creates app-level actions from Nexus getters, setters, refs and list helpers.
+ */
 export type AppActsCreate<
   S extends RecordAny,
   R extends RecordAny,
@@ -44,6 +59,11 @@ export type AppActsCreate<
   helpers: AppHelpers<S>
 ) => A;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***AppSetupContext***:
+ * passes the app store, bindings, actions, refs and cleanup to `setup`.
+ */
 export interface AppSetupContext<
   S extends RecordAny,
   A extends RecordAny,
@@ -56,6 +76,20 @@ export interface AppSetupContext<
   onCleanup(cleanup: () => void): () => void;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***NexusDOMApp***:
+ * owns DOM roots, lazy store instances and application resources.
+ * @description
+ * `render` and `hydrate` return disposable root handles. `dispose()`
+ * releases every root and calls the application's registered cleanups.
+ * @example
+ * ```tsx
+ * const root = app.render(<App />, "#app");
+ * root.dispose(); // Dispose this root.
+ * app.dispose(); // Dispose the application and its stores.
+ * ```
+ */
 export interface NexusDOMApp<
   S extends RecordAny,
   A extends RecordAny,
@@ -105,17 +139,52 @@ function createRefs<R extends RecordAny>(values: R): AppRefs<R> {
   ) as AppRefs<R>;
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createApp***:
+ * creates an application that resolves lazy stores and mounts DOM roots.
+ * @returns an app with `render`, `hydrate` and `dispose`.
+ * @example
+ * ```tsx
+ * const app = createApp();
+ * app.render(<Counter />, "#app");
+ * ```
+ */
 export function createApp(): NexusDOMApp<
   Record<string, never>,
   Record<string, never>,
   Record<string, never>
 >;
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createApp***:
+ * creates an application with an app-level Nexus store and named actions.
+ * @param options state, actions, optional runtime refs and app setup.
+ * @returns an app with the Nexus store, actions, bindings and root lifecycle.
+ * @example
+ * ```ts
+ * const app = createApp({
+ *   state: { count: 0 },
+ *   acts: (get, set) => ({
+ *     increment: () => set({ count: get("count") + 1 }),
+ *   }),
+ * });
+ * app.acts.increment();
+ * ```
+ */
 export function createApp<
   S extends RecordAny,
   R extends RecordAny = Record<string, never>,
   A extends RecordAny = Record<string, never>,
 >(options: AppOptions<S, R, A>): NexusDOMApp<S, A, R>;
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createApp***:
+ * creates an application with an app-level Nexus store.
+ * @param options state, optional runtime refs and app setup.
+ * @returns an app with the Nexus store, bindings and root lifecycle.
+ */
 export function createApp<
   S extends RecordAny,
   R extends RecordAny = Record<string, never>,

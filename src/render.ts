@@ -21,7 +21,17 @@ function resolveTarget(target: ParentNode | string): ParentNode {
   return element;
 }
 
-/** Reuses server-rendered DOM and attaches client behavior. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***hydrate***:
+ * adopts server-rendered DOM and attaches client bindings, events and refs.
+ * @description
+ * Use `app.hydrate` when the server HTML carries lazy-store snapshots.
+ * @param view the same initial JSX tree used on the server.
+ * @param target container node or a selector in the current document.
+ * @param options renderer options, including the server's `idPrefix`.
+ * @returns a root with `dispose()` and `flush()`.
+ */
 export function hydrate<C = unknown>(
   view: Renderable,
   target: ParentNode | string,
@@ -48,7 +58,19 @@ export function hydrate<C = unknown>(
   };
 }
 
-/** Mounts a view using an isolated DOM renderer. */
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***render***:
+ * mounts JSX into a DOM container with an isolated renderer.
+ * @param view JSX, a live value or another renderable value.
+ * @param target container node or a selector in the current document.
+ * @param options scheduling, diagnostics and component ID prefix.
+ * @returns a root with `dispose()` and `flush()`.
+ * @example
+ * ```tsx
+ * const root = render(<p>Ready</p>, "#app");
+ * ```
+ */
 export function render<C = unknown>(
   view: Renderable,
   target: ParentNode | string,

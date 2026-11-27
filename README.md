@@ -1,31 +1,74 @@
-# nexus-dom
-
 ![nexus-dom banner](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/01-banner-logo.svg)
 
-## Table of contents
+<h2></h2>
+
+### Table of contents
 
 - [About](#about)
+- [Installation](#installation)
 - [Quick start](#quick-start)
 - [API](#api)
-- [Store namespaces](#store-namespaces)
-- [Server rendering](#server-rendering)
+- [Recipes](#recipes)
 - [Security](#security)
-- [Local error recovery](#local-error-recovery)
 - [Development](#development)
 - [License](#license)
 
-## About
+<h2></h2>
 
-`nexus-dom` renders JSX to the DOM with [`nexus-state`](https://github.com/voodoofugu/nexus-state).
-Views declare the stores they use. Reading `state.count` tracks that key for
-view updates, while placing `$.count` in JSX binds it directly to the DOM.
-Keyed lists preserve row identity across reorders.
+### About
 
-## Quick start
+`nexus-dom` renders JSX to the DOM with
+[`nexus-state`](https://github.com/voodoofugu/nexus-state).
 
-Run the playground from a checkout with `npm install` and `npm run dev`.
-Set `jsx` to `react-jsx` and
-`jsxImportSource` to `nexus-dom` in your TypeScript configuration.
+- **Two update paths.** Read plain `state` to track a component's dependencies,
+  or pass `$` values into JSX to update individual DOM bindings.
+- **Shared stores.** Components declare the stores they can use. Each app
+  creates the stores its components access and disposes their resources.
+- **Keyed collections.** Rows retain their DOM identity across reorder and
+  update their live fields independently.
+- **Server rendering.** Render HTML synchronously and hydrate the existing DOM
+  with stable IDs and JSON store snapshots.
+
+<h2></h2>
+
+### Installation
+
+```bash
+npm install nexus-dom
+```
+
+| Import | Contents |
+| --- | --- |
+| `nexus-dom` | Components, stores, DOM rendering and bindings |
+| `nexus-dom/server` | Synchronous HTML rendering |
+| `nexus-dom/jsx-runtime` | Automatic JSX runtime |
+| `nexus-dom/jsx-dev-runtime` | Development JSX runtime |
+
+All entries ship ESM and CommonJS with TypeScript declarations.
+`nexus-state` is installed as a dependency. The main entry re-exports
+`createNexus`, `createActs` and `persist`.
+
+Set the automatic JSX runtime in `tsconfig.json`.
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "nexus-dom"
+  }
+}
+```
+
+Add `<div id="app"></div>` to the page and load your TSX entry with your build tool.
+
+<h2></h2>
+
+### Quick start
+
+Mount a counter whose text updates directly when its store changes.
+
+<details><summary><b>Counter</b> with <code>store</code>, <code>component</code> and <code>createApp</code></summary>
+<br>
 
 ```tsx
 import { createApp, store, component } from "nexus-dom";
@@ -44,13 +87,19 @@ app.render(<Counter />, "#app");
 Call `app.dispose()` when the application is removed to dispose its DOM roots
 and store resources.
 
-## API
+</details>
 
-Use `nexus-dom` for the browser API, stores and components. JSX tooling uses
-`nexus-dom/jsx-runtime` and `nexus-dom/jsx-dev-runtime`. Import
-`renderToString` from `nexus-dom/server`. Each entry supports ESM and CommonJS.
+<h2></h2>
 
-### App roots and low-level bindings
+### API
+
+<details><summary><b><code>nexus-dom</code></b></summary>
+<br>
+
+###### **— APPLICATION —**
+
+<details><summary><b><code>createApp</code></b> <em>(roots, state and lifecycle)</em></summary>
+<br>
 
 ```tsx
 import { createApp } from "nexus-dom";
@@ -58,14 +107,14 @@ import { createApp } from "nexus-dom";
 const app = createApp({
   state: { count: 0 },
   refs: { canvas: null as HTMLCanvasElement | null },
-  acts: (get, set, refs) => ({
+  acts: (get, set) => ({
     increment() {
       set({ count: get("count") + 1 });
     },
   }),
 });
 
-const { $, acts, refs } = app;
+const { $, acts } = app;
 
 function Counter() {
   return (
@@ -81,18 +130,16 @@ const root = app.render(<Counter />, "#app");
 root.dispose();
 ```
 
-`createApp` creates Nexus state, stable bindings, non-reactive refs and the root
-render facade together. State under `$` updates attached DOM bindings. Values in
-`refs` are ordinary `{ current }` cells: changing them does not schedule DOM
-work, which makes them suitable for elements, canvas contexts, sockets and other
-runtime resources. The lower-level `createNexus`, `bind` and `render` exports
-remain available independently.
+`createApp()` owns the roots and lazy stores of one application.
+`createApp({ state, refs, acts })` also creates an app-level Nexus store
+and its bindings. Refs are mutable `{ current }` cells for elements, canvas
+contexts, sockets and other runtime resources.
 
-`app.dispose()` disposes every root mounted by the app and runs setup cleanups:
+`app.dispose()` disposes every root mounted by the app and runs setup cleanups.
 
 ```tsx
 const app = createApp({
-  state,
+  state: {},
   refs: { socket: null as WebSocket | null },
   setup({ refs, onCleanup }) {
     refs.socket.current = new WebSocket(url);
@@ -101,33 +148,129 @@ const app = createApp({
 });
 ```
 
-`$.count` is a stable `LiveValue<number>`, not the current number. The renderer attaches it to one text node and subscribes that binding to the `count` key. The `Counter` function runs only during mounting.
+</details>
 
-Derived bindings use the existing top-level dependency model of `nexus-state`:
+<details><summary><b><code>render / createDOMRenderer</code></b> <em>(standalone DOM rendering)</em></summary>
+<br>
+
+`render(view, target, options?)` mounts into a DOM container or selector and
+returns a root with `.dispose()` and `.flush()`. Use it with function
+components and existing bindings. Use `createApp().render(...)` to resolve
+lazy stores declared with `store`.
+
+`createDOMRenderer(options?)` exposes `.mount()`, `.hydrate()` and `.flush()`
+when several roots need to share one scheduler.
 
 ```tsx
-const total = $.$select((state) => state.price * state.quantity);
+import { createDOMRenderer } from "nexus-dom";
 
-app.render(<p>Total: {total}</p>, document.body);
+const renderer = createDOMRenderer({ schedule: "manual" });
+const root = renderer.mount(<p>Ready</p>, document.body);
+renderer.flush();
+root.dispose();
 ```
 
-Selectors dynamically resubscribe when the set of keys they read changes.
-Calling `bind` again with the same store returns the same binding, so integration
-code can safely expose or reuse it without creating duplicate wrappers.
+</details>
 
-`app.render` is the normal application entry point. `createDOMRenderer` remains
-available for tests, custom scheduling and advanced integrations that need to
-mount several roots through the same renderer.
+<details><summary><b><code>onCleanup</code></b> <em>(component resources)</em></summary>
+<br>
 
-### Standalone views and lazy stores
-
-The current authoring model separates application bootstrap from component
-definitions. `store(...)` declares state, actions and refs without creating a
-module-global instance. `component(render, stores)` defines a normal JSX component:
+`onCleanup(cleanup)` registers work to run when the current component owner
+is disposed. Call it while the component renders. For resources shared by
+the whole app, use the store's `setup` or `mount` callback.
 
 ```tsx
+import { onCleanup } from "nexus-dom";
+
+function SearchInput() {
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => observer?.disconnect());
+  return <input ref={(node) => {
+    if (!node) return;
+    observer = new ResizeObserver(handleResize);
+    observer.observe(node);
+  }} />;
+}
+```
+
+</details>
+
+###### **— STORES AND COMPONENTS —**
+
+<details><summary><b><code>store</code></b> <em>(state, actions and refs)</em></summary>
+<br>
+
+`store(options, dependencies?)` declares state, actions and refs. Each app
+creates its own instance the first time a component uses the descriptor.
+The returned descriptor can be reused by as many components as needed.
+
+Stores can declare dependencies for their actions and lifecycle callbacks.
+
+```tsx
+const session = store({ state: { currentUser: "Alex" } });
+
+const assignments = store(
+  {
+    state: { assignee: "Unassigned" },
+    acts: ({ set, dependencies }) => ({
+      assignCurrentUser() {
+        set({ assignee: dependencies.get("currentUser") });
+      },
+    }),
+    setup({ onCleanup }) {
+      const socket = connectAssignments();
+      onCleanup(() => socket.close());
+    },
+  },
+  [session]
+);
+```
+
+Dependency cycles fail during mount. Each store sends its own notifications
+and update contexts. The renderer coalesces synchronous updates into one pass
+and uses the latest context for a queued component update. Keep invariants
+that require atomic observation inside one store.
+
+Use `mount` for client integrations that can change state, such as restoring
+preferences from storage or connecting Redux DevTools. It runs once per
+app-scoped store when a view that depends on it first mounts. Store
+dependencies mount before their dependents. During hydration, the callback
+runs after DOM adoption and snapshot validation. Storage values then reach
+the component through scheduled updates.
+
+```ts
+import { persist, store } from "nexus-dom";
+
+const preferences = store({
+  state: { compact: false },
+  acts: ({ reset }) => ({
+    resetPreferences: () => reset("compact"),
+  }),
+  mount({ nexus }) {
+    return persist(nexus, { key: "preferences", include: ["compact"] });
+  },
+});
+```
+
+Use `setup` for initialization needed during the first client render.
+Both callbacks are client-only. Returned cleanup functions and callbacks
+registered with `onCleanup` run on `app.dispose()`.
+
+</details>
+
+<details><summary><b><code>component</code></b> <em>(tracked JSX components)</em></summary>
+<br>
+
+`component(render, stores?)` defines a JSX component. Its callback receives
+the store scope first and the component's props second.
+
+```tsx
+import { component, createApp, store } from "nexus-dom";
+
+type Issue = { id: number; title: string };
+
 const issues = store({
-  state: { issues: [] as Issue[] },
+  state: { issues: [{ id: 1, title: "Review draft" }] as Issue[] },
   acts: ({ get, set }) => ({
     add(issue: Issue) {
       set({ issues: [...get("issues"), issue] });
@@ -148,117 +291,16 @@ app.render(<IssueTitle issueId={1} />, "#app");
 ```
 
 The first mounted consumer resolves a descriptor to one app-scoped store.
-Later views using the same descriptor receive its current values; another app
-gets an independent instance. Dependency tuples infer and merge `state`, `$`,
+Later components using the same descriptor receive its current values.
+Each app gets an independent instance. Dependency arrays merge `state`, `$`,
 `acts` and `refs`, and duplicate keys are rejected by TypeScript and again at
 runtime. JSX attributes remain per-instance input, while shared mutable data
 belongs to explicit store dependencies.
 
-Stores can depend on other descriptors when their actions need shared data:
+</details>
 
-```tsx
-const assignments = store(
-  {
-    state: { assignee: "Unassigned" },
-    acts: ({ set, dependencies }) => ({
-      assignCurrentUser() {
-        set({ assignee: dependencies.get("currentUser") });
-      },
-    }),
-    setup({ onCleanup }) {
-      const socket = connectAssignments();
-      onCleanup(() => socket.close());
-    },
-  },
-  [session]
-);
-```
-
-Dependency cycles fail during mount. Store setup runs once per app on first
-resolution and is disposed by `app.dispose()`. Updates across separate stores
-are not presented as one atomic Nexus transaction: each store keeps its own
-notifications and provenance. Synchronous updates are nevertheless coalesced
-into one renderer pass, which reads the final state of every dependency. A
-coalesced view contributes its most recent causal context to `onCommit`. Keep
-invariants that require atomic observation inside one store; use dependency
-actions to coordinate commands whose visual result only needs one commit.
-
-Use `mount` for client integrations that can change state, such as restoring
-preferences from storage or connecting Redux DevTools. It runs once per
-app-scoped store when a view that depends on it first mounts. Store
-dependencies mount before their dependents. During hydration, the callback
-runs after the DOM is adopted and the server snapshot is validated. Storage
-values then reach the view through normal scheduled updates.
-
-```ts
-import { persist, store } from "nexus-dom";
-import { devtools } from "nexus-state/devtools";
-
-const preferences = store({
-  state: { compact: false },
-  acts: ({ reset }) => ({
-    resetPreferences: () => reset("compact"),
-  }),
-  mount({ nexus, onCleanup }) {
-    onCleanup(persist(nexus, { key: "preferences", include: ["compact"] }));
-    return devtools(nexus, { name: "Preferences" });
-  },
-});
-```
-
-Use `setup` for initialization needed during the first client render.
-Both callbacks are client-only. Returned cleanup functions and callbacks
-registered with `onCleanup` run on `app.dispose()`.
-
-`state` and `$` expose the same store values with different update costs.
-Reading `state.count` gives a plain value and makes the surrounding view rerun
-when `count` changes. `$.count` is a stable `LiveValue` that updates one DOM
-binding without rerunning the view. `refs` are non-reactive runtime cells and
-`acts` are commands. These are two subscription strategies over one Nexus
-state, not two sources of truth. `state` stays read-only inside a view; direct
-local writes go through `$.field.set(...)`, while named actions remain the
-explicit path for domain operations.
-
-Bindings from standalone stores are writable for small local updates:
-
-```tsx
-<button onClick={() => $.count.set((count) => count + 1)}>
-  {$.count}
-</button>
-
-<button onClick={() => $.filter.set("active")}>Active</button>
-```
-
-The functional `set` form is preferred for increments and other
-read-modify-write operations; `$.count.set($.count.get() + 1)` is valid but
-easier to make stale. Direct updates use `$.set` provenance. Named `acts`
-remain useful for shared domain operations, validation and multi-key changes.
-
-Runtime refs intentionally remain separate from state. Nexus snapshots, reset,
-persistence, devtools and future SSR operate on state data; DOM nodes, sockets
-and canvas contexts are non-serializable resources with app lifecycle instead.
-
-Views also receive a stable component-local ID factory:
-
-```tsx
-const Field = component(({ id }) => {
-  const inputId = id("input");
-  return <label for={inputId}><input id={inputId} /></label>;
-});
-
-app.render(<Field />, target, { idPrefix: "account" });
-// nxs-ByvN82F
-```
-
-The ID survives tracked reruns and uses a different owner token for each
-component instance. Its fixed `nxs-<7-character hash>` form is derived from the contract
-version, root prefix, deterministic owner path and exact local key. The input
-stays available to collision diagnostics but is not exposed in markup. An
-explicit `idPrefix` is shared by browser and server rendering; client-only
-roots get an automatic unique prefix. The hash is an identifier encoding, not
-a security boundary for sensitive keys.
-
-### Store namespaces
+<details><summary><b><code>componentScope</code></b> <em>(shared store namespaces)</em></summary>
+<br>
 
 With `component(render, [stores])`, each component declares its own stores.
 Rendering a child inside a parent leaves that list unchanged. If both
@@ -301,8 +343,8 @@ const SubTitle = titleComponent(
 
 The keys in these objects become the names used under `state`, `$`, `acts`
 and `refs`. The object in `SubTitle` adds `subtitle` to the shared `title`
-scope. Names must be unique within a component. Use a descriptor array
-in `component` when you want a flat scope.
+scope. Names must be unique within a component. Use a descriptor array in
+`component` for a flat scope.
 
 Reading `state.preferences.theme` subscribes the view to the preferences
 store. Use `$.preferences.theme` for a binding to that field alone. Reading
@@ -322,10 +364,280 @@ namespace or enumerating its fields subscribes to the store as a whole.
 Conditional reads update subscriptions on each run. `$select` is reserved
 as a store name within a component scope.
 
-### Server rendering
+</details>
+
+<details><summary><b><code>id</code></b> <em>(stable component IDs)</em></summary>
+<br>
+
+```tsx
+import { component, createApp } from "nexus-dom";
+
+const Field = component(({ id }) => {
+  const inputId = id("input");
+  return (
+    <>
+      <label for={inputId}>Email</label>
+      <input id={inputId} />
+    </>
+  );
+});
+
+createApp().render(<Field />, "#app", { idPrefix: "account" });
+```
+
+The ID survives tracked reruns and differs for each component instance.
+Its format is `nxs-<7-character hash>`. Use the same `idPrefix` and initial
+tree on the server and the client. Client-only roots get a unique prefix
+automatically.
+
+</details>
+
+###### **— LIVE BINDINGS —**
+
+<details><summary><b><code>bind / createLiveSelector / isLiveValue</code></b> <em>(bind an existing source)</em></summary>
+<br>
+
+`bind(nexus)` returns stable `LiveValue` bindings for an existing Nexus source.
+Repeated calls for the same source return the same object. `$select` is
+reserved for derived values. A binding reads its current value with `.get()`
+and can be used as JSX text or a DOM property.
+
+```tsx
+import { bind, createNexus, render } from "nexus-dom";
+
+const nexus = createNexus({ state: { price: 12, quantity: 2 } });
+const $ = bind(nexus);
+const total = $.$select((state) => state.price * state.quantity);
+
+render(<p>Total: {total}</p>, "#app");
+```
+
+Selectors track top-level reads and update their subscriptions when those
+reads change. `createLiveSelector(source, selector, isEqual?)` creates a
+standalone selector. `isLiveValue(value)` narrows an unknown value to
+`LiveValue`. Use `.map(project, isEqual?)` to derive a binding from one live value.
+
+</details>
+
+<details><summary><b><code>WritableLiveValue.set</code></b> <em>(update a store field)</em></summary>
+<br>
+
+Bindings from `store(...)` expose `.set(value)` and `.set(current => value)`.
+
+```tsx
+<button onClick={() => $.count.set((count) => count + 1)}>
+  {$.count}
+</button>
+
+<button onClick={() => $.filter.set("active")}>Active</button>
+```
+
+Use a functional updater for changes that depend on the current value.
+Direct updates use the `$.set` context source. Use named actions for shared
+domain operations, validation and multi-key changes.
+
+</details>
+
+<details><summary><b><code>when / Show</code></b> <em>(conditional branches)</em></summary>
+<br>
+
+Selects a branch by the truthiness of a live value.
+
+```tsx
+import { when } from "nexus-dom";
+
+{when($.authorized, <Profile />, <Login />)}
+```
+
+`when` retains the current branch while source truthiness stays the same, even
+if the underlying value changes. Function components in the inactive VNode are
+not executed until that branch mounts.
+
+`Show` offers the JSX form, `<Show when={live} fallback={fallback}>{children}</Show>`.
+
+</details>
+
+<details><summary><b><code>LiveValue.render</code></b> <em>(value-dependent branches)</em></summary>
+<br>
+
+`.render(project, { key }?)` updates a local DOM branch when a live value changes.
+
+```tsx
+{$.authorized.render((authorized) =>
+  authorized ? <Profile /> : <Login />
+)}
+```
+
+When the live value changes, the region disposes the old branch and mounts
+the selected branch. Map to the condition to retain it while the result stays
+the same.
+
+```tsx
+const positive = $.count.map((count) => count >= 0);
+
+{positive.render((isPositive) =>
+  isPositive ? <Positive /> : <Negative />
+)}
+```
+
+You can also keep the branch by passing a structural key.
+
+```tsx
+{$.count.render(
+  (count) => count >= 0 ? <Positive /> : <Negative />,
+  { key: (count) => count >= 0 }
+)}
+```
+
+The project function runs again only when the key changes. Bind changing values
+inside a retained branch separately instead of deriving them from a skipped
+project call.
+
+</details>
+
+<details><summary><b><code>LiveValue.each</code></b> <em>(keyed collections)</em></summary>
+<br>
+
+Use `.each(key, project)` to render an array into a keyed DOM region.
+
+```tsx
+{$.tasks.each(
+  (task) => task.id,
+  ($task) => <Task task={$task} />
+)}
+```
+
+Rows with unchanged keys and values keep their DOM and owner when reordered.
+Removing a key disposes its row. Replacing an item under the same key updates
+the row's `$item` bindings without rerunning its component or replacing its DOM.
+On browsers with `ParentNode.moveBefore()`, keyed moves also preserve focus and
+other state associated with moved DOM nodes; older browsers use `insertBefore()`
+as a compatibility fallback. On that fallback, the general diff keeps the
+focused block in its increasing subsequence and exact moves rearrange neighbors
+around it, so the active element itself is not detached.
+Use `$item.title` in JSX and `$item.id.get()` when an event needs the current
+plain value. Items should be derived from the current Nexus state;
+`createNexus` clones its initial state, so external pre-construction object
+references are intentionally not treated as the stored values.
+
+Use `$field(key)` for field names that overlap a `LiveValue` method.
+
+```tsx
+{$item.$field("get")}
+```
+
+</details>
+
+<details><summary><b><code>list</code></b> <em>(typed list operations)</em></summary>
+<br>
+
+Use `app.list(key)` for arrays declared in `createApp({ state })`. A lazy
+store exposes the same typed `list(key)` helper inside its action factory.
+
+```tsx
+app.list("tasks").append(task);
+app.list("tasks").replace(index, nextTask);
+app.list("tasks").move(from, to);
+app.list("tasks").remove(index);
+
+app.list("tasks").batch((tasks) => {
+  tasks.move(9, 0);
+  tasks.replace(2, nextTask);
+  tasks.remove(5);
+});
+```
+
+They update Nexus state normally and attach an operation description to the
+existing `UpdateContext.meta`. Every operation receives a unique provenance id;
+`batch` carries an ordered operation list through one Nexus notification. A
+direct array binding can then apply insert, remove, move or replace without
+rediscovering the operation by scanning every key. Arbitrary `set({ tasks })`
+calls remain supported and use a general keyed diff with a
+longest-increasing-subsequence pass to minimize DOM moves.
+
+</details>
+
+###### **— ERRORS —**
+
+<details><summary><b><code>ErrorBoundary</code></b> <em>(local recovery)</em></summary>
+<br>
+
+`ErrorBoundary` owns its rendered subtree and replaces it locally when initial
+rendering or a scheduled binding or structural update throws.
+
+```tsx
+<ErrorBoundary
+  fallback={(error, reset) => (
+    <section role="alert">
+      <p>{String(error)}</p>
+      <button onClick={reset}>Try again</button>
+    </section>
+  )}
+>
+  <Editor />
+</ErrorBoundary>
+```
+
+The failed owner is disposed before the fallback mounts. `reset()` remounts the
+original children from current state; if a fallback itself fails, the error
+continues to the next surrounding boundary and then to renderer `onError`.
+Handle exceptions from event handlers and asynchronous callbacks at the call site.
+
+</details>
+
+<details><summary><b><code>RendererOptions / NexusDOMError</code></b> <em>(scheduling and diagnostics)</em></summary>
+<br>
+
+Use `schedule: "animationFrame"` to batch visual work before paint, or
+`schedule: "manual"` to run queued work through `root.flush()`.
+The default is `"microtask"`.
+
+```tsx
+app.render(<CanvasView />, "#app", { schedule: "animationFrame" });
+```
+
+Scheduled binding or structural errors can be observed without aborting the
+remaining bindings in the same commit.
+
+```tsx
+app.render(<App />, "#app", {
+  onError(error) {
+    report(error);
+  },
+});
+```
+
+Initial mount errors remain synchronous, but the renderer disposes the partial
+owner before rethrowing. A failed dynamic replacement is prepared off-DOM, so
+the previous working branch remains mounted.
+
+Errors raised by the library itself have a recognizable, searchable format and
+a stable code.
+
+```text
+nexus-dom: [RENDER_TARGET_NOT_FOUND]
+Render target "#app" was not found.
+```
+
+They are instances of the exported `NexusDOMError`. Exceptions thrown by user
+components or callbacks keep their original type and message, so the renderer
+does not mislabel application failures as library failures.
+
+`onCommit({ updates, contexts })` reports completed jobs and their Nexus update
+contexts.
+
+</details>
+
+</details>
+
+<details><summary><b><code>nexus-dom/server</code></b></summary>
+<br>
+
+<details><summary><b><code>renderToString / hydrate</code></b> <em>(HTML and client adoption)</em></summary>
+<br>
 
 The synchronous server entry renders current state without a browser DOM.
-Enable hydration markers when the client will reuse that markup:
+Enable hydration markers when the client will reuse that markup.
 
 ```tsx
 import { renderToString } from "nexus-dom/server";
@@ -335,6 +647,7 @@ const html = renderToString(<Field />, {
   idPrefix: "account",
 });
 
+// In the browser, after the server HTML is in target:
 app.hydrate(<Field />, target, { idPrefix: "account" });
 ```
 
@@ -350,7 +663,7 @@ When hydration resolves lazy stores, the server appends one versioned
 stores before their client `setup` functions run and removes the payload.
 Stores are matched in deterministic lazy-resolution order and guarded by their
 exact top-level key shape, so server and client must render the same view build.
-State transfer accepts only finite JSON values, arrays and plain objects;
+State transfer accepts finite JSON values, arrays and plain objects.
 `Date`, `Map`, `Set`, functions, `undefined`, `BigInt`, cycles and custom class
 instances require an application-level serialization policy. Refs and setup
 resources are intentionally never serialized. A store's `mount` runs after
@@ -368,37 +681,18 @@ removes them after creating or adopting the concrete text node. Other
 structural regions need no server markers because the expected VNode traversal
 provides their boundaries. A tag/text mismatch produces `HYDRATION_MISMATCH`,
 disposes partial client behavior, reports the error through `onError` and
-replaces the complete root using the same `idPrefix`. Initial store state
-transfer is automatic for lazy stores; branch-local mismatch replacement
-remains follow-up work.
+replaces the complete root using the same `idPrefix` and restored store values.
 
-### Security
+</details>
 
-Use application-owned JSX templates and pass untrusted text as children
-of ordinary elements. The browser writes text nodes and the server escapes
-text and attribute values.
+</details>
 
-The renderer rejects `innerHTML`, `outerHTML`, `srcdoc` and
-`dangerouslySetInnerHTML`. Use function handlers such as `onClick` for
-events. The browser and server reject inline event attributes such as `onclick`.
+<h2></h2>
 
-The URL check covers `href`, `src`, `action`, `formAction`, `poster`,
-SVG `xlink:href` and `data` on `object` elements. These accept relative
-URLs and the `http:`, `https:`, `mailto:` and `tel:` schemes. A rejected
-live update leaves the previous URL in place and follows the renderer's
-error handling path.
+### Recipes
 
-Apply your own origin and resource rules before binding untrusted URLs.
-Keep arbitrary property maps, CSS, executable element content and markup
-from untrusted sources outside your templates. Hydrate HTML generated from
-trusted templates and state.
-
-Hydration sends lazy-store snapshots to the browser in the HTML. Treat
-that state as public to the recipient and keep credentials and server-only
-data outside those stores. Authorize actions on your server and treat state
-received from the client as untrusted.
-
-### Tracked component updates
+<details><summary><b>Read plain state in a component</b></summary>
+<br>
 
 Use `component` to render a branch from ordinary state reads. In a flat
 component scope, the renderer tracks the top-level keys the callback reads.
@@ -434,9 +728,9 @@ For a stable local shape made of ordinary DOM elements, text and the same
 in place. Element identity, focus and uncontrolled DOM state survive these
 updates. A changed element type, key or child shape — or a component, keyed or
 dynamic subtree at the reconciliation boundary — falls back to atomic owned
-branch replacement. This is deliberately positional local reconciliation, not
-a general Virtual DOM or keyed/component diff. Update errors still follow owner
-cleanup and local `ErrorBoundary` propagation.
+branch replacement. Reconciliation is positional and limited to this local
+DOM shape. Update errors follow owner cleanup and local `ErrorBoundary`
+propagation.
 
 Refs can use a callback or a store's object cells.
 
@@ -444,179 +738,60 @@ Refs can use a callback or a store's object cells.
 <input ref={refs.search} />
 ```
 
-`nexus-state` is a regular dependency and its framework-agnostic API is
-re-exported by `nexus-dom`, so applications only need to install and import from
-`nexus-dom`. `bind` still accepts the small structural `NexusSource` contract,
-leaving room for explicit adapters without making them the primary design.
+</details>
 
-### Runtime ternaries without a compiler
+<details><summary><b>Choose between <code>state</code> and <code>$</code></b></summary>
+<br>
 
-The common boolean case can use a plain function rather than a control-flow
-component:
+| Read | Result | What updates |
+| --- | --- | --- |
+| `state.count` | Plain value | The component reruns when the observed key changes in a flat scope |
+| `state.preferences.theme` | Plain value | The component reruns when the observed store changes in a named scope |
+| `$.count` or `$.preferences.theme` | Live value | Each attached binding updates directly |
 
-```tsx
-import { when } from "nexus-dom";
+Use `state` for ordinary expressions or grouped changes. Use `$` for
+frequently changing text, properties and keyed collections. The writable
+bindings and named actions update the same store. Refs hold mutable runtime
+resources such as DOM nodes without subscribing the component.
 
-{when($.authorized, <Profile />, <Login />)}
-```
+</details>
 
-`when` retains the current branch while source truthiness stays the same, even
-if the underlying value changes. Function components in the inactive VNode are
-not executed until that branch mounts.
+<h2></h2>
 
-An ordinary ternary can run inside a live structural region without an extra compiler:
+### Security
 
-```tsx
-{$.authorized.render((authorized) =>
-  authorized ? <Profile /> : <Login />
-)}
-```
+Use application-owned JSX templates and pass untrusted text as children
+of ordinary elements. The browser writes text nodes and the server escapes
+text and attribute values.
 
-`render` owns only this local DOM region. When the live value changes, the old branch is disposed and the selected branch is mounted. Mapping to the actual condition first avoids replacing the branch for unrelated source values:
+The renderer rejects `innerHTML`, `outerHTML`, `srcdoc` and
+`dangerouslySetInnerHTML`. Use function handlers such as `onClick` for
+events. The browser and server reject inline event attributes such as `onclick`.
 
-```tsx
-const positive = $.count.map((count) => count >= 0);
+The URL check covers `href`, `src`, `action`, `formAction`, `poster`,
+SVG `xlink:href` and `data` on `object` elements. These accept relative
+URLs and the `http:`, `https:`, `mailto:` and `tel:` schemes. A rejected
+live update leaves the previous URL in place and follows the renderer's
+error handling path.
 
-{positive.render((isPositive) =>
-  isPositive ? <Positive /> : <Negative />
-)}
-```
+Apply your own origin and resource rules before binding untrusted URLs.
+Keep arbitrary property maps, CSS, executable element content and markup
+from untrusted sources outside your templates. Hydrate HTML generated from
+trusted templates and state.
 
-The same optimization can stay local to the region through a structural key:
+Hydration sends lazy-store snapshots to the browser in the HTML. Treat
+that state as public to the recipient and keep credentials and server-only
+data outside those stores. Authorize actions on your server and treat state
+received from the client as untrusted.
 
-```tsx
-{$.count.render(
-  (count) => count >= 0 ? <Positive /> : <Negative />,
-  { key: (count) => count >= 0 }
-)}
-```
+<h2></h2>
 
-The project function runs again only when the key changes. Bind changing values
-inside a retained branch separately instead of deriving them from a skipped
-project call.
+### Development
 
-The prototype still includes `Show` as a correctness baseline for branch ownership. A literally bare `{authorized ? A : B}` would require a JSX transform or component rerun because plain JavaScript evaluates it once during a one-shot component mount. Whether `.render(...)` is sufficiently intuitive remains an explicit usability question rather than a settled API decision.
+Run `npm run dev` from a checkout to open the issue-triage playground.
 
-### Keyed lists without a control-flow component
-
-Reactive arrays own a keyed DOM region through `.each(...)`:
-
-```tsx
-{$.tasks.each(
-  (task) => task.id,
-  ($task) => <Task task={$task} />
-)}
-```
-
-Rows with unchanged keys and values keep their DOM and owner when reordered.
-Removing a key disposes its row. Replacing an item under the same key updates
-the row's `$item` bindings without rerunning its component or replacing its DOM.
-On browsers with `ParentNode.moveBefore()`, keyed moves also preserve focus and
-other state associated with moved DOM nodes; older browsers use `insertBefore()`
-as a compatibility fallback. On that fallback, the general diff keeps the
-focused block in its increasing subsequence and exact moves rearrange neighbors
-around it, so the active element itself is not detached.
-Use `$item.title` in JSX and `$item.id.get()` when an event needs the current
-plain value. Items should be derived from the current Nexus state;
-`createNexus` clones its initial state, so external pre-construction object
-references are intentionally not treated as the stored values.
-
-Fields that collide with LiveValue methods use the explicit escape hatch:
-
-```tsx
-{$item.$field("get")}
-```
-
-`createApp` also exposes typed list operations:
-
-```tsx
-app.list("tasks").append(task);
-app.list("tasks").replace(index, nextTask);
-app.list("tasks").move(from, to);
-app.list("tasks").remove(index);
-
-app.list("tasks").batch((tasks) => {
-  tasks.move(9, 0);
-  tasks.replace(2, nextTask);
-  tasks.remove(5);
-});
-```
-
-They update Nexus state normally and attach an operation description to the
-existing `UpdateContext.meta`. Every operation receives a unique provenance id;
-`batch` carries an ordered operation list through one Nexus notification. A
-direct array binding can then apply insert, remove, move or replace without
-rediscovering the operation by scanning every key. Arbitrary `set({ tasks })`
-calls remain supported and use a general keyed diff with a
-longest-increasing-subsequence pass to minimize DOM moves. An id alone cannot
-describe an arbitrary diff, so it would not remove that O(n) fallback.
-
-Keyed blocks and dynamic branches store their actual top-level nodes internally.
-They do not add `nexus-item`, `nexus-dynamic` or `nexus-show` comments, wrappers
-or custom attributes to user markup. Empty text nodes are used only as invisible
-insertion anchors and when a rendered keyed row has no nodes.
-
-## Local error recovery
-
-`ErrorBoundary` owns its rendered subtree and replaces it locally when initial
-rendering or a scheduled binding/structural update throws:
-
-```tsx
-<ErrorBoundary
-  fallback={(error, reset) => (
-    <section role="alert">
-      <p>{String(error)}</p>
-      <button onClick={reset}>Try again</button>
-    </section>
-  )}
->
-  <Editor />
-</ErrorBoundary>
-```
-
-The failed owner is disposed before the fallback mounts. `reset()` remounts the
-original children from current state; if a fallback itself fails, the error
-continues to the next surrounding boundary and then to renderer `onError`.
-Like React error boundaries, this scope covers rendering work, not exceptions
-thrown later by event handlers or arbitrary asynchronous callbacks.
-
-## Implemented
-
-- automatic JSX runtime;
-- elements, fragments and function components;
-- text and DOM property bindings;
-- static and live event handlers;
-- selector dependency tracking;
-- microtask update deduplication;
-- manual flushing for deterministic tests and measurements;
-- owner-based subscription, event and component cleanup;
-- update contexts carried into renderer commit events.
-- an experimental owned `Show` branch with deterministic cleanup.
-- compiler-free `LiveValue.render(...)` regions with normal ternary expressions.
-- compiler-free keyed list regions through `LiveValue.each(...)`.
-- fine-grained live item fields that preserve row DOM and focus on replacement;
-- LIS-based general keyed reordering and exact context-driven list operations;
-- integrated app root and resource disposal through `app.dispose()`.
-- local owned error boundaries with fallback propagation and manual reset;
-- tracked components with plain state expressions, bounded local
-  reconciliation and injected
-  bindings, actions and refs;
-- SVG namespace support, including HTML descendants of `foreignObject`;
-- animation-frame scheduling for paint-aligned updates.
-- stable component-local `id(localKey)` values with explicit root prefixes;
-- synchronous HTML serialization through `nexus-dom/server`.
-- initial hydration for stable DOM, live bindings and tracked store views.
-
-## Deliberately missing
-
-- branch-local hydration mismatch fallback;
-- portals, suspense or transitions;
-- a style adapter;
-- full cold-navigation measurements including resource loading.
-
-These should only be added after the basic binding model proves understandable and useful.
-
-## Development
+<details><summary><b>Build and browser checks</b></summary>
+<br>
 
 ```bash
 npm install
@@ -625,20 +800,11 @@ npm run check
 npm run smoke:package
 npm run smoke:dogfood
 npm run smoke:dogfood:ssr
-npm run benchmark
-npm run benchmark:browser
-npm run benchmark:compare
-npm run benchmark:compare:mobile
-npm run benchmark:compare:matrix
-npm run benchmark:heap
-npm run benchmark:density
-npm run benchmark:selector-selection
-npm run benchmark:bundle
 ```
 
 `npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
 the main entry, both JSX runtimes and the server entry. Declarations are emitted
-separately to `dist/types`, and `npm run smoke:dist` loads every built runtime
+for ESM and CommonJS, and `npm run smoke:dist` loads every built runtime
 entry in both module formats.
 
 `npm run smoke:dogfood` builds the playground and checks filtering, editing,
@@ -650,114 +816,32 @@ loader. It checks that hydration adopts the server DOM, keeps the focused
 search input and applies persisted preferences after hydration. Set
 `NEXUS_DOM_BROWSER` to `firefox` or `webkit` to run with those browsers.
 
-Visual workloads can opt into frame batching:
+</details>
 
-```tsx
-app.render(<CanvasView />, "#app", { schedule: "animationFrame" });
-```
+<details><summary><b>Benchmarks</b></summary>
+<br>
 
-Scheduled binding or structural errors can be observed without aborting the
-remaining bindings in the same commit:
+| Command | What it measures |
+| --- | --- |
+| `npm run benchmark` | jsdom microbenchmarks for writes, bindings and subtree rebuilds |
+| `npm run benchmark:browser` | Keyed updates and reorders, forced layout and disposal |
+| `npm run benchmark:compare:matrix` | Production builds against React, Solid and Preact Signals in Chromium, Firefox and WebKit |
+| `npm run benchmark:compare:mobile` | The Chromium comparison with 4× CPU throttling |
+| `npm run benchmark:heap` | Retained allocations per keyed row in Chromium |
+| `npm run benchmark:density` | Sparse and dense updates through `$` and `state` |
+| `npm run benchmark:selector-selection` | Field-level selector tracking in namespaced stores |
+| `npm run benchmark:bundle` | Tree-shaken ESM entry sizes before and after gzip |
 
-```tsx
-app.render(<App />, "#app", {
-  onError(error) {
-    report(error);
-  },
-});
-```
+The browser comparison checks keyed order, DOM identity and focus before
+timing. Heap runs measure retained JavaScript objects. CPU throttling covers
+a slower CPU workload on the host machine. See
+[project measurements](https://github.com/voodoofugu/nexus-dom/blob/main/PROJECT.md#benchmark-policy)
+for sample counts, hardware-specific results and caveats.
 
-Initial mount errors remain synchronous, but the renderer disposes the partial
-owner before rethrowing. A failed dynamic replacement is prepared off-DOM, so
-the previous working branch remains mounted.
+</details>
 
-Errors raised by the library itself have a recognizable, searchable format and
-a stable code:
+<h2></h2>
 
-```text
-nexus-dom: [RENDER_TARGET_NOT_FOUND]
-Render target "#app" was not found.
-```
-
-They are instances of the exported `NexusDOMError`. Exceptions thrown by user
-components or callbacks keep their original type and message, so the renderer
-does not mislabel application failures as library failures.
-
-`npm run dev` opens a counter and keyed-list playground. It exposes component execution count, DOM commit count and update provenance so the rendering model can be judged visually instead of only through unit tests.
-
-The current benchmark is a jsdom microbenchmark. It compares direct DOM writes, a targeted Nexus binding and a deliberately naive subtree rebuild. It is useful for detecting large regressions, not for claiming performance against React, Solid or Preact. A fair comparison requires production browser builds, equal semantics, warm-up, repeated samples, memory checks and separate mount/update/list scenarios.
-
-The automated browser benchmark launches an installed Chrome/Chromium through
-`playwright-core` (set `CHROME_PATH` when it is not in a known location). It
-measures an exact row replacement, general and context-described moves, adjacent
-swap, complete reversal and stable dynamic branches with forced layout. On the
-current local Headless Chrome run, an exact last-to-first move measured about
-`0.5 ms` median versus `1.4 ms` for rebuilding 1,000 rows; a full reversal was
-roughly equal to rebuilding. Results are printed with browser identity and must
-be treated as machine-specific evidence, not general performance claims.
-
-The Chrome runner also performs a coarse retention probe: it repeatedly mounts,
-updates and disposes 1,000-row apps, forces garbage collection through CDP and
-reports both remaining fixture nodes and heap delta. The first 20-cycle run left
-zero fixture nodes and roughly `7 KiB` of heap delta after warm-up; this is a
-regression signal, not proof that every user graph is leak-free.
-
-`npm run benchmark:compare` production-builds a separate equal-semantics
-comparison against React, Solid and Preact Signals. Before timing, every adapter
-must prove that it mounted 1,000 rows, updated the requested text, retained row
-DOM identity and focus, and produced the requested keyed order. Framework-specific
-flushes are included in the measured work and every sample ends with a forced
-layout. Mount samples use equal warm-up and balanced execution orders. First-call
-mount is measured separately in fresh pages so it is not confused with warm
-steady state. The comparison is intended to expose trade-offs, not produce a
-single winner.
-
-The same runner measures the first mount in fresh pages and compares JS heap at
-1,000 and 10,000 mounted rows after forced garbage collection. It separates
-one-field and two-field keyed rows, then measures again after disposal. These
-heap values cover JavaScript objects, not complete native DOM memory.
-
-`npm run benchmark:compare:matrix` repeats correctness and timing in Chromium,
-Firefox and WebKit. Chromium and Firefox currently expose `moveBefore()`;
-WebKit exercises the `insertBefore()` fallback. All three preserve nexus-dom row
-identity, keyed order and focus in the tested reorder sequence. Heap diagnostics
-remain Chromium-only because they use CDP.
-
-`npm run benchmark:density` compares 500 identical components with 1, 2, 4, 8
-and 16 fields using either individual `$` bindings or one tracked `state` view.
-It measures one-field and all-field updates plus forced-GC heap. In the first
-local Chrome run after writable bindings, targeted `$` updates stayed around
-`0.3–0.4 ms`; dense updates crossed over between eight and sixteen fields, and
-at sixteen fields the tracked view measured `3.9 ms` versus `4.8 ms` for
-bindings. Retained JS heap at sixteen fields was
-about `2.3 KB/component` for the view versus `12.2 KB/component` for bindings.
-These values are machine-specific; the shape of the crossover is the useful
-result.
-
-`npm run benchmark:heap` runs a focused CDP sampling heap profile for static,
-keyed-static and one-/two-field keyed rows. It keeps source function names and
-reports retained sampled allocations per row, making it useful for locating
-the structures behind changes in the forced-GC totals.
-
-`npm run benchmark:compare:mobile` repeats the Chromium comparison with 4x CDP
-CPU throttling. This is a stable low-CPU regression workload, not a substitute
-for a real phone: it does not emulate mobile memory, thermals, GPU or network
-conditions. In the current local run, fresh-page first mount was about `16.9
-ms` for nexus-dom, `23.2 ms` for React, `20.6 ms` for Solid and `22.5 ms` for
-Preact Signals. Warm 1,000-row mount was `6.4 / 6.9 / 7.3 / 9.0 ms` in the same
-order; nexus-dom full reverse was `6.7 ms`, close to Solid at `6.3 ms` and below
-React at `11.0 ms` and Preact Signals at `17.6 ms`. These are machine-specific
-measurements, not universal rankings.
-
-The Rollup bundle benchmark builds isolated, Terser-minified ESM entries with
-`nexus-state` externalized and also builds the full entry with the dependency
-included. The current local measurement is approximately `8.81 KB gzip` for
-low-level core exports, `12.04 KB` for `createApp`, `12.61 KB` for the complete
-main entry, and `14.18 KB` for that entry plus the tree-shaken `nexus-state`
-runtime. The server entry is `7.08 KB` externalized or `8.15 KB` with
-`nexus-state`. The larger playground bundle also contains the example UI and
-diagnostics, so it is not a library-size measurement.
-
-## License
+### License
 
 [MIT](./LICENSE)

@@ -52,6 +52,20 @@ function createElement(document: Document, target: Node, type: string) {
     : document.createElement(type);
 }
 
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createDOMRenderer***:
+ * creates a DOM renderer with one scheduler for its mounted roots.
+ * @param options scheduling, diagnostics and component ID prefix.
+ * @returns a renderer with `mount()`, `hydrate()` and `flush()`.
+ * @example
+ * ```tsx
+ * const renderer = createDOMRenderer({ schedule: "manual" });
+ * const root = renderer.mount(<p>Ready</p>, document.body);
+ * renderer.flush();
+ * root.dispose();
+ * ```
+ */
 export function createDOMRenderer<C = unknown>(
   options: RendererOptions<C> = {},
   storeViews?: StoreViewResolver
