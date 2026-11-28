@@ -42,39 +42,10 @@ npm install nexus-dom
 
 ### Quick start
 
-Configure your build tool to use the automatic JSX runtime from `nexus-dom`.
-
-<details><summary><b>Vite 8 and TypeScript setup</b></summary>
-
-Set the runtime in `vite.config.ts`.
-
-```ts
-import { defineConfig } from "vite";
-
-export default defineConfig({
-  oxc: {
-    jsx: {
-      runtime: "automatic",
-      importSource: "nexus-dom",
-    },
-  },
-});
-```
-
-Set the JSX types in `tsconfig.json` and let Vite handle the transform.
-
-```json
-{
-  "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "preserve",
-    "jsxImportSource": "nexus-dom"
-  }
-}
-```
-
-</details>
+Set your JSX transform to the automatic runtime and use `nexus-dom` as the
+import source. The generated code imports from `nexus-dom/jsx-runtime`.
+See the [Vite setup](https://github.com/voodoofugu/nexus-dom/blob/main/PROJECT.md#vite-8-and-typescript-setup)
+for one example.
 
 Add `<div id="app"></div>` to your page and mount the counter in your TSX entry.
 

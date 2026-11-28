@@ -340,6 +340,36 @@ for sample counts, hardware-specific results and caveats.
 
 </details>
 
+### Vite 8 and TypeScript setup
+
+Set the runtime in `vite.config.ts`.
+
+```ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "nexus-dom",
+    },
+  },
+});
+```
+
+Set the JSX types in `tsconfig.json` and let Vite handle the transform.
+
+```json
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "jsxImportSource": "nexus-dom"
+  }
+}
+```
+
 ## Benchmark policy
 
 `npm run benchmark:selector-selection` changes only `selectedIssueId` in
