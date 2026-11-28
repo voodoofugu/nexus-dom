@@ -391,7 +391,7 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `8.79 KB
-gzip` for core, `12.06 KB` for `createApp`, and `12.55 KB` for the full main entry
+gzip` for core, `12.06 KB` for `createApp`, and `12.56 KB` for the full main entry
 with `nexus-state` externalized. The same full entry is `14.12 KB gzip` when the
 tree-shaken dependency is bundled. The server entry is `7.12 KB` externalized
 or `8.19 KB` with `nexus-state`. Track these separately from the playground

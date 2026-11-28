@@ -18,7 +18,6 @@ import {
 describe("nexus-dom rendering model", () => {
   it("mounts an application in one call and disposes its root and stores", async () => {
     const cleanup = vi.fn();
-    const onCommit = vi.fn();
     const counter = store({ state: { visible: false }, setup: () => cleanup });
     const Counter = component(({ $ }) => (
       <button onClick={() => $.visible.set(true)}>
@@ -27,13 +26,12 @@ describe("nexus-dom rendering model", () => {
     ), [counter]);
     const host = document.createElement("div");
 
-    const app = createApp(<Counter />, host, { onCommit });
+    const app = createApp(<Counter />, host);
     const button = host.querySelector("button")!;
     expect(button.textContent).toBe("Start");
     button.click();
     await Promise.resolve();
     expect(button.querySelector("strong")?.textContent).toBe("Ready");
-    expect(onCommit).toHaveBeenCalledOnce();
 
     app.dispose();
     expect(host.childNodes).toHaveLength(0);

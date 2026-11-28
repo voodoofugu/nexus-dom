@@ -105,7 +105,6 @@ target to mount immediately. Use `createApp()` to mount later or to hydrate.
 **Parameters:**
 
 - `view` and `target` mount the first root into an element or a selector.
-  The optional third argument sets renderer options.
 - `createApp(options)` accepts app-level `state`, `acts`, `refs` and `setup`
   for two-step initialization.
 
@@ -119,7 +118,8 @@ const app = createApp(<App />, "#app");
 <br>
 <ul><div>
 
-`app.render()` returns a root handle with its own `dispose()` and `flush()`.
+`app.render(view, target, options?)` accepts renderer options and returns a
+root handle with its own `dispose()` and `flush()`.
 
 ```tsx
 const app = createApp();

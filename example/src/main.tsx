@@ -4,8 +4,9 @@ import { createWorkspace } from "./workspace.js";
 import "./style.css";
 
 const { App, onCommit } = createWorkspace();
+const app = createApp();
 const host = document.querySelector("#app")!;
 const options = { idPrefix: "issue-triage", onCommit };
 
-if (host.hasAttribute("data-ssr")) createApp().hydrate(<App />, host, options);
-else createApp(<App />, host, options);
+if (host.hasAttribute("data-ssr")) app.hydrate(<App />, host, options);
+else app.render(<App />, host, options);

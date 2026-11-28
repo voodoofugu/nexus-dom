@@ -162,7 +162,6 @@ export function createApp(): NexusDOMApp<
  * creates an application and mounts its first DOM root.
  * @param view JSX or another renderable value.
  * @param target DOM container or selector.
- * @param options optional scheduling, diagnostics and component ID prefix.
  * @returns the app with `render`, `hydrate` and `dispose`.
  * @example
  * ```tsx
@@ -171,8 +170,7 @@ export function createApp(): NexusDOMApp<
  */
 export function createApp(
   view: Renderable,
-  target: ParentNode | string,
-  options?: RendererOptions<UpdateContext>
+  target: ParentNode | string
 ): NexusDOMApp<Record<string, never>, Record<string, never>, Record<string, never>>;
 
 /**---
@@ -216,8 +214,7 @@ export function createApp<
   A extends RecordAny,
 >(
   optionsOrView?: AppOptions<S, R, A> | AppOptionsWithoutActs<S, R> | Renderable,
-  target?: ParentNode | string,
-  rendererOptions?: RendererOptions<UpdateContext>
+  target?: ParentNode | string
 ): NexusDOMApp<S, A, R> {
   const options = target === undefined ? optionsOrView : undefined;
   const normalized = (options ?? { state: {} }) as
@@ -323,7 +320,7 @@ export function createApp<
 
   if (target !== undefined) {
     try {
-      app.render(optionsOrView as Renderable, target, rendererOptions);
+      app.render(optionsOrView as Renderable, target);
     } catch (error) {
       app.dispose();
       throw error;
