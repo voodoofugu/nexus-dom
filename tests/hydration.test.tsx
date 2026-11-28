@@ -1,11 +1,10 @@
 /** @jsxImportSource nexus-dom */
+import { bind, hydrate } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
 import { describe, expect, it, vi } from "vitest";
 import {
-  bind,
   createApp,
-  createNexus,
   ErrorBoundary,
-  hydrate,
   NexusDOMError,
   persist,
   store,

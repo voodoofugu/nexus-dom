@@ -1,18 +1,18 @@
 /** @jsxImportSource nexus-dom */
+import { bind, createDOMRenderer, render } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
+import { createListHelpers } from "../src/list.js";
 import { describe, expect, it, vi } from "vitest";
 import {
-  bind,
   createApp,
-  createNexus,
-  createDOMRenderer,
   ErrorBoundary,
   NexusDOMError,
   onCleanup,
-  render,
   store,
   component,
   type CommitEvent,
   type LiveItem,
+  type ListController,
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
@@ -373,35 +373,45 @@ describe("nexus-dom rendering model", () => {
     ]);
   });
 
-  it("creates a complete app with reactive state and non-reactive refs", () => {
-    const app = createApp({
+  it("shares reactive state and non-reactive refs through a store", () => {
+    const reportRef = vi.fn();
+    const model = store({
       state: { count: 0 },
       refs: { runtimeCount: 0 },
-      acts: (get, set, refs) => ({
+      acts: ({ get, set, refs }) => ({
         increment() {
           refs.runtimeCount.current++;
+          reportRef(refs.runtimeCount.current);
           set({ count: get("count") + 1 });
         },
       }),
     });
+    const Counter = component(({ $, acts, refs }) => (
+      <p>
+        <button onClick={() => { refs.runtimeCount.current = 10; }}>Set ref</button>
+        <button onClick={acts.increment}>Increment</button>
+        <output>{$.count}</output>
+      </p>
+    ), [model]);
     const host = document.createElement("div");
     const commits = vi.fn();
-    const root = app.render(<p>{app.$.count}</p>, host, {
+    const app = createApp();
+    const root = app.render(<Counter />, host, {
       schedule: "manual",
       onCommit: commits,
     });
+    const [setRef, increment] = host.querySelectorAll("button");
 
-    app.refs.runtimeCount.current = 10;
+    setRef!.click();
     root.flush();
-    expect(host.textContent).toBe("0");
+    expect(host.querySelector("output")?.textContent).toBe("0");
     expect(commits).not.toHaveBeenCalled();
 
-    app.acts.increment();
+    increment!.click();
     root.flush();
-
-    expect(host.textContent).toBe("1");
-    expect(app.refs.runtimeCount.current).toBe(11);
-    expect(app.nexus.get("count")).toBe(1);
+    expect(host.querySelector("output")?.textContent).toBe("1");
+    expect(reportRef).toHaveBeenCalledWith(11);
+    app.dispose();
   });
 
   it("tracks ordinary component reads and updates its subscriptions", () => {
@@ -590,16 +600,12 @@ describe("nexus-dom rendering model", () => {
 
   it("disposes every app root and setup resource", () => {
     const cleanup = vi.fn();
-    const app = createApp({
-      state: { count: 0 },
-      setup({ onCleanup }) {
-        onCleanup(cleanup);
-      },
-    });
+    const app = createApp();
+    app.onCleanup(cleanup);
     const firstHost = document.createElement("div");
     const secondHost = document.createElement("div");
-    app.render(<p>{app.$.count}</p>, firstHost);
-    app.render(<p>{app.$.count}</p>, secondHost);
+    app.render(<p>First</p>, firstHost);
+    app.render(<p>Second</p>, secondHost);
 
     app.dispose();
 
@@ -621,28 +627,36 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("applies typed list operations without rescanning every key", () => {
-    const app = createApp({
-      state: {
-        items: [
-          { id: 1, label: "First" },
-          { id: 2, label: "Second" },
-          { id: 3, label: "Third" },
-        ],
+    const app = createApp();
+    const items = [
+      { id: 1, label: "First" },
+      { id: 2, label: "Second" },
+      { id: 3, label: "Third" },
+    ];
+    let tasks!: ListController<(typeof items)[number]>;
+    const model = store({
+      state: { items },
+      acts: ({ list }) => ({ tasks: list("items") }),
+      setup({ acts }) {
+        tasks = acts.tasks;
       },
     });
     const host = document.createElement("div");
     const commits: CommitEvent<{ source: string }>[] = [];
     let keyCalls = 0;
-    const root = app.render(
+    const List = component(({ $ }) => (
       <ul>
-        {app.$.items.each(
+        {$.items.each(
           (item) => {
             keyCalls++;
             return item.id;
           },
           ($item) => <li data-id={$item.id}>{$item.label}</li>
         )}
-      </ul>,
+      </ul>
+    ), [model]);
+    const root = app.render(
+      <List />,
       host,
       {
         schedule: "manual",
@@ -652,7 +666,7 @@ describe("nexus-dom rendering model", () => {
     const thirdNode = host.querySelector('[data-id="3"]');
     keyCalls = 0;
 
-    app.list("items").move(2, 0);
+    tasks.move(2, 0);
     root.flush();
 
     expect(keyCalls).toBe(1);
@@ -660,14 +674,14 @@ describe("nexus-dom rendering model", () => {
     expect(commits.at(-1)?.contexts.at(-1)?.source).toBe("list.move");
 
     keyCalls = 0;
-    app.list("items").append({ id: 4, label: "Fourth" });
+    tasks.append({ id: 4, label: "Fourth" });
     root.flush();
     expect(keyCalls).toBe(1);
     expect(host.querySelector('[data-id="4"]')?.textContent).toBe("Fourth");
 
     const firstNode = host.querySelector('[data-id="1"]');
     keyCalls = 0;
-    app.list("items").batch((items) => {
+    tasks.batch((items) => {
       items.move(3, 0);
       items.replace(2, { id: 1, label: "First updated" });
       items.remove(3);
@@ -689,9 +703,12 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("dispatches row and changed-field subscriptions independently", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: { items: [{ id: 1, label: "First" }] },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div");
     const rowListener = vi.fn();
     const idListener = vi.fn();
@@ -705,7 +722,7 @@ describe("nexus-dom rendering model", () => {
     }
 
     const root = app.render(
-      app.$.items.each(
+      $.items.each(
         (item) => item.id,
         ($item) => <Subscribed item={$item} />
       ),
@@ -713,7 +730,7 @@ describe("nexus-dom rendering model", () => {
       { schedule: "manual" }
     );
 
-    app.list("items").replace(0, { id: 1, label: "Updated" });
+    list("items").replace(0, { id: 1, label: "Updated" });
     root.flush();
 
     expect(rowListener).toHaveBeenCalledOnce();
@@ -1024,7 +1041,8 @@ describe("nexus-dom rendering model", () => {
 
   it("cleans completed keyed rows when a later initial row throws", () => {
     const firstCleanup = vi.fn();
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: {
         items: [
           { id: 1, broken: false },
@@ -1032,6 +1050,7 @@ describe("nexus-dom rendering model", () => {
         ],
       },
     });
+    const $ = bind(nexus);
     const host = document.createElement("div");
 
     function Row({ id, broken }: { id: number; broken: boolean }) {
@@ -1042,7 +1061,7 @@ describe("nexus-dom rendering model", () => {
 
     expect(() =>
       app.render(
-        app.$.items.each(
+        $.items.each(
           (item) => item.id,
           ($item) => (
             <Row id={$item.id.get()} broken={$item.broken.get()} />
@@ -1151,13 +1170,16 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("routes keyed row update errors through the surrounding boundary", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: { items: [{ id: 1, value: 1 }] },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div");
     const root = app.render(
       <ErrorBoundary fallback={<p>List failed</p>}>
-        {app.$.items.each(
+        {$.items.each(
           (item) => item.id,
           (item) =>
             item.render((value) => {
@@ -1170,7 +1192,7 @@ describe("nexus-dom rendering model", () => {
       { schedule: "manual" }
     );
 
-    app.list("items").replace(0, { id: 1, value: -1 });
+    list("items").replace(0, { id: 1, value: -1 });
     root.flush();
 
     expect(host.textContent).toBe("List failed");
@@ -1345,7 +1367,9 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("switches an if branch only when source truthiness changes", () => {
-    const app = createApp({ state: { count: 1 } });
+    const app = createApp();
+    const nexus = createNexus({ state: { count: 1 } });
+    const $ = bind(nexus);
     const host = document.createElement("div");
     const positiveCleanup = vi.fn();
 
@@ -1355,18 +1379,18 @@ describe("nexus-dom rendering model", () => {
     }
 
     const root = app.render(
-      app.$.count.if(<Positive />, <em>Not positive</em>),
+      $.count.if(<Positive />, <em>Not positive</em>),
       host,
       { schedule: "manual" }
     );
     const positive = host.querySelector("strong");
 
-    app.nexus.set({ count: 2 });
+    nexus.set({ count: 2 });
     root.flush();
     expect(host.querySelector("strong")).toBe(positive);
     expect(positiveCleanup).not.toHaveBeenCalled();
 
-    app.nexus.set({ count: 0 });
+    nexus.set({ count: 0 });
     root.flush();
     expect(host.textContent).toBe("Not positive");
     expect(positiveCleanup).toHaveBeenCalledOnce();
@@ -1480,7 +1504,8 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("moves and removes keyed rows with multiple root nodes", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: {
         items: [
           { id: 1, label: "First" },
@@ -1488,9 +1513,11 @@ describe("nexus-dom rendering model", () => {
         ],
       },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div");
     const root = app.render(
-      app.$.items.each(
+      $.items.each(
         (item) => item.id,
         ($item) => (
           <>
@@ -1505,7 +1532,7 @@ describe("nexus-dom rendering model", () => {
     const secondHead = host.querySelector('[data-id="2"]');
     const secondTail = host.querySelector('[data-tail="2"]');
 
-    app.list("items").move(1, 0);
+    list("items").move(1, 0);
     root.flush();
 
     expect(Array.from(host.children)).toEqual([
@@ -1515,7 +1542,7 @@ describe("nexus-dom rendering model", () => {
       host.querySelector('[data-tail="1"]'),
     ]);
 
-    app.list("items").remove(0);
+    list("items").remove(0);
     root.flush();
 
     expect(secondHead?.isConnected).toBe(false);
@@ -1524,12 +1551,15 @@ describe("nexus-dom rendering model", () => {
   });
 
   it("reads item fields that collide with LiveValue methods", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: { items: [{ id: 1, get: "Initial" }] },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div");
     const root = app.render(
-      app.$.items.each(
+      $.items.each(
         (item) => item.id,
         ($item) => <span>{$item.$field("get")}</span>
       ),
@@ -1538,7 +1568,7 @@ describe("nexus-dom rendering model", () => {
     );
     const span = host.querySelector("span");
 
-    app.list("items").replace(0, { id: 1, get: "Updated" });
+    list("items").replace(0, { id: 1, get: "Updated" });
     root.flush();
 
     expect(host.querySelector("span")).toBe(span);

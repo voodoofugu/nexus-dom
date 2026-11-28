@@ -30,6 +30,7 @@ export const createPlugins = ({ clean = false, minify = true } = {}) => [
 
 const input = {
   index: "./src/index.ts",
+  core: "./src/core.ts",
   "jsx-runtime": "./src/jsx-runtime.ts",
   "jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
   server: "./src/server.ts",

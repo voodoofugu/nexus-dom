@@ -1,7 +1,9 @@
 import { signal, type Signal } from "@preact/signals";
 import { For, createSignal, flush as flushSolid } from "solid-js";
 import { insert, render as renderSolid } from "@solidjs/web";
-import { createApp, render as renderNexus } from "nexus-dom";
+import { bind, render as renderNexus } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
+import { createListHelpers } from "../../src/list.js";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { createElement, Fragment, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -100,10 +102,12 @@ const permutations = <T,>(values: readonly T[]): T[][] =>
       );
 
 const createNexusFixture = (): Fixture => {
-  const app = createApp({ state: { items: initial } });
+  const nexus = createNexus({ state: { items: initial } });
+  const $ = bind(nexus);
+  const { list } = createListHelpers(nexus.get, nexus.set);
   const host = createHost();
-  const root = app.render(
-    app.$.items.each(
+  const root = renderNexus(
+    $.items.each(
       (item) => item.id,
       ($item) =>
         jsx("span", {
@@ -124,24 +128,24 @@ const createNexusFixture = (): Fixture => {
   return {
     host,
     replaceMiddle(version) {
-      const item = app.nexus.get("items")[500]!;
-      app.list("items").replace(500, { ...item, label: `Row ${version}` });
+      const item = nexus.get("items")[500]!;
+      list("items").replace(500, { ...item, label: `Row ${version}` });
       flush();
     },
     moveAdjacent() {
-      app.list("items").move(499, 500);
+      list("items").move(499, 500);
       flush();
     },
     moveLastToFirst() {
-      app.list("items").move(rows - 1, 0);
+      list("items").move(rows - 1, 0);
       flush();
     },
     reverse() {
-      app.list("items").reverse();
+      list("items").reverse();
       flush();
     },
     dispose() {
-      app.dispose();
+      root.dispose();
       host.remove();
     },
   };
@@ -195,10 +199,10 @@ const mountVariants: MountVariant[] = [
   {
     name: "nexus keyed static fields",
     mount() {
-      const app = createApp({ state: { items: initial } });
+      const $ = bind(createNexus({ state: { items: initial } }));
       const host = createHost();
-      app.render(
-        app.$.items.each(
+      const root = renderNexus(
+        $.items.each(
           (item) => item.id,
           ($item) => {
             const item = $item.get();
@@ -214,7 +218,7 @@ const mountVariants: MountVariant[] = [
       );
       forceLayout(host);
       return () => {
-        app.dispose();
+        root.dispose();
         host.remove();
       };
     },
@@ -458,9 +462,9 @@ window.mountMemoryFixture = (variant, count) => {
       host.remove();
     };
   } else if (variant === "keyed static fields") {
-    const app = createApp({ state: { items } });
-    app.render(
-      app.$.items.each(
+    const $ = bind(createNexus({ state: { items } }));
+    const root = renderNexus(
+      $.items.each(
         (item) => item.id,
         ($item) => {
           const item = $item.get();
@@ -474,16 +478,16 @@ window.mountMemoryFixture = (variant, count) => {
       { schedule: "manual" }
     );
     disposeMemoryFixture = () => {
-      app.dispose();
+      root.dispose();
       host.remove();
     };
   } else if (
     variant === "reactive keyed (1 field)" ||
     variant === "reactive keyed (2 fields)"
   ) {
-    const app = createApp({ state: { items } });
-    app.render(
-      app.$.items.each(
+    const $ = bind(createNexus({ state: { items } }));
+    const root = renderNexus(
+      $.items.each(
         (item) => item.id,
         ($item) =>
           jsx("span", {
@@ -498,7 +502,7 @@ window.mountMemoryFixture = (variant, count) => {
       { schedule: "manual" }
     );
     disposeMemoryFixture = () => {
-      app.dispose();
+      root.dispose();
       host.remove();
     };
   } else if (variant === "React") {

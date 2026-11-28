@@ -21,18 +21,14 @@ nexus.set
 
 The renderer preserves the Nexus update context so tooling can explain which state transition caused each DOM commit.
 
-The public application path is deliberately small: `bind(store)` creates (and
-caches) the reactive view of Nexus state, while `render(view, target)` owns the
-renderer instance. `createDOMRenderer` is a low-level escape hatch rather than a
-required setup step.
+The application API uses `store(...)` descriptors and
+`component(render, dependencies)` JSX components. `createApp()` owns renderer
+roots and resolves each descriptor to one Nexus instance per app.
+The render callback receives the store scope and JSX props separately.
 
-The new primary authoring experiment uses standalone `store(...)` descriptors
-and `component(render, dependencies)` JSX components. `createApp()` owns the renderer
-roots and lazily resolves each descriptor to one app-scoped Nexus instance;
-different apps stay isolated. Component input remains normal JSX attributes,
-destructured directly as the render callback's second argument. The previous
-`createApp({ state, refs, acts })` facade remains available while the new model
-is validated and still owns the convenient `app.render(...)` entry point.
+`nexus-dom/core` exposes bindings and standalone rendering for an existing
+Nexus source. `bind(nexus)` caches its bindings and `render(view, target)`
+mounts them through an isolated renderer.
 
 Tracked components rerun their owned region through the renderer scheduler.
 `component` takes explicit dependencies, and `componentScope` shares a map
@@ -58,12 +54,12 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
 - Keyed arrays use `liveArray.each(key, project)` rather than a component-like
   `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
   changed values update `$item` bindings without rerunning or replacing the row.
-- General reorders use LIS to minimize physical moves. `app.list(key)` attaches
-  insert/remove/move/replace metadata to the existing Nexus `UpdateContext`, so
+- General reorders use LIS to minimize physical moves. A store action's
+  `list(key)` attaches operation metadata to the Nexus `UpdateContext`, so
   direct array bindings can skip the O(n) key scan for known operations.
 - Keyed blocks prefer `ParentNode.moveBefore()` so modern browsers retain focus
   and DOM state during moves; `insertBefore()` remains the compatibility path.
-- `app.list(key).batch(...)` preserves an ordered set of operations and unique
+- `list(key).batch(...)` preserves an ordered set of operations and unique
   operation ids through one automatically batched Nexus notification. Arbitrary
   array replacement still uses O(n) reconciliation because identity alone does
   not describe a diff.
@@ -72,10 +68,10 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
   injected into user markup.
 - DOM block references remain private renderer ownership. They are not stored in
   Nexus state, because one store may feed several roots and DOM resources must
-  follow root disposal. `app.refs` is reserved for explicit user runtime values.
-- `nexus-state` is a regular dependency and the default data model. Its core API
-  is re-exported so applications can install and import only `nexus-dom`; the
-  small structural `NexusSource` contract remains available for future adapters.
+  follow root disposal. Store `refs` hold mutable runtime values.
+- `nexus-state` is a regular dependency and the default data model. The main
+  entry re-exports `persist` for store lifecycle hooks. The core entry exposes
+  the structural `NexusSource` contract for adapters.
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
 - `app.dispose()` owns all roots and setup cleanups; `setup({ onCleanup })`
   provides lifecycle for sockets and other user runtime refs.
@@ -96,7 +92,7 @@ An order-sensitive hash can show that an arbitrary tree changed, but it cannot
 describe which rows moved or which DOM operations restore the new order. A
 per-row hash still requires an O(n) pass, duplicates keyed identity and needs a
 collision check. Maintaining hashes incrementally would itself require precise
-mutation metadata, which `app.list(...)` already provides without losing the
+mutation metadata, which `list(...)` already provides without losing the
 operation. Hashes may still be useful later for hydration or immutable-subtree
 memoization, but they do not reduce the physical work of a full reverse.
 
@@ -155,8 +151,8 @@ frequent sparse updates: editors, dashboards, interactive tables, task boards,
 streaming status screens, scroll-driven interfaces and canvas-adjacent tools.
 It is especially useful when focus, selection, element identity or explicit
 update provenance matters more than recreating component trees. `createApp`
-also gives existing Nexus users one integrated state, action, ref and render
-lifecycle instead of another reactive runtime to coordinate.
+owns the render and store lifecycle for components that declare scoped state,
+actions and refs.
 `componentScope(...)` makes shared stores available at the rendering boundary, so plain
 tracked state, actions, fine-grained bindings and runtime refs do not need prop
 drilling or a provider hierarchy.
@@ -172,7 +168,7 @@ drilling or a provider hierarchy.
   branch. Larger focus-sensitive trees must keep stable boundaries or move hot
   values into `$` bindings.
 - Arbitrary array replacement needs O(n) keyed reconciliation. Fast exact
-  operations require `app.list(...)` metadata.
+  operations require `list(...)` metadata.
 - Hydration reuses stable elements/text and attaches live bindings, events,
   refs, tracked views, dynamic branches, keyed blocks and error boundaries.
   Root mismatch replacement and lazy-store state transfer exist; branch-local
@@ -195,7 +191,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `14.12 KB gzip`; actual application cost still depends on imported APIs
+  about `13.88 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -256,8 +252,7 @@ drilling or a provider hierarchy.
 `1.0.0` is prepared with an MIT license and awaits publication to npm.
 `component` and `componentScope` are the tracked component
 API. Scoped `state` reads subscribe by namespace. Scoped `$.$select` provides
-field-level tracking for derived bindings. The README records the DOM
-property and hydration trust boundaries.
+field-level tracking for derived bindings.
 
 The package smoke installs the tarball in an empty directory, then compiles
 and runs ESM and CommonJS consumers. Separate declaration trees let
@@ -310,7 +305,7 @@ npm run smoke:dogfood:ssr
 ```
 
 `npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
-the main entry, both JSX runtimes and the server entry. Declarations are emitted
+the main, core, JSX runtime and server entries. Declarations are emitted
 for ESM and CommonJS, and `npm run smoke:dist` loads every built runtime
 entry in both module formats.
 
@@ -391,9 +386,10 @@ equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
 The isolated Rollup/Terser ESM benchmark currently measures roughly `8.79 KB
-gzip` for core, `12.06 KB` for `createApp`, and `12.56 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `14.12 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `7.12 KB` externalized
+gzip` for `bind`, `render` and `createDOMRenderer`, `11.95 KB` for `createApp`,
+and `12.38 KB` for the full main entry with `nexus-state` externalized.
+The same full entry is `13.88 KB gzip` with the tree-shaken dependency bundled.
+The server entry is `7.12 KB` externalized
 or `8.19 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 

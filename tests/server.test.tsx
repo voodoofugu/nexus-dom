@@ -1,9 +1,9 @@
 /** @jsxImportSource nexus-dom */
+import { bind } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
 import { describe, expect, it } from "vitest";
 import {
-  bind,
   createApp,
-  createNexus,
   NexusDOMError,
   onCleanup,
   store,

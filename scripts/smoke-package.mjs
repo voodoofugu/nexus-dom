@@ -8,6 +8,8 @@ const directory = await mkdtemp(join(tmpdir(), "nexus-dom-package-"));
 const tsc = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
 const source = `
 import { component, componentScope, createApp, store } from "nexus-dom";
+import { bind, isLiveValue, render } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { jsxDEV } from "nexus-dom/jsx-dev-runtime";
 import { renderToString } from "nexus-dom/server";
@@ -19,11 +21,23 @@ const Title = view(({ $, state }) =>
   $.message.visible.if(jsx(Text, { text: state.message.text }))
 );
 export const mount = (target: string | ParentNode) => createApp(jsx(Title, {}), target);
+export function rejectsOldAppOptions() {
+  // @ts-expect-error Application state is declared with store().
+  return createApp({ state: { count: 0 } });
+}
 const app = createApp();
-if ("view" in app) throw new Error("Unexpected legacy app.view method");
+if ("view" in app || "$" in app || "nexus" in app || "list" in app) {
+  throw new Error("Unexpected legacy app methods");
+}
 app.dispose();
 const html = renderToString(jsxDEV(Title, {}));
 if (html !== "<p>ready</p>") throw new Error("Unexpected SSR output: " + html);
+const external = createNexus({ state: { title: "external" } });
+const $ = bind(external);
+export const mountExternal = (target: string | ParentNode) => render($.title, target);
+if (!isLiveValue($.title) || renderToString($.title) !== "external") {
+  throw new Error("Could not use a binding from the core entry in SSR");
+}
 `;
 
 try {

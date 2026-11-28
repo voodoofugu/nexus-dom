@@ -34,8 +34,9 @@
 npm install nexus-dom
 ```
 
-Import browser APIs from `nexus-dom` and HTML rendering from `nexus-dom/server`.
-Both ship ESM, CommonJS and TypeScript declarations.
+Use `nexus-dom` for applications, `nexus-dom/server` for HTML rendering
+and `nexus-dom/core` to integrate an existing store. Each entry ships ESM,
+CommonJS and TypeScript declarations.
 
 <details><summary><b>TypeScript JSX setup</b></summary>
 
@@ -105,8 +106,6 @@ target to mount immediately. Use `createApp()` to mount later or to hydrate.
 **Parameters:**
 
 - `view` and `target` mount the first root into an element or a selector.
-- `createApp(options)` accepts app-level `state`, `acts`, `refs` and `setup`
-  for two-step initialization.
 
 **Example:**
 
@@ -120,6 +119,8 @@ const app = createApp(<App />, "#app");
 
 `app.render(view, target, options?)` accepts renderer options and returns a
 root handle with its own `dispose()` and `flush()`.
+
+Use `app.onCleanup(cleanup)` to release an app-wide resource on disposal.
 
 ```tsx
 const app = createApp();
@@ -437,7 +438,7 @@ update its live fields, and removing a key disposes the row.
 
 Updates an array with typed operations. A direct keyed binding can use the
 recorded operation to apply changes such as insert, remove, move and replace.
-Use `app.list` for app-level state or `list` in a store action factory.
+Use `list` inside a store's action factory.
 
 **Parameters:**
 
@@ -446,9 +447,13 @@ Use `app.list` for app-level state or `list` in a store action factory.
 **Example:**
 
 ```ts
-app.list("tasks").batch((tasks) => {
-  tasks.move(2, 0);
-  tasks.replace(1, nextTask);
+const taskStore = store({
+  state: { tasks: ["Review", "Publish", "Draft"] },
+  acts: ({ list }) => ({
+    moveToFront(index: number) {
+      list("tasks").move(index, 0);
+    },
+  }),
 });
 ```
 
@@ -532,6 +537,43 @@ app.hydrate(<App />, "#app", { idPrefix: "account" });
 > **✦ Note:** Render the same initial tree with the same `idPrefix`. Lazy-store
 > snapshots must be JSON-safe. The browser receives them in the HTML, so keep
 > credentials and server-only data outside those stores.
+
+</div></ul>
+</details>
+
+</div></ul>
+</details>
+
+<details><summary><b><code>nexus-dom/core</code></b></summary>
+<br>
+<ul><div>
+
+<details><summary><b><code>bind</code></b></summary>
+<br>
+<ul><div>
+
+**Description:**
+
+Provides JSX bindings for an existing Nexus store. The core entry also exposes
+`render`, `hydrate` and `createDOMRenderer` for standalone rendering.
+
+**Parameters:**
+
+- `nexus` is a Nexus store or a compatible source with `get` and `subscribe`.
+
+**Example:**
+
+```tsx
+import { bind, render } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
+
+const nexus = createNexus({ state: { title: "Issues" } });
+const $ = bind(nexus);
+render(<h1>{$.title}</h1>, "#app");
+```
+
+> **✦ Note:** Declare `nexus-state` in your app's dependencies if you import
+> it directly. To render components declared with `store()`, use `createApp()`.
 
 </div></ul>
 </details>

@@ -1,4 +1,6 @@
-import { createApp } from "nexus-dom";
+import { bind, render } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
+import { createListHelpers } from "../../src/list.js";
 import { jsx } from "nexus-dom/jsx-runtime";
 
 interface Item {
@@ -31,14 +33,13 @@ declare global {
 window.runNexusDOMRetentionCycle = (rounds = 20) => {
   for (let round = 0; round < rounds; round++) {
     const fixture = createKeyedFixture();
-    const item = fixture.app.nexus.get("items")[500]!;
-    fixture.app.list("items").replace(500, {
+    const item = fixture.nexus.get("items")[500]!;
+    fixture.list("items").replace(500, {
       ...item,
       label: `Retention ${round}`,
     });
     fixture.flush();
-    fixture.app.dispose();
-    fixture.host.remove();
+    fixture.dispose();
   }
   return fixtures.childNodes.length;
 };
@@ -103,11 +104,13 @@ function measureBatched(
 }
 
 function createKeyedFixture() {
-  const app = createApp({ state: { items: initial } });
+  const nexus = createNexus({ state: { items: initial } });
+  const $ = bind(nexus);
+  const { list } = createListHelpers(nexus.get, nexus.set);
   const host = document.createElement("div");
   fixtures.appendChild(host);
-  const root = app.render(
-    app.$.items.each(
+  const root = render(
+    $.items.each(
       (item) => item.id,
       ($item) =>
         jsx("span", { "data-id": $item.id, children: $item.label })
@@ -117,14 +120,15 @@ function createKeyedFixture() {
   );
 
   return {
-    app,
+    nexus,
+    list,
     host,
     flush() {
       root.flush();
       forceLayout(host);
     },
     update(items: Item[]) {
-      app.nexus.set({ items });
+      nexus.set({ items });
       this.flush();
     },
     dispose() {
@@ -162,7 +166,7 @@ function benchmarkPermutation(
   createOrders: (items: Item[]) => [Item[], Item[]]
 ) {
   const keyed = createKeyedFixture();
-  const current = [...keyed.app.nexus.get("items")];
+  const current = [...keyed.nexus.get("items")];
   const [first, second] = createOrders(current);
   let keyedToggle = false;
   const keyedMeasurement = measure(`${name}: keyed`, iterations, () => {
@@ -186,8 +190,8 @@ function benchmarkRowUpdate() {
   const keyed = createKeyedFixture();
   let keyedVersion = 0;
   const keyedMeasurement = measure("one row update: exact replace", 80, () => {
-    const item = keyed.app.nexus.get("items")[500]!;
-    keyed.app.list("items").replace(500, {
+    const item = keyed.nexus.get("items")[500]!;
+    keyed.list("items").replace(500, {
       ...item,
       label: `Keyed ${++keyedVersion}`,
     });
@@ -197,7 +201,7 @@ function benchmarkRowUpdate() {
   const rebuild = createRebuildFixture();
   let rebuildVersion = 0;
   const rebuildMeasurement = measure("one row update: rebuild", 80, () => {
-    const items = [...keyed.app.nexus.get("items")];
+    const items = [...keyed.nexus.get("items")];
     items[500] = { ...items[500]!, label: `Rebuild ${++rebuildVersion}` };
     rebuild.update(items);
   });
@@ -215,14 +219,14 @@ function benchmarkExactMove() {
   const keyed = createKeyedFixture();
   let atFront = false;
   const keyedMeasurement = measure("last to first: exact move", 60, () => {
-    if (atFront) keyed.app.list("items").move(0, size - 1);
-    else keyed.app.list("items").move(size - 1, 0);
+    if (atFront) keyed.list("items").move(0, size - 1);
+    else keyed.list("items").move(size - 1, 0);
     atFront = !atFront;
     keyed.flush();
   });
 
   const rebuild = createRebuildFixture();
-  const forward = [...keyed.app.nexus.get("items")];
+  const forward = [...keyed.nexus.get("items")];
   const moved = [forward.at(-1)!, ...forward.slice(0, -1)];
   let rebuildAtFront = false;
   const rebuildMeasurement = measure("last to first: rebuild", 60, () => {
@@ -237,22 +241,23 @@ function benchmarkExactMove() {
 
 function benchmarkDynamicBranch() {
   const createFixture = (keyed: boolean) => {
-    const app = createApp({ state: { value: 1 } });
+    const nexus = createNexus({ state: { value: 1 } });
+    const $ = bind(nexus);
     const host = document.createElement("div");
     fixtures.appendChild(host);
     const branch = (value: number) =>
       value >= 0
         ? jsx("strong", { children: "Positive" })
         : jsx("em", { children: "Negative" });
-    const root = app.render(
-      app.$.value.render(branch, keyed ? { key: (value) => value >= 0 } : {}),
+    const root = render(
+      $.value.render(branch, keyed ? { key: (value) => value >= 0 } : {}),
       host,
       { schedule: "manual" }
     );
     let value = 1;
     return {
       run() {
-        app.nexus.set({ value: ++value });
+        nexus.set({ value: ++value });
         root.flush();
         forceLayout(host);
       },

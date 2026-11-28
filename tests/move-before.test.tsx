@@ -1,10 +1,14 @@
 /** @jsxImportSource nexus-dom */
+import { bind } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
+import { createListHelpers } from "../src/list.js";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "nexus-dom";
 
 describe("state-preserving keyed moves", () => {
   it("uses moveBefore when the browser supports it", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: {
         items: [
           { id: 1, label: "First" },
@@ -13,6 +17,8 @@ describe("state-preserving keyed moves", () => {
         ],
       },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div") as HTMLDivElement & {
       moveBefore(node: Node, reference: Node | null): void;
     };
@@ -21,7 +27,7 @@ describe("state-preserving keyed moves", () => {
     });
     host.moveBefore = moveBefore;
     const root = app.render(
-      app.$.items.each(
+      $.items.each(
         (item) => item.id,
         ($item) => <span data-id={$item.id}>{$item.label}</span>
       ),
@@ -29,7 +35,7 @@ describe("state-preserving keyed moves", () => {
       { schedule: "manual" }
     );
 
-    app.list("items").move(2, 0);
+    list("items").move(2, 0);
     root.flush();
 
     expect(moveBefore).toHaveBeenCalled();
@@ -39,7 +45,8 @@ describe("state-preserving keyed moves", () => {
   });
 
   it("keeps the active block stationary on the insertBefore fallback", () => {
-    const app = createApp({
+    const app = createApp();
+    const nexus = createNexus({
       state: {
         items: [
           { id: 1, label: "First" },
@@ -48,10 +55,12 @@ describe("state-preserving keyed moves", () => {
         ],
       },
     });
+    const $ = bind(nexus);
+    const { list } = createListHelpers(nexus.get, nexus.set);
     const host = document.createElement("div");
     document.body.appendChild(host);
     const root = app.render(
-      app.$.items.each(
+      $.items.each(
         (item) => item.id,
         ($item) => (
           <span data-id={$item.id} tabIndex={$item.id.get() === 2 ? 0 : -1}>
@@ -66,7 +75,7 @@ describe("state-preserving keyed moves", () => {
     active.focus();
     const insertBefore = vi.spyOn(host, "insertBefore");
 
-    app.list("items").reverse();
+    list("items").reverse();
     root.flush();
 
     expect(
@@ -76,7 +85,7 @@ describe("state-preserving keyed moves", () => {
     expect(document.activeElement).toBe(active);
 
     insertBefore.mockClear();
-    app.list("items").move(1, 0);
+    list("items").move(1, 0);
     root.flush();
     expect(
       Array.from(host.querySelectorAll("span"), (node) => node.dataset.id)
@@ -85,7 +94,7 @@ describe("state-preserving keyed moves", () => {
     expect(document.activeElement).toBe(active);
 
     insertBefore.mockClear();
-    app.list("items").move(0, 2);
+    list("items").move(0, 2);
     root.flush();
     expect(
       Array.from(host.querySelectorAll("span"), (node) => node.dataset.id)

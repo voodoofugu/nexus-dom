@@ -52,7 +52,7 @@ type ListOperationWithoutId = ListOperation extends infer Operation
  * `batch()` groups synchronous operations into one store notification.
  * @example
  * ```ts
- * app.list("tasks").batch((tasks) => {
+ * list("tasks").batch((tasks) => {
  *   tasks.move(2, 0);
  *   tasks.remove(1);
  * });
@@ -71,10 +71,10 @@ export interface ListController<Item> {
 
 /**---
  * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- * ### ***AppHelpers***:
+ * ### ***ListHelpers***:
  * provides typed list operations for arrays in a Nexus store.
  */
-export interface AppHelpers<S extends RecordAny> {
+export interface ListHelpers<S extends RecordAny> {
   list<K extends ArrayKey<S>>(key: K): ListController<ArrayItem<S[K]>>;
 }
 
@@ -111,7 +111,7 @@ function assertIndex(index: number, length: number, allowEnd = false) {
 export function createListHelpers<S extends RecordAny>(
   get: Getter<S>,
   set: Setter<S>
-): AppHelpers<S> {
+): ListHelpers<S> {
   const controllers = new Map<PropertyKey, ListController<unknown>>();
 
   return {

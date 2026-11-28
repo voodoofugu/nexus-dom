@@ -415,6 +415,8 @@ function selectorLive<S extends object, R, C>(
  * @returns the cached binding object with each field and `$select`.
  * @example
  * ```tsx
+ * import { bind, render } from "nexus-dom/core";
+ *
  * const $ = bind(nexus);
  * render(<span>{$.count}</span>, "#app");
  * ```

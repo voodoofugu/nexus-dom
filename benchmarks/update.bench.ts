@@ -1,5 +1,6 @@
+import { bind, createDOMRenderer } from "nexus-dom/core";
+import { createNexus } from "nexus-state";
 import { bench, describe } from "vitest";
-import { bind, createDOMRenderer, createNexus } from "nexus-dom";
 import { jsx } from "nexus-dom/jsx-runtime";
 
 describe("single binding update", () => {

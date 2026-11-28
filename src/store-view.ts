@@ -9,9 +9,8 @@ import {
 import { nexusDOMError } from "./errors.js";
 import { bind, createTrackedSelector } from "./live.js";
 import { LIVE_VALUE, type LiveValue } from "./types.js";
-import { createListHelpers, type AppHelpers } from "./list.js";
+import { createListHelpers, type ListHelpers } from "./list.js";
 import { captureOwnerId } from "./owner.js";
-import type { AppRefs } from "./app.js";
 import type {
   BoundState,
   NexusSource,
@@ -24,6 +23,25 @@ import type {
 } from "./types.js";
 
 type RecordAny = Record<string, any>;
+
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***RefValue***:
+ * a mutable `current` cell for a DOM node or another runtime value.
+ */
+export interface RefValue<T> {
+  current: T;
+}
+
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***StoreRefs***:
+ * non-reactive runtime cells keyed by the names supplied in `refs`.
+ */
+export type StoreRefs<R extends RecordAny> = {
+  readonly [K in keyof R]: RefValue<R[K]>;
+};
+
 type EmptyRecord = {};
 const STORE_OPTIONS = Symbol("nexus-dom.store-options");
 declare const STORE_TYPES: unique symbol;
@@ -41,8 +59,8 @@ export interface StoreActsContext<
   readonly get: Getter<S>;
   readonly set: Setter<S>;
   readonly reset: (...keys: (keyof S)[]) => void;
-  readonly refs: AppRefs<R>;
-  readonly list: AppHelpers<S>["list"];
+  readonly refs: StoreRefs<R>;
+  readonly list: ListHelpers<S>["list"];
   readonly dependencies: StoreDependencyScope<D>;
 }
 
@@ -134,7 +152,7 @@ export function store<
 type AnyStore = StoreDefinition<RecordAny, RecordAny, RecordAny, any>;
 type StoreState<T> = T extends StoreDefinition<infer S, any, any, any> ? S : never;
 type StoreActs<T> = T extends StoreDefinition<any, infer A, any, any> ? A : never;
-type StoreRefs<T> = T extends StoreDefinition<any, any, infer R, any> ? R : never;
+type StoreRefValues<T> = T extends StoreDefinition<any, any, infer R, any> ? R : never;
 type UnionToIntersection<U> = (
   U extends unknown ? (value: U) => void : never
 ) extends (value: infer I) => void
@@ -167,7 +185,7 @@ export type DependencyActs<D extends readonly AnyStore[]> = EnsureRecord<
  * combines the ref values of a flat store dependency list.
  */
 export type DependencyRefs<D extends readonly AnyStore[]> = EnsureRecord<
-  MergeStores<D, StoreRefs<D[number]>>
+  MergeStores<D, StoreRefValues<D[number]>>
 >;
 
 /**---
@@ -205,7 +223,7 @@ type Conflicts<
           ? StoreState<Head>
           : Domain extends "acts"
             ? StoreActs<Head>
-            : StoreRefs<Head>),
+            : StoreRefValues<Head>),
         Seen
       > |
       Conflicts<
@@ -216,7 +234,7 @@ type Conflicts<
             ? StoreState<Head>
             : Domain extends "acts"
               ? StoreActs<Head>
-              : StoreRefs<Head>)
+              : StoreRefValues<Head>)
       >
   : never;
 
@@ -252,7 +270,7 @@ export interface ViewScope<D extends readonly AnyStore[]> {
   /** Named commands from the declared stores. */
   readonly acts: DependencyActs<D>;
   /** Shared, non-reactive runtime cells from the declared stores. */
-  readonly refs: AppRefs<DependencyRefs<D>>;
+  readonly refs: StoreRefs<DependencyRefs<D>>;
 }
 
 /**---
@@ -264,7 +282,7 @@ export interface StoreDependencyScope<D extends readonly AnyStore[]> {
   readonly get: Getter<DependencyState<D>>;
   readonly $: WritableBoundState<DependencyState<D>, UpdateContext>;
   readonly acts: DependencyActs<D>;
-  readonly refs: AppRefs<DependencyRefs<D>>;
+  readonly refs: StoreRefs<DependencyRefs<D>>;
 }
 
 /**---
@@ -281,7 +299,7 @@ export interface StoreSetupContext<
   readonly nexus: Nexus<S, A>;
   readonly $: WritableBoundState<S, UpdateContext>;
   readonly acts: A;
-  readonly refs: AppRefs<R>;
+  readonly refs: StoreRefs<R>;
   readonly dependencies: StoreDependencyScope<D>;
   onCleanup(cleanup: () => void): () => void;
 }
@@ -366,7 +384,7 @@ export type WorkspaceScope<R extends StoreRegistry> = {
     readonly [K in keyof R]: WritableBoundState<StoreState<R[K]>, UpdateContext>;
   } & Pick<BoundState<WorkspaceState<R>, UpdateContext>, "$select">;
   readonly acts: { readonly [K in keyof R]: StoreActs<R[K]> };
-  readonly refs: { readonly [K in keyof R]: AppRefs<StoreRefs<R[K]>> };
+  readonly refs: { readonly [K in keyof R]: StoreRefs<StoreRefValues<R[K]>> };
 };
 
 /**---
@@ -434,7 +452,7 @@ function extendRegistry(registry: Map<string, AnyStore[]>, stores: StoreRegistry
 
 interface ResolvedStore {
   nexus: Nexus<RecordAny, RecordAny>;
-  refs: AppRefs<RecordAny>;
+  refs: StoreRefs<RecordAny>;
   mount?: () => void;
 }
 
@@ -442,11 +460,11 @@ interface ResolvedScope {
   source: NexusSource<RecordAny, UpdateContext>;
   $: WritableBoundState<RecordAny, UpdateContext>;
   acts: RecordAny;
-  refs: AppRefs<RecordAny>;
+  refs: StoreRefs<RecordAny>;
   mount?: () => void;
 }
 
-const createRefs = (values: RecordAny): AppRefs<RecordAny> =>
+const createRefs = (values: RecordAny): StoreRefs<RecordAny> =>
   Object.fromEntries(
     Object.entries(values).map(([key, current]) => [key, { current }])
   );
@@ -675,7 +693,7 @@ export function createStoreViewRegistry(
       resolveStore(dependency as AnyStore)
     );
     const acts: RecordAny = {};
-    const refs = {} as AppRefs<RecordAny>;
+    const refs = {} as StoreRefs<RecordAny>;
     const stateKeys = new Map<ResolvedStore, Set<string>>();
     const stateOwners = new Map<string, ResolvedStore>();
     for (const item of resolved) {
