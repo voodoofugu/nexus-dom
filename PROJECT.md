@@ -163,8 +163,8 @@ drilling or a provider hierarchy.
 
 ### Limitations
 
-- Boolean conditional UI has compiler-free `when(live, truthy, fallback)`;
-  value-dependent branches still require `.render(...)`. Bare reactive JSX
+- Boolean conditional UI uses `live.if(truthy, fallback)`;
+  value-dependent branches use `.render(...)`. Bare reactive JSX
   expressions cannot work with one-shot components without a compiler or
   component reruns.
 - Tracked views preserve identity for stable plain-DOM shapes, but structural
@@ -195,7 +195,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `14.18 KB gzip`; actual application cost still depends on imported APIs
+  about `14.12 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -390,11 +390,11 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `8.81 KB
-gzip` for core, `12.04 KB` for `createApp`, and `12.61 KB` for the full main entry
-with `nexus-state` externalized. The same full entry is `14.18 KB gzip` when the
-tree-shaken dependency is bundled. The server entry is `7.08 KB` externalized
-or `8.15 KB` with `nexus-state`. Track these separately from the playground
+The isolated Rollup/Terser ESM benchmark currently measures roughly `8.79 KB
+gzip` for core, `12.06 KB` for `createApp`, and `12.55 KB` for the full main entry
+with `nexus-state` externalized. The same full entry is `14.12 KB gzip` when the
+tree-shaken dependency is bundled. The server entry is `7.12 KB` externalized
+or `8.19 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

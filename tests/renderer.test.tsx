@@ -9,15 +9,50 @@ import {
   NexusDOMError,
   onCleanup,
   render,
-  Show,
   store,
   component,
-  when,
   type CommitEvent,
   type LiveItem,
 } from "nexus-dom";
 
 describe("nexus-dom rendering model", () => {
+  it("mounts an application in one call and disposes its root and stores", async () => {
+    const cleanup = vi.fn();
+    const onCommit = vi.fn();
+    const counter = store({ state: { visible: false }, setup: () => cleanup });
+    const Counter = component(({ $ }) => (
+      <button onClick={() => $.visible.set(true)}>
+        {$.visible.if(<strong>Ready</strong>, "Start")}
+      </button>
+    ), [counter]);
+    const host = document.createElement("div");
+
+    const app = createApp(<Counter />, host, { onCommit });
+    const button = host.querySelector("button")!;
+    expect(button.textContent).toBe("Start");
+    button.click();
+    await Promise.resolve();
+    expect(button.querySelector("strong")?.textContent).toBe("Ready");
+    expect(onCommit).toHaveBeenCalledOnce();
+
+    app.dispose();
+    expect(host.childNodes).toHaveLength(0);
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("disposes resolved stores when the first mount fails", () => {
+    const cleanup = vi.fn();
+    const failure = new Error("first mount failed");
+    const data = store({ state: { label: "Ready" }, setup: () => cleanup });
+    const Label = component(({ state }) => <p>{state.label}</p>, [data]);
+    const Broken = () => { throw failure; };
+    const host = document.createElement("div");
+
+    expect(() => createApp(<><Label /><Broken /></>, host)).toThrow(failure);
+    expect(host.childNodes).toHaveLength(0);
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it("keeps declared store scope independent of JSX ancestry", () => {
     const titleStates = store({ state: { title: "Title" } });
     const subTitleStates = store({ state: { subtitle: "Subtitle" } });
@@ -1171,7 +1206,7 @@ describe("nexus-dom rendering model", () => {
     expect(host.querySelector("span")?.textContent).toBe("after");
   });
 
-  it("replaces an owned Show branch and cleans up the removed component", () => {
+  it("replaces an owned if branch and cleans up the removed component", () => {
     const store = createNexus({ state: { visible: true } });
     const $ = bind(store);
     const renderer = createDOMRenderer({ schedule: "manual" });
@@ -1185,12 +1220,7 @@ describe("nexus-dom rendering model", () => {
       return <strong>Visible branch</strong>;
     }
 
-    renderer.mount(
-      <Show when={$.visible} fallback={<em>Hidden branch</em>}>
-        <Visible />
-      </Show>,
-      host
-    );
+    renderer.mount($.visible.if(<Visible />, <em>Hidden branch</em>), host);
 
     const visibleNode = host.querySelector("strong");
     expect(visibleNode?.textContent).toBe("Visible branch");
@@ -1316,7 +1346,7 @@ describe("nexus-dom rendering model", () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
-  it("switches a when branch only when source truthiness changes", () => {
+  it("switches an if branch only when source truthiness changes", () => {
     const app = createApp({ state: { count: 1 } });
     const host = document.createElement("div");
     const positiveCleanup = vi.fn();
@@ -1327,7 +1357,7 @@ describe("nexus-dom rendering model", () => {
     }
 
     const root = app.render(
-      when(app.$.count, <Positive />, <em>Not positive</em>),
+      app.$.count.if(<Positive />, <em>Not positive</em>),
       host,
       { schedule: "manual" }
     );
@@ -1342,6 +1372,23 @@ describe("nexus-dom rendering model", () => {
     root.flush();
     expect(host.textContent).toBe("Not positive");
     expect(positiveCleanup).toHaveBeenCalledOnce();
+  });
+
+  it("binds if to a live row field even when its name overlaps the method", () => {
+    const data = createNexus({ state: { rows: [{ id: 1, if: false }] } });
+    const $ = bind(data);
+    const host = document.createElement("div");
+    const root = render($.rows.each((row) => row.id, ($row) => (
+      <p>{$row.$field("if").if("Ready", "Waiting")}</p>
+    )), host, { schedule: "manual" });
+    const row = host.querySelector("p");
+    expect(row?.textContent).toBe("Waiting");
+
+    data.set({ rows: [{ id: 1, if: true }] });
+    root.flush();
+    expect(host.querySelector("p")).toBe(row);
+    expect(row?.textContent).toBe("Ready");
+    root.dispose();
   });
 
   it("preserves keyed rows while reordering and removes owned rows", () => {

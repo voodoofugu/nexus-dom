@@ -213,20 +213,6 @@ export function createWorkspace() {
     }
   );
 
-  const EmptyState = workspaceComponent(
-    ({ state }) => {
-      const { query: rawQuery, filter } = state.filters;
-      const query = rawQuery.trim().toLowerCase();
-      const count = state.issues.items.filter((issue) =>
-        (filter === "all" || issue.status === filter) &&
-        (query === "" || issue.title.toLowerCase().includes(query) || issue.code.toLowerCase().includes(query) || issue.owner.toLowerCase().includes(query))
-      ).length;
-      return count === 0 ? (
-        <div class="empty-state"><strong>No matching issues</strong><span>Change the filter or clear the search query.</span></div>
-      ) : null;
-    }
-  );
-
   const IssueList = workspaceComponent(
     ({ $, acts }) => {
       diagnostics.viewRun("issue-list");
@@ -276,7 +262,12 @@ export function createWorkspace() {
             )}
           </ul>
 
-          <EmptyState />
+          {visibleIssues.map((items) => items.length === 0).if(
+            <div class="empty-state">
+              <strong>No matching issues</strong>
+              <span>Change the filter or clear the search query.</span>
+            </div>
+          )}
         </section>
       );
     }

@@ -35,11 +35,10 @@ export type {
   ListController,
   ListOperation,
 } from "./list.js";
-export { bind, createLiveSelector, isLiveValue, when } from "./live.js";
+export { bind, createLiveSelector, isLiveValue } from "./live.js";
 export { onCleanup } from "./owner.js";
 export { hydrate, render } from "./render.js";
 export { createDOMRenderer } from "./renderer.js";
-export { Show } from "./show.js";
 export { component, componentScope, store } from "./store-view.js";
 export type {
   DependencyActs,
@@ -74,7 +73,6 @@ export type {
   Renderable,
   RenderRoot,
   RendererOptions,
-  ShowVNode,
   StoreViewVNode,
   TrackedViewVNode,
   VNode,

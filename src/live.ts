@@ -17,6 +17,14 @@ const sameValue: EqualityFn<unknown> = Object.is;
 const bindingCache = new WeakMap<object, object>();
 const sourceKeys = new WeakMap<object, PropertyKey>();
 
+function conditionalLive<T, C>(
+  source: LiveValue<T, C>,
+  truthy: Renderable,
+  fallback?: Renderable
+): DynamicVNode {
+  return mapLive(source, Boolean).render((visible) => visible ? truthy : fallback);
+}
+
 class MappedLiveValue<T, U, C> implements LiveValue<U, C> {
   readonly [LIVE_VALUE] = true as const;
 
@@ -45,6 +53,10 @@ class MappedLiveValue<T, U, C> implements LiveValue<U, C> {
     nextEqual?: EqualityFn<V>
   ): LiveValue<V, C> {
     return mapLive(this, nextProject, nextEqual);
+  }
+
+  if(truthy: Renderable, fallback?: Renderable) {
+    return conditionalLive(this, truthy, fallback);
   }
 
   render(
@@ -123,6 +135,10 @@ class FieldLiveValue<T, C> implements LiveValue<unknown, C> {
     isEqual?: EqualityFn<U>
   ): LiveValue<U, C> {
     return mapLive(this, project, isEqual);
+  }
+
+  if(truthy: Renderable, fallback?: Renderable) {
+    return conditionalLive(this, truthy, fallback);
   }
 
   render(
@@ -204,6 +220,10 @@ class MutableLiveValue<T, C> implements LiveValue<T, C> {
     isEqual?: EqualityFn<U>
   ): LiveValue<U, C> {
     return mapLive(this, project, isEqual);
+  }
+
+  if(truthy: Renderable, fallback?: Renderable) {
+    return conditionalLive(this, truthy, fallback);
   }
 
   render(
@@ -366,6 +386,9 @@ function selectorLive<S extends object, R, C>(
     map<U>(project: (value: R) => U, nextEqual?: EqualityFn<U>) {
       return mapLive(this, project, nextEqual);
     },
+    if(truthy, fallback) {
+      return conditionalLive(this, truthy, fallback);
+    },
     render(
       project: (value: R) => Renderable,
       options?: { key?: (value: R) => unknown }
@@ -458,29 +481,6 @@ export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown
     value !== null &&
     (value as Partial<LiveValue<unknown>>)[LIVE_VALUE] === true
   );
-}
-
-/**---
- * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- * ### ***when***:
- * chooses an owned JSX branch from the truthiness of a live value.
- * @param source a live condition.
- * @param truthy JSX to mount while the condition is truthy.
- * @param fallback optional JSX to mount otherwise.
- * @returns a renderable dynamic branch.
- * @example
- * ```tsx
- * const panel = when($.signedIn, <Profile />, <SignIn />);
- * ```
- */
-export function when<T, C>(
-  source: LiveValue<T, C>,
-  truthy: Renderable,
-  fallback?: Renderable
-): DynamicVNode {
-  return source
-    .map((value) => Boolean(value))
-    .render((visible) => (visible ? truthy : fallback));
 }
 
 /**---

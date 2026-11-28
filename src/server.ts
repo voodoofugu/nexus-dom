@@ -111,17 +111,6 @@ export function renderToString(
       );
       return render(vnode.project(vnode.source.get()), branchOwner);
     }
-    if (vnode.kind === "show") {
-      const branchOwner = new Owner(
-        owner,
-        true,
-        owner.reserveIdSegment("d")
-      );
-      return render(
-        vnode.when.get() ? vnode.children : vnode.fallback,
-        branchOwner
-      );
-    }
     if (vnode.kind === "keyed") {
       const regionId = owner.reserveIdSegment("l");
       return vnode.source

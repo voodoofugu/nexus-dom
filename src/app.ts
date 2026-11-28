@@ -159,6 +159,25 @@ export function createApp(): NexusDOMApp<
 /**---
  * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
  * ### ***createApp***:
+ * creates an application and mounts its first DOM root.
+ * @param view JSX or another renderable value.
+ * @param target DOM container or selector.
+ * @param options optional scheduling, diagnostics and component ID prefix.
+ * @returns the app with `render`, `hydrate` and `dispose`.
+ * @example
+ * ```tsx
+ * const app = createApp(<Counter />, "#app");
+ * ```
+ */
+export function createApp(
+  view: Renderable,
+  target: ParentNode | string,
+  options?: RendererOptions<UpdateContext>
+): NexusDOMApp<Record<string, never>, Record<string, never>, Record<string, never>>;
+
+/**---
+ * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+ * ### ***createApp***:
  * creates an application with an app-level Nexus store and named actions.
  * @param options state, actions, optional runtime refs and app setup.
  * @returns an app with the Nexus store, actions, bindings and root lifecycle.
@@ -196,8 +215,11 @@ export function createApp<
   R extends RecordAny,
   A extends RecordAny,
 >(
-  options?: AppOptions<S, R, A> | AppOptionsWithoutActs<S, R>
+  optionsOrView?: AppOptions<S, R, A> | AppOptionsWithoutActs<S, R> | Renderable,
+  target?: ParentNode | string,
+  rendererOptions?: RendererOptions<UpdateContext>
 ): NexusDOMApp<S, A, R> {
+  const options = target === undefined ? optionsOrView : undefined;
   const normalized = (options ?? { state: {} }) as
     | AppOptions<S, R, A>
     | AppOptionsWithoutActs<S, R>;
@@ -298,6 +320,15 @@ export function createApp<
     onCleanup: app.onCleanup,
   });
   if (setupCleanup) app.onCleanup(setupCleanup);
+
+  if (target !== undefined) {
+    try {
+      app.render(optionsOrView as Renderable, target, rendererOptions);
+    } catch (error) {
+      app.dispose();
+      throw error;
+    }
+  }
 
   return app;
 }

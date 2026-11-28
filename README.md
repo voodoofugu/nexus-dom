@@ -77,8 +77,7 @@ const Counter = component(
   [counter]
 );
 
-const app = createApp();
-app.render(<Counter />, "#app");
+const app = createApp(<Counter />, "#app");
 ```
 
 Call `app.dispose()` when removing the application.
@@ -99,16 +98,28 @@ Call `app.dispose()` when removing the application.
 
 **Description:**
 
-Creates an app with its own stores and rendering roots. `app.render()` returns a
-root handle with `dispose()` and `flush()`. `app.dispose()` releases all the app's
-roots and store resources.
+Creates an app with its own stores and rendering roots. Pass a view and a
+target to mount immediately. Use `createApp()` to mount later or to hydrate.
+`app.dispose()` releases all the app's roots and store resources.
 
 **Parameters:**
 
-- `options` (optional) provides app-level `state`, `acts`, `refs` and `setup`.
-  Components can declare their own stores with `store()`.
+- `view` and `target` mount the first root into an element or a selector.
+  The optional third argument sets renderer options.
+- `createApp(options)` accepts app-level `state`, `acts`, `refs` and `setup`
+  for two-step initialization.
 
 **Example:**
+
+```tsx
+const app = createApp(<App />, "#app");
+```
+
+<details><summary><b>Mount in two steps</b></summary>
+<br>
+<ul><div>
+
+`app.render()` returns a root handle with its own `dispose()` and `flush()`.
 
 ```tsx
 const app = createApp();
@@ -116,6 +127,9 @@ const root = app.render(<App />, "#app");
 root.dispose();
 app.dispose();
 ```
+
+</div></ul>
+</details>
 
 </div></ul>
 </details>
@@ -327,6 +341,32 @@ readers and live bindings.
   {$.count}
 </button>
 ```
+
+</div></ul>
+</details>
+
+<details><summary><b><code>LiveValue.if</code></b></summary>
+<br>
+<ul><div>
+
+**Description:**
+
+Mounts a local branch and keeps it while the binding's truthiness stays the same.
+
+**Parameters:**
+
+- `truthy` is the JSX to mount for a truthy value.
+- `fallback` is optional JSX for a falsy value.
+
+**Example:**
+
+```tsx
+{$.authorized.if(<Profile />, <Login />)}
+```
+
+> **✦ Note:** JSX expressions used as arguments evaluate normally. Component
+> bodies run when their branch mounts. Use `.render()` when the branch needs
+> the current value.
 
 </div></ul>
 </details>

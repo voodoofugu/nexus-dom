@@ -471,6 +471,7 @@ const createWritableBinding = (
         get: () => base.get(),
         subscribe: (listener) => base.subscribe(listener),
         map: (project, isEqual) => base.map(project, isEqual),
+        if: (truthy, fallback) => base.if(truthy, fallback),
         render: (project, options) => base.render(project, options),
         each: (base.each as any).bind(base),
         set(next, context = "$.set") {

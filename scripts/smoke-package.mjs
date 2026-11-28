@@ -12,10 +12,13 @@ import { jsx } from "nexus-dom/jsx-runtime";
 import { jsxDEV } from "nexus-dom/jsx-dev-runtime";
 import { renderToString } from "nexus-dom/server";
 
-const message = store({ state: { text: "ready" } });
+const message = store({ state: { text: "ready", visible: true } });
 const view = componentScope({ message });
 const Text = component((_, { text }: { text: string }) => jsx("p", { children: text }));
-const Title = view(({ state }) => jsx(Text, { text: state.message.text }));
+const Title = view(({ $, state }) =>
+  $.message.visible.if(jsx(Text, { text: state.message.text }))
+);
+export const mount = (target: string | ParentNode) => createApp(jsx(Title, {}), target);
 const app = createApp();
 if ("view" in app) throw new Error("Unexpected legacy app.view method");
 app.dispose();

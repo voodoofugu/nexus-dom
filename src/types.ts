@@ -22,7 +22,8 @@ export type LiveListener<T, C = unknown> = (value: T, context?: C) => void;
  * exposes a reactive value for JSX text, properties and structural regions.
  * @description
  * Use `get()` for the current value and `map()` for a derived binding.
- * `render()` owns a local branch and `each()` owns a keyed array region.
+ * Use `if()` for a condition, `render()` for a value-dependent branch
+ * and `each()` for a keyed array region.
  * @example
  * ```tsx
  * <span>{$.count.map((count) => count.toLocaleString())}</span>
@@ -33,6 +34,19 @@ export interface LiveValue<T, C = unknown> {
   get(): T;
   subscribe(listener: LiveListener<T, C>): () => void;
   map<U>(project: (value: T) => U, isEqual?: EqualityFn<U>): LiveValue<U, C>;
+  /**---
+   * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
+   * ### ***if***:
+   * retains the active branch while the source truthiness stays the same.
+   * @param truthy content to mount for a truthy value.
+   * @param fallback optional content to mount for a falsy value.
+   * @returns a renderable dynamic region.
+   * @example
+   * ```tsx
+   * {$.authorized.if(<Profile />, <Login />)}
+   * ```
+   */
+  if(truthy: Renderable, fallback?: Renderable): DynamicVNode;
   render(
     project: (value: T) => Renderable,
     options?: { key?: (value: T) => unknown }
@@ -115,20 +129,8 @@ export interface FragmentVNode {
 
 /**---
  * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- * ### ***ShowVNode***:
- * describes the owned region created by `Show`.
- */
-export interface ShowVNode {
-  readonly kind: "show";
-  readonly when: LiveValue<unknown, unknown>;
-  readonly children?: Renderable;
-  readonly fallback?: Renderable;
-}
-
-/**---
- * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
  * ### ***DynamicVNode***:
- * describes a live branch returned by `when` or `LiveValue.render`.
+ * describes a live branch returned by `LiveValue.if` or `LiveValue.render`.
  */
 export interface DynamicVNode {
   readonly kind: "dynamic";
@@ -218,7 +220,6 @@ export type VNode =
   | ElementVNode
   | ComponentVNode
   | FragmentVNode
-  | ShowVNode
   | DynamicVNode
   | TrackedViewVNode
   | StoreViewVNode

@@ -606,17 +606,6 @@ export function createDOMRenderer<C = unknown>(
       return;
     }
 
-    if (vnode.kind === "show") {
-      const condition = vnode.when.map(Boolean);
-      renderRegion(
-        target,
-        owner,
-        condition,
-        (visible) => (visible ? vnode.children : vnode.fallback)
-      );
-      return;
-    }
-
     if (vnode.kind === "fragment") {
       renderInto(vnode.props.children as Renderable, target, owner);
       return;
@@ -818,18 +807,6 @@ export function createDOMRenderer<C = unknown>(
         vnode.source,
         vnode.project,
         vnode.key,
-        { node, hydrateInto }
-      );
-      return next === undefined ? node : next;
-    }
-    if (vnode.kind === "show") {
-      const condition = vnode.when.map(Boolean);
-      const next = renderRegion(
-        target,
-        owner,
-        condition,
-        (visible) => (visible ? vnode.children : vnode.fallback),
-        undefined,
         { node, hydrateInto }
       );
       return next === undefined ? node : next;

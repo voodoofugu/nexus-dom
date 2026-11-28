@@ -10,7 +10,6 @@ import {
   persist,
   store,
   component,
-  when,
 } from "nexus-dom";
 import { renderToString } from "nexus-dom/server";
 
@@ -395,7 +394,8 @@ describe("nexus-dom hydration", () => {
       <main>
         {$.visible.render((visible) => visible ? <input value="kept" /> : null)}
         {$.deferred.render((visible) => visible ? <strong>Ready</strong> : null)}
-        {when($.visible, <em>Shown</em>, <b>Hidden</b>)}
+        {$.visible.if(<em>Shown</em>, <b>Hidden</b>)}
+        {$.deferred.map(Boolean).if(<i>Deferred</i>)}
         <span>After</span>
       </main>
     );
@@ -417,6 +417,7 @@ describe("nexus-dom hydration", () => {
     expect(host.querySelector("strong")?.textContent).toBe("Ready");
     expect(host.querySelector("em")).toBe(null);
     expect(host.querySelector("b")?.textContent).toBe("Hidden");
+    expect(host.querySelector("i")?.textContent).toBe("Deferred");
     expect(host.querySelector("span")).toBe(after);
   });
 
