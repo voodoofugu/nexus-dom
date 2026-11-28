@@ -9,7 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "nexus-dom/jsx-runtime": source("jsx-runtime.ts"),
-      "nexus-dom/core": source("core.ts"),
       "nexus-dom": source("index.ts"),
     },
   },

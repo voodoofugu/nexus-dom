@@ -415,8 +415,6 @@ function selectorLive<S extends object, R, C>(
  * @returns the cached binding object with each field and `$select`.
  * @example
  * ```tsx
- * import { bind, render } from "nexus-dom/core";
- *
  * const $ = bind(nexus);
  * render(<span>{$.count}</span>, "#app");
  * ```
@@ -483,25 +481,6 @@ export function isLiveValue(value: unknown): value is LiveValue<unknown, unknown
     value !== null &&
     (value as Partial<LiveValue<unknown>>)[LIVE_VALUE] === true
   );
-}
-
-/**---
- * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
- * ### ***createLiveSelector***:
- * creates a standalone live value derived from a state source.
- * @param source store or compatible source to observe.
- * @param selector computes a value from the current state.
- * @param isEqual optional comparison for successive results. Defaults to `Object.is`.
- * @param sourceKey optional known top-level dependency.
- * @returns a live value that notifies when its selected result changes.
- */
-export function createLiveSelector<S extends object, R, C>(
-  source: NexusSource<S, C>,
-  selector: (state: S) => R,
-  isEqual?: EqualityFn<R>,
-  sourceKey?: PropertyKey
-): LiveValue<R, C> {
-  return selectorLive(source, selector, isEqual, sourceKey);
 }
 
 export function createTrackedSelector<S extends object, R, C>(

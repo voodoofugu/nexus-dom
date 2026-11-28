@@ -1,4 +1,5 @@
-import { bind, createDOMRenderer } from "nexus-dom/core";
+import { bind } from "../src/live.js";
+import { createDOMRenderer } from "../src/renderer.js";
 import { createNexus } from "nexus-state";
 import { bench, describe } from "vitest";
 import { jsx } from "nexus-dom/jsx-runtime";

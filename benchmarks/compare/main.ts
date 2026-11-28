@@ -1,7 +1,8 @@
 import { signal, type Signal } from "@preact/signals";
 import { For, createSignal, flush as flushSolid } from "solid-js";
 import { insert, render as renderSolid } from "@solidjs/web";
-import { bind, render as renderNexus } from "nexus-dom/core";
+import { bind } from "../../src/live.js";
+import { render as renderNexus } from "../../src/render.js";
 import { createNexus } from "nexus-state";
 import { createListHelpers } from "../../src/list.js";
 import { jsx } from "nexus-dom/jsx-runtime";

@@ -1,5 +1,6 @@
 /** @jsxImportSource nexus-dom */
-import { bind, hydrate } from "nexus-dom/core";
+import { bind } from "../src/live.js";
+import { hydrate } from "../src/render.js";
 import { createNexus } from "nexus-state";
 import { describe, expect, it, vi } from "vitest";
 import {

@@ -26,9 +26,8 @@ The application API uses `store(...)` descriptors and
 roots and resolves each descriptor to one Nexus instance per app.
 The render callback receives the store scope and JSX props separately.
 
-`nexus-dom/core` exposes bindings and standalone rendering for an existing
-Nexus source. `bind(nexus)` caches its bindings and `render(view, target)`
-mounts them through an isolated renderer.
+The renderer binds Nexus sources internally. Applications use the main entry
+for stores and browser rendering, and the server entry for HTML.
 
 Tracked components rerun their owned region through the renderer scheduler.
 `component` takes explicit dependencies, and `componentScope` shares a map
@@ -70,8 +69,7 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
   Nexus state, because one store may feed several roots and DOM resources must
   follow root disposal. Store `refs` hold mutable runtime values.
 - `nexus-state` is a regular dependency and the default data model. The main
-  entry re-exports `persist` for store lifecycle hooks. The core entry exposes
-  the structural `NexusSource` contract for adapters.
+  entry re-exports `persist` for store lifecycle hooks.
 - `styled-atom` integration should use lifecycle ownership rather than merging its runtime into this package.
 - `app.dispose()` owns all roots and setup cleanups; `setup({ onCleanup })`
   provides lifecycle for sockets and other user runtime refs.
@@ -305,7 +303,7 @@ npm run smoke:dogfood:ssr
 ```
 
 `npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
-the main, core, JSX runtime and server entries. Declarations are emitted
+the main, JSX runtime and server entries. Declarations are emitted
 for ESM and CommonJS, and `npm run smoke:dist` loads every built runtime
 entry in both module formats.
 

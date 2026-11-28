@@ -45,9 +45,9 @@ Install the resulting archive in your application.
 npm install /path/to/nexus-dom/nexus-dom-1.0.0.tgz
 ```
 
-Use `nexus-dom` for applications, `nexus-dom/server` for HTML rendering
-and `nexus-dom/core` to integrate an existing store. Each entry ships ESM,
-CommonJS and TypeScript declarations.
+Use `nexus-dom` for components, stores and browser rendering. Import
+`renderToString` from `nexus-dom/server`. Both entries ship ESM, CommonJS
+and TypeScript declarations. The package includes `nexus-state` as a dependency.
 
 > **✦ Note:** The package targets Node.js 20 or newer. To build from a
 > checkout, use Node.js 20.19+ on the 20.x line or Node.js 22.12+.
@@ -121,6 +121,8 @@ target to mount immediately. Use `createApp()` to mount later or to hydrate.
 
 - `view` and `target` mount the first root into an element or a selector.
 
+<br>
+
 **Example:**
 
 ```tsx
@@ -161,6 +163,8 @@ calls it when that component's render scope is disposed.
 **Parameters:**
 
 - `cleanup` runs when the owner is disposed.
+
+<br>
 
 **Example:**
 
@@ -204,6 +208,8 @@ when an individual root is removed.
 - `options` defines initial `state`, optional `acts`, `refs`, `setup` and `mount`.
 - `dependencies` (optional) lists other stores available to actions and callbacks.
 
+<br>
+
 **Example:**
 
 ```ts
@@ -241,6 +247,8 @@ its store scope and JSX props.
 - `render` receives `{ state, $, acts, refs, id }` and the JSX props.
 - `stores` (optional) accepts an array for flat access or a named object for
   namespaced access.
+
+<br>
 
 **Example:**
 
@@ -290,6 +298,8 @@ the stores it accesses. The component factory can add local entries.
 - `stores` names the shared descriptors. Names become keys under
   `state`, `$`, `acts` and `refs`.
 
+<br>
+
 **Example:**
 
 ```tsx
@@ -315,27 +325,33 @@ const Heading = workspaceComponent(
 
 **Description:**
 
-Returns a stable DOM ID for a key within a component instance.
+Returns a stable DOM ID for a key within a component instance. Reuse a key
+to refer to the same element. Use distinct keys for distinct elements.
 
 **Parameters:**
 
-- `localKey` names the element or relationship within the component.
+- `localKey` is a string local to the component, such as `"email"` or `"hint"`.
+
+<br>
 
 **Example:**
 
 ```tsx
 const Field = component(({ id }) => {
   const inputId = id("email");
+  const hintId = id("hint");
   return (
     <>
       <label for={inputId}>Email</label>
-      <input id={inputId} />
+      <input id={inputId} type="email" aria-describedby={hintId} />
+      <p id={hintId}>Use your work address.</p>
     </>
   );
 });
 ```
 
-> **✦ Note:** Use the same `idPrefix` and initial tree on the server and client.
+> **✦ Note:** Each component instance can reuse these local keys. Use the
+> same `idPrefix` and initial tree on the server and client.
 
 </div></ul>
 </details>
@@ -354,6 +370,8 @@ readers and live bindings.
 **Parameters:**
 
 - `value` is the next value or a function that receives the current value.
+
+<br>
 
 **Example:**
 
@@ -378,6 +396,8 @@ Mounts a local branch and keeps it while the binding's truthiness stays the same
 
 - `truthy` is the JSX to mount for a truthy value.
 - `fallback` is optional JSX for a falsy value.
+
+<br>
 
 **Example:**
 
@@ -404,6 +424,8 @@ Updates a local JSX branch when a live value changes.
 
 - `project` receives the current value and returns JSX.
 - `options.key` (optional) keeps the branch mounted while the key stays equal.
+
+<br>
 
 **Example:**
 
@@ -432,6 +454,8 @@ update its live fields, and removing a key disposes the row.
 
 - `key` returns a unique, stable key for an item.
 - `project` receives the row's live item and returns JSX.
+
+<br>
 
 **Example:**
 
@@ -464,6 +488,8 @@ Use `list` inside a store's action factory.
 
 - `key` selects an array field in the store.
 
+<br>
+
 **Example:**
 
 ```ts
@@ -495,6 +521,8 @@ again with current state.
 
 - `children` is the protected subtree.
 - `fallback` accepts JSX or a callback that receives the error and reset function.
+
+<br>
 
 **Example:**
 
@@ -534,6 +562,8 @@ Renders JSX to HTML synchronously. The browser can adopt that HTML with
 - `options.hydration` adds the markers and store snapshots used by hydration.
 - `options.idPrefix` sets the prefix input for stable component IDs.
 
+<br>
+
 **Example:**
 
 ```tsx
@@ -569,47 +599,6 @@ root again.
 </div></ul>
 </details>
 
-<details><summary><b><code>nexus-dom/core</code></b></summary>
-<br>
-<ul><div>
-
-<details><summary><b><code>bind</code></b></summary>
-<br>
-<ul><div>
-
-**Description:**
-
-Provides JSX bindings for an existing Nexus store. The core entry also exposes
-`render`, `hydrate` and `createDOMRenderer` for standalone rendering,
-plus `createLiveSelector` and `isLiveValue` for working with bindings.
-Mount components that declare their own stores through `createApp()`.
-
-**Parameters:**
-
-- `nexus` is a Nexus store or a compatible source with `get` and `subscribe`.
-
-**Example:**
-
-```tsx
-import { bind, render } from "nexus-dom/core";
-import { createNexus } from "nexus-state";
-
-const nexus = createNexus({ state: { title: "Issues" } });
-const $ = bind(nexus);
-render(<h1>{$.title}</h1>, "#app");
-```
-
-> **✦ Note:** Declare `nexus-state` in your app's dependencies if you import
-> it directly. For SSR with an external store, provide the same initial
-> state on the client. Automatic snapshot transfer covers stores declared
-> with `store()` and hydrated with `app.hydrate()`.
-
-</div></ul>
-</details>
-
-</div></ul>
-</details>
-
 <h2></h2>
 
 ### Recipes
@@ -623,6 +612,8 @@ render(<h1>{$.title}</h1>, "#app");
 | `state.count` | The component reruns when this key changes in a flat scope. |
 | `state.preferences.theme` | The component reruns when the observed store changes. |
 | `$.count` | The attached text or property updates directly. |
+
+<br>
 
 **Example:**
 

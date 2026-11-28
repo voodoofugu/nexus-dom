@@ -10,7 +10,6 @@ export default defineConfig({
       "nexus-dom/jsx-dev-runtime": source("jsx-dev-runtime.ts"),
       "nexus-dom/jsx-runtime": source("jsx-runtime.ts"),
       "nexus-dom/server": source("server.ts"),
-      "nexus-dom/core": source("core.ts"),
       "nexus-dom": source("index.ts"),
     },
   },

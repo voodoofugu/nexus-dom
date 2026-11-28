@@ -1,5 +1,7 @@
 /** @jsxImportSource nexus-dom */
-import { bind, createDOMRenderer, render } from "nexus-dom/core";
+import { bind } from "../src/live.js";
+import { createDOMRenderer } from "../src/renderer.js";
+import { render } from "../src/render.js";
 import { createNexus } from "nexus-state";
 import { createListHelpers } from "../src/list.js";
 import { describe, expect, it, vi } from "vitest";

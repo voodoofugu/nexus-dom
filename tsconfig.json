@@ -13,7 +13,6 @@
     "baseUrl": ".",
     "paths": {
       "nexus-dom": ["./src/index.ts"],
-      "nexus-dom/core": ["./src/core.ts"],
       "nexus-dom/jsx-runtime": ["./src/jsx-runtime.ts"],
       "nexus-dom/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"],
       "nexus-dom/server": ["./src/server.ts"]

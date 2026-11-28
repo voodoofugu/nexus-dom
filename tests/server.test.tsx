@@ -1,5 +1,5 @@
 /** @jsxImportSource nexus-dom */
-import { bind } from "nexus-dom/core";
+import { bind } from "../src/live.js";
 import { createNexus } from "nexus-state";
 import { describe, expect, it } from "vitest";
 import {

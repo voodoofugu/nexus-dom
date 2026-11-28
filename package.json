@@ -22,16 +22,6 @@
         "default": "./dist/cjs/index.js"
       }
     },
-    "./core": {
-      "import": {
-        "types": "./dist/types/core.d.ts",
-        "default": "./dist/esm/core.js"
-      },
-      "require": {
-        "types": "./dist/types-cjs/core.d.ts",
-        "default": "./dist/cjs/core.js"
-      }
-    },
     "./jsx-runtime": {
       "import": {
         "types": "./dist/types/jsx-runtime.d.ts",

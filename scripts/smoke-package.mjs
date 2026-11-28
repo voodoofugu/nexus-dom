@@ -8,11 +8,12 @@ const directory = await mkdtemp(join(tmpdir(), "nexus-dom-package-"));
 const tsc = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
 const source = `
 import { component, componentScope, createApp, store } from "nexus-dom";
-import { bind, isLiveValue, render } from "nexus-dom/core";
-import { createNexus } from "nexus-state";
 import { jsx } from "nexus-dom/jsx-runtime";
 import { jsxDEV } from "nexus-dom/jsx-dev-runtime";
 import { renderToString } from "nexus-dom/server";
+
+// @ts-expect-error Standalone integration is internal.
+export type LegacyCore = typeof import("nexus-dom/core");
 
 const message = store({ state: { text: "ready", visible: true } });
 const view = componentScope({ message });
@@ -32,12 +33,6 @@ if ("view" in app || "$" in app || "nexus" in app || "list" in app) {
 app.dispose();
 const html = renderToString(jsxDEV(Title, {}));
 if (html !== "<p>ready</p>") throw new Error("Unexpected SSR output: " + html);
-const external = createNexus({ state: { title: "external" } });
-const $ = bind(external);
-export const mountExternal = (target: string | ParentNode) => render($.title, target);
-if (!isLiveValue($.title) || renderToString($.title) !== "external") {
-  throw new Error("Could not use a binding from the core entry in SSR");
-}
 `;
 
 try {
@@ -45,6 +40,9 @@ try {
     encoding: "utf8",
   });
   const [{ filename, files }] = JSON.parse(packed);
+  if (files.some(({ path }) => /^dist\/(?:esm|cjs|types|types-cjs)\/core\./.test(path))) {
+    throw new Error("Unexpected core entry in the package tarball");
+  }
   for (const required of ["LICENSE", "CHANGELOG.md"]) {
     if (!files.some(({ path }) => path === required)) {
       throw new Error(`Missing ${required} in the package tarball`);
