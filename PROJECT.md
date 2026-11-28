@@ -1,25 +1,19 @@
-# nexus-dom — experiment context
+# nexus-dom project notes
 
-_Started: 2026-11-21 · status: working alpha_
+Status: the implementation for `1.0.0` is ready for its first npm release.
 
-## Goal
+## Scope
 
-Test whether the subscription and provenance model of `nexus-state` can support a small, understandable DOM renderer with precise updates and reliable resource ownership.
+`nexus-dom` builds browser interfaces from JSX, with app-scoped stores,
+fine-grained DOM updates, tracked components, server rendering and hydration.
+It uses `nexus-state` internally to manage state and preserve update provenance.
 
-This is not currently a framework project. Fine-grained DOM binding is the first hypothesis, not a locked architecture. Component reruns, local reconciliation and hybrid approaches remain valid outcomes of the experiment.
+## Rendering model
 
-## First hypothesis
-
-A component executes once to create DOM. Stable `LiveValue` objects connect Nexus keys or selectors to concrete text/property bindings. Nexus updates invalidate only those bindings; a scheduler deduplicates them and commits the latest values.
-
-```text
-nexus.set
-→ subscribed LiveValue
-→ dirty binding set
-→ DOM commit
-```
-
-The renderer preserves the Nexus update context so tooling can explain which state transition caused each DOM commit.
+A component can mix two subscription paths. Reading plain `state` tracks
+dependencies for a local rerender. A `$` binding connects a store field or
+selector directly to a DOM update through the scheduler. Commit callbacks
+receive the update context from the originating store change.
 
 The application API uses `store(...)` descriptors and
 `component(render, dependencies)` JSX components. `createApp()` owns renderer
@@ -29,15 +23,13 @@ The render callback receives the store scope and JSX props separately.
 The renderer binds Nexus sources internally. Applications use the main entry
 for stores and browser rendering, and the server entry for HTML.
 
-Tracked components rerun their owned region through the renderer scheduler.
 `component` takes explicit dependencies, and `componentScope` shares a map
 of store namespaces across components. Stable local trees of plain elements,
-text and unchanged live
-bindings are reconciled positionally in place; text, properties, events and
-refs update without losing element identity or focus. Structural changes and
+text and unchanged live bindings are reconciled positionally in place.
+Text, properties, events and refs update while preserving element identity
+and focus. Structural changes and
 component, keyed or dynamic boundaries still use atomic owned replacement.
-This is intentionally smaller than a general Virtual DOM renderer; fine-grained
-`$` bindings and keyed `.each(...)` remain the primary hot paths.
+Fine-grained `$` bindings and keyed `.each(...)` update their own regions.
 
 ## Current boundaries
 
@@ -47,12 +39,9 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
 - The renderer owns DOM and lifecycle; `nexus-state` owns data and actions.
 - No general Virtual DOM or whole-tree reconciliation; tracked views only have
   a bounded positional fast path for stable plain-DOM shapes.
-- No claim of being universally faster: subscriptions, binding objects and cleanup have their own costs.
-- `Show` established branch ownership; keyed lists now reuse the same owner and
-  cleanup model without introducing a component-like `<For>` primitive.
-- Keyed arrays use `liveArray.each(key, project)` rather than a component-like
-  `<For>` control flow. Unchanged rows preserve DOM identity and ownership;
-  changed values update `$item` bindings without rerunning or replacing the row.
+- `.if()`, `.render()` and `.each()` use the same ownership and cleanup model.
+- Keyed arrays use `liveArray.each(key, project)`. Unchanged rows preserve DOM
+  identity and ownership. Changed values update `$item` bindings in place.
 - General reorders use LIS to minimize physical moves. A store action's
   `list(key)` attaches operation metadata to the Nexus `UpdateContext`, so
   direct array bindings can skip the O(n) key scan for known operations.
@@ -63,8 +52,7 @@ This is intentionally smaller than a general Virtual DOM renderer; fine-grained
   array replacement still uses O(n) reconciliation because identity alone does
   not describe a diff.
 - Keyed blocks and dynamic branches retain their actual top-level nodes. No
-  item/dynamic/show comments, wrapper elements or custom Nexus attributes are
-  injected into user markup.
+  wrapper elements or markers are required for these regions in server HTML.
 - DOM block references remain private renderer ownership. They are not stored in
   Nexus state, because one store may feed several roots and DOM resources must
   follow root disposal. Store `refs` hold mutable runtime values.
@@ -94,25 +82,7 @@ mutation metadata, which `list(...)` already provides without losing the
 operation. Hashes may still be useful later for hydration or immutable-subtree
 memoization, but they do not reduce the physical work of a full reverse.
 
-## Validation questions
-
-1. Is a stable live value in JSX easy to understand?
-2. Can components execute once without making dynamic UI awkward?
-3. Are selector dependency changes and cleanup correct?
-4. Does provenance remain useful at the DOM commit boundary?
-5. What are the memory and update costs per binding?
-6. At what point is local rerender/reconciliation simpler than more bindings?
-7. Is compiler-free `LiveValue.render(value => value ? A : B)` intuitive enough,
-   or is a small transform/component rerun worth supporting bare JSX ternaries?
-8. Can keyed reordering preserve identity without making worst-case full-list
-   permutations disproportionately expensive?
-9. Is the current stable plain-DOM reconciliation boundary sufficient for
-   useful tracked components without growing into a general VDOM?
-10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
-    commands such as focus, rather than relying on scheduler timing?
-11. Can one deterministic owner-path contract support browser identity,
-    component IDs, SSR output and hydration without turning every node into
-    marked framework DOM?
+## Component IDs and hydration
 
 Component scopes expose a lazy `id` string. Base IDs use the fixed
 `nxs-<7-character hash>` form derived from the contract version, root prefix
@@ -120,8 +90,8 @@ and owner path. Typed keyed-row segments make identity
 independent of list position. Browser and server rendering now mirror tracked,
 dynamic, keyed and boundary ownership and produce matching IDs for the same
 explicit `idPrefix` and initial tree. A per-root claim map rejects the unlikely
-case of a 42-bit collision. Stable-tree hydration reuses this traversal;
-structural regions still need matching boundary markers.
+case of a 42-bit collision. Hydration uses the same traversal to recover
+structural boundaries. Paired server markers preserve reactive text nodes.
 
 ## Current assessment
 
@@ -194,9 +164,9 @@ drilling or a provider hierarchy.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
   path. Runtime refs stay separate because state participates in cloning,
-  reset, persistence, devtools and future server serialization.
+  reset, persistence, devtools and server serialization.
 
-### Current problems and likely solutions
+### Maintenance priorities
 
 1. **Cold mount and tail latency.** A fresh-page, first-call measurement now
    runs each renderer in a new page with balanced order. The current Chrome
@@ -213,27 +183,12 @@ drilling or a provider hierarchy.
    infrastructure at `313 B/row`, Preact Signals at `755 B/row` and Solid at
    `566 B/row`. The remaining gap to Solid is primarily binding/subscription
    state rather than retained leaks; disposal still returns to baseline.
-3. **Control-flow ergonomics.** The dogfood workspace now runs on standalone
-   `component(render, stores)` components and lazy app-scoped stores. Normal JSX
-   attributes provide instance input while the render callback destructures
-   values directly; shared state/actions/refs come from the explicit dependency
-   tuple. Bounded positional reconciliation preserves stable plain DOM and
-   falls back to atomic replacement for structural changes. The next design
-   question is whether the flat merged scope remains clear as the application
-   grows. Cross-store data writes deliberately remain separate Nexus updates;
-   synchronous dependency actions are coalesced into one DOM pass that reads
-   every store's final state. Store descriptors can now depend on
-   other descriptors for typed action access; cycles fail explicitly, and lazy
-   setup resources follow app disposal, including failed initialization.
-   Plain `state` and fine-grained `$` are two subscription strategies over the
-   same Nexus state. Store actions receive one extensible context with
-   get/set/reset/refs/list/dependencies.
-   A density benchmark over 500 components now confirms the trade-off: targeted
-   `$` updates remain nearly flat as fields increase, while dense all-field
-   updates cross tracked-view reconciliation between eight and sixteen fields.
-   After deterministic owner paths, the sixteen-field run measured `4.8 ms` for
-   bindings versus `3.9 ms` for the view, with roughly `12.2 KB` versus `2.3
-   KB` retained JS per component.
+3. **Update granularity.** The density benchmark compares field bindings and
+   tracked rerenders over 500 components. The crossover for dense updates
+   fell between eight and sixteen fields. The sixteen-field run measured
+   `4.8 ms` and about `12.2 KB` of retained JS per component for bindings,
+   versus `3.9 ms` and about `2.3 KB` for tracked rerenders. Use this workload
+   to check the cost of changes to either subscription path.
 4. **Generic list fallback.** Keep O(n) reconciliation for arbitrary `set` and
    improve exact operations instead of hiding scans behind structural hashes.
 5. **Error recovery.** The local owned boundary now has explicit fallback,
@@ -334,8 +289,7 @@ search input and applies persisted preferences after hydration. Set
 
 The browser comparison checks keyed order, DOM identity and focus before
 timing. Heap runs measure retained JavaScript objects. CPU throttling covers
-a slower CPU workload on the host machine. See
-[project measurements](https://github.com/voodoofugu/nexus-dom/blob/main/PROJECT.md#benchmark-policy)
+a slower CPU workload on the host machine. See [Benchmark policy](#benchmark-policy)
 for sample counts, hardware-specific results and caveats.
 
 </details>

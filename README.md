@@ -44,8 +44,6 @@ npm install nexus-dom
 
 Set your JSX transform to the automatic runtime and use `nexus-dom` as the
 import source. The generated code imports from `nexus-dom/jsx-runtime`.
-See the [Vite setup](https://github.com/voodoofugu/nexus-dom/blob/main/PROJECT.md#vite-8-and-typescript-setup)
-for one example.
 
 Add `<div id="app"></div>` to your page and mount the counter in your TSX entry.
 
