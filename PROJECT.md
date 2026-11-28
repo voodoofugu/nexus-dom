@@ -267,6 +267,86 @@ The issue-triage browser smoke covers separate issue, filter and preference
 stores. Keep issue data and selection in one store because a single action
 can change both. Run the smoke with `npm run smoke:dogfood`.
 
+## DOM and hydration trust boundaries
+
+Use application-owned JSX templates and pass untrusted text as children
+of ordinary elements. The browser writes text nodes and the server escapes
+text and attribute values.
+
+The renderer rejects `innerHTML`, `outerHTML`, `srcdoc` and
+`dangerouslySetInnerHTML`. Use function handlers such as `onClick` for
+events. The browser and server reject inline event attributes such as `onclick`.
+
+The URL check covers `href`, `src`, `action`, `formAction`, `poster`,
+SVG `xlink:href` and `data` on `object` elements. These accept relative
+URLs and the `http:`, `https:`, `mailto:` and `tel:` schemes. A rejected
+live update leaves the previous URL in place and follows the renderer's
+error handling path.
+
+Apply your own origin and resource rules before binding untrusted URLs.
+Keep arbitrary property maps, CSS, executable element content and markup
+from untrusted sources outside your templates. Hydrate HTML generated from
+trusted templates and state.
+
+Hydration sends lazy-store snapshots to the browser in the HTML. Treat
+that state as public to the recipient and keep credentials and server-only
+data outside those stores. Authorize actions on your server and treat state
+received from the client as untrusted.
+
+## Development
+
+Run `npm run dev` from a checkout to open the issue-triage playground.
+
+<details><summary><b>Build and browser checks</b></summary>
+<br>
+
+```bash
+npm install
+npm run dev
+npm run check
+npm run smoke:package
+npm run smoke:dogfood
+npm run smoke:dogfood:ssr
+```
+
+`npm run build` uses Rollup to produce Terser-minified ESM and CJS graphs for
+the main entry, both JSX runtimes and the server entry. Declarations are emitted
+for ESM and CommonJS, and `npm run smoke:dist` loads every built runtime
+entry in both module formats.
+
+`npm run smoke:dogfood` builds the playground and checks filtering, editing,
+keyed moves, focus and persisted preferences in Chromium. Set `CHROME_PATH`
+to use a specific browser executable.
+
+`npm run smoke:dogfood:ssr` serves the same workspace through Vite's SSR
+loader. It checks that hydration adopts the server DOM, keeps the focused
+search input and applies persisted preferences after hydration. Set
+`NEXUS_DOM_BROWSER` to `firefox` or `webkit` to run with those browsers.
+
+</details>
+
+<details><summary><b>Benchmarks</b></summary>
+<br>
+
+| Command | What it measures |
+| --- | --- |
+| `npm run benchmark` | jsdom microbenchmarks for writes, bindings and subtree rebuilds |
+| `npm run benchmark:browser` | Keyed updates and reorders, forced layout and disposal |
+| `npm run benchmark:compare:matrix` | Production builds against React, Solid and Preact Signals in Chromium, Firefox and WebKit |
+| `npm run benchmark:compare:mobile` | The Chromium comparison with 4× CPU throttling |
+| `npm run benchmark:heap` | Retained allocations per keyed row in Chromium |
+| `npm run benchmark:density` | Sparse and dense updates through `$` and `state` |
+| `npm run benchmark:selector-selection` | Field-level selector tracking in namespaced stores |
+| `npm run benchmark:bundle` | Tree-shaken ESM entry sizes before and after gzip |
+
+The browser comparison checks keyed order, DOM identity and focus before
+timing. Heap runs measure retained JavaScript objects. CPU throttling covers
+a slower CPU workload on the host machine. See
+[project measurements](https://github.com/voodoofugu/nexus-dom/blob/main/PROJECT.md#benchmark-policy)
+for sample counts, hardware-specific results and caveats.
+
+</details>
+
 ## Benchmark policy
 
 `npm run benchmark:selector-selection` changes only `selectedIssueId` in
