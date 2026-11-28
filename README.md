@@ -325,12 +325,8 @@ const Heading = workspaceComponent(
 
 **Description:**
 
-Returns a stable DOM ID for a key within a component instance. Reuse a key
-to refer to the same element. Use distinct keys for distinct elements.
-
-**Parameters:**
-
-- `localKey` is a string local to the component, such as `"email"` or `"hint"`.
+A stable DOM ID string for the component instance. Add a suffix for
+another element in the same component.
 
 <br>
 
@@ -338,20 +334,19 @@ to refer to the same element. Use distinct keys for distinct elements.
 
 ```tsx
 const Field = component(({ id }) => {
-  const inputId = id("email");
-  const hintId = id("hint");
+  const hintId = `${id}-hint`;
   return (
     <>
-      <label for={inputId}>Email</label>
-      <input id={inputId} type="email" aria-describedby={hintId} />
+      <label for={id}>Email</label>
+      <input id={id} type="email" aria-describedby={hintId} />
       <p id={hintId}>Use your work address.</p>
     </>
   );
 });
 ```
 
-> **✦ Note:** Each component instance can reuse these local keys. Use the
-> same `idPrefix` and initial tree on the server and client.
+> **✦ Note:** Each component instance has its own ID, generated on first read.
+> Use the same `idPrefix` and initial tree on the server and client.
 
 </div></ul>
 </details>

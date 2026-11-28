@@ -258,11 +258,11 @@ type ValidDependencies<D extends readonly AnyStore[]> =
 /**---
  * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
  * ### ***ViewScope***:
- * passes tracked state, bindings, actions, refs and an ID factory to a component with flat dependencies.
+ * passes tracked state, bindings, actions, refs and a stable ID to a component with flat dependencies.
  */
 export interface ViewScope<D extends readonly AnyStore[]> {
-  /** Returns a stable DOM id for a local key within this component instance. */
-  readonly id: (localKey: string) => string;
+  /** A stable DOM ID for this component instance, generated on first access. */
+  readonly id: string;
   /** Plain values whose top-level reads determine when the view reruns. */
   readonly state: Readonly<DependencyState<D>>;
   /** Writable live values for direct DOM bindings and small local writes. */
@@ -362,7 +362,7 @@ export function component<Input extends object>(
     ...(registry ? { registry } : {}),
     input,
     render: render as StoreViewVNode["render"],
-    id: captureOwnerId(),
+    getId: captureOwnerId(),
   });
 }
 
@@ -375,10 +375,11 @@ type WorkspaceState<R extends StoreRegistry> = {
 /**---
  * ## ![logo](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/nexus-dom-logo.svg)
  * ### ***WorkspaceScope***:
- * passes store namespaces and the component ID factory to a scoped component.
+ * passes store namespaces and the stable component ID to a scoped component.
  */
 export type WorkspaceScope<R extends StoreRegistry> = {
-  readonly id: (localKey: string) => string;
+  /** A stable DOM ID for this component instance, generated on first access. */
+  readonly id: string;
   readonly state: WorkspaceState<R>;
   readonly $: {
     readonly [K in keyof R]: WritableBoundState<StoreState<R[K]>, UpdateContext>;
@@ -428,7 +429,7 @@ export function componentScope<const R extends StoreRegistry>(
       registry,
       render,
       input,
-      id: captureOwnerId(),
+      getId: captureOwnerId(),
     });
   };
   return factory as WorkspaceViewFactory<R>;
@@ -869,7 +870,18 @@ export function createStoreViewRegistry(
     const acts = namespace((name) => read(name).acts);
     const refs = namespace((name) => read(name).refs);
     const project = (state: RecordAny) =>
-      vnode.render({ id: vnode.id, state, $, acts, refs }, vnode.input);
+      vnode.render(
+        {
+          get id() {
+            return vnode.getId();
+          },
+          state,
+          $,
+          acts,
+          refs,
+        },
+        vnode.input
+      );
     return {
       kind: "tracked-view",
       source,
@@ -918,7 +930,9 @@ export function createStoreViewRegistry(
         project: (state) =>
           vnode.render(
             {
-              id: vnode.id,
+              get id() {
+                return vnode.getId();
+              },
               state,
               $: scope.$,
               acts: scope.acts,

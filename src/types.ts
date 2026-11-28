@@ -163,7 +163,7 @@ export interface StoreViewVNode {
   readonly registry?: ReadonlyMap<string, readonly unknown[]>;
   readonly input: Record<string, unknown>;
   readonly render: (scope: unknown, input: Record<string, unknown>) => Renderable;
-  readonly id: (localKey: string) => string;
+  readonly getId: () => string;
 }
 
 export interface StoreViewResolver {

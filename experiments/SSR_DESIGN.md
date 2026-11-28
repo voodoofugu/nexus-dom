@@ -8,9 +8,14 @@ counter cannot promise the same output on the server and client.
 ```tsx
 const Field = component(
   ({ id }, { name }: { name: string }) => {
-    const inputId = id("input");
-    const hintId = id("hint");
-    return <label for={inputId}><input id={inputId} name={name} aria-describedby={hintId} /><small id={hintId}>Required</small></label>;
+    const hintId = `${id}-hint`;
+    return (
+      <>
+        <label for={id}>{name}</label>
+        <input id={id} name={name} aria-describedby={hintId} />
+        <small id={hintId}>Required</small>
+      </>
+    );
   },
   [form]
 );
@@ -19,19 +24,19 @@ const html = renderToString(<App />, {
   hydration: true,
   idPrefix: "account",
 });
-hydrate(<App />, document.querySelector("#app")!, { idPrefix: "account" });
+createApp().hydrate(<App />, "#app", { idPrefix: "account" });
 ```
 
-`id(localKey)` is preferable to an order-only hook: explicit local keys remain
-stable when an unrelated conditional ID is added. Calling it with the same key
-in one component returns the same value.
+The component scope computes its base `id` on first read. Suffixes identify
+additional elements without changing the base when a conditional element
+appears or disappears.
 
 ## Identity contract
 
 - Every mounted component has an owner path scoped to one root.
 - A root has an explicit or generated `idPrefix`; generated prefixes are unique,
   while callers must keep explicit prefixes unique when roots share a document.
-- Component IDs hash `contractVersion + idPrefix + ownerPath + localKey`; the
+- Base component IDs hash `contractVersion + idPrefix + ownerPath`; the
   fixed markup form is `nxs-` plus seven alphanumeric base62 characters.
 - Keyed rows use type-preserving keyed owner segments, so moves and initial
   order changes preserve IDs.
@@ -44,7 +49,7 @@ in one component returns the same value.
 
 ## Rendering phases
 
-1. **Implemented:** add owner identity and `id(localKey)` to the browser renderer
+1. **Implemented:** add owner identity and a lazy `id` to the browser renderer
    without changing DOM output unless requested. Tracked, dynamic, keyed and
    boundary traversals now match on browser and server; reruns and keyed moves
    retain their identity.

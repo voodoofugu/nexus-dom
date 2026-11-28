@@ -111,12 +111,12 @@ memoization, but they do not reduce the physical work of a full reverse.
 10. Should app-scoped imperative refs get an explicit `afterCommit` hook for
     commands such as focus, rather than relying on scheduler timing?
 11. Can one deterministic owner-path contract support browser identity,
-    `id(localKey)`, SSR output and hydration without turning every node into
+    component IDs, SSR output and hydration without turning every node into
     marked framework DOM?
 
-Owners now expose `id(localKey)` through standalone view scope. IDs use
-the fixed `nxs-<7-character hash>` form derived from a versioned root prefix,
-owner path and exact local key. Typed keyed-row segments make identity
+Component scopes expose a lazy `id` string. Base IDs use the fixed
+`nxs-<7-character hash>` form derived from the contract version, root prefix
+and owner path. Typed keyed-row segments make identity
 independent of list position. Browser and server rendering now mirror tracked,
 dynamic, keyed and boundary ownership and produce matching IDs for the same
 explicit `idPrefix` and initial tree. A per-root claim map rejects the unlikely
@@ -189,7 +189,7 @@ drilling or a provider hierarchy.
   general and exact moves, preserving focus in the tested cases, but cannot
   promise every other stateful-move behavior of the native primitive.
 - The complete tree-shaken renderer and `nexus-state` runtime currently measure
-  about `13.88 KB gzip`; actual application cost still depends on imported APIs
+  about `13.86 KB gzip`; actual application cost still depends on imported APIs
   and bundler behavior.
 - Writable `$field.set(value | project)` covers small local
   changes without forcing one-off actions; actions remain the domain-command
@@ -383,12 +383,12 @@ median versus `1.4 ms` for rebuilding 1,000 rows; full reverse remains roughly
 equal. Keep the jsdom discrepancy as evidence that browser measurements,
 identity semantics and multiple reorder shapes all matter.
 
-The isolated Rollup/Terser ESM benchmark currently measures roughly `8.79 KB
+The isolated Rollup/Terser ESM benchmark currently measures roughly `8.78 KB
 gzip` for `bind`, `render` and `createDOMRenderer`, `11.95 KB` for `createApp`,
-and `12.38 KB` for the full main entry with `nexus-state` externalized.
-The same full entry is `13.88 KB gzip` with the tree-shaken dependency bundled.
-The server entry is `7.12 KB` externalized
-or `8.19 KB` with `nexus-state`. Track these separately from the playground
+and `12.35 KB` for the full main entry with `nexus-state` externalized.
+The same full entry is `13.86 KB gzip` with the tree-shaken dependency bundled.
+The server entry is `7.10 KB` externalized
+or `8.18 KB` with `nexus-state`. Track these separately from the playground
 bundle.
 
 The browser runner includes a forced-GC retention probe. The first warm 20-cycle

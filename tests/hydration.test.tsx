@@ -86,7 +86,10 @@ describe("nexus-dom hydration", () => {
     });
     const Counter = component(
       ({ id, state, acts }) => (
-        <button id={id("button")} onClick={acts.increment}>{state.count}</button>
+        <>
+          <button id={id} aria-describedby={`${id}-hint`} onClick={acts.increment}>{state.count}</button>
+          <p id={`${id}-hint`}>Increment the counter</p>
+        </>
       ),
       [counter]
     );
@@ -96,6 +99,8 @@ describe("nexus-dom hydration", () => {
       idPrefix: "app",
     });
     const button = host.querySelector("button")!;
+    const hint = host.querySelector("p")!;
+    const serverId = button.id;
     const app = createApp();
 
     const root = app.hydrate(<Counter />, host, {
@@ -110,6 +115,9 @@ describe("nexus-dom hydration", () => {
 
     expect(host.querySelector("button")).toBe(button);
     expect(button.textContent).toBe("1");
+    expect(button.id).toBe(serverId);
+    expect(button.getAttribute("aria-describedby")).toBe(hint.id);
+    expect(hint.id).toBe(`${serverId}-hint`);
 
     app.dispose();
     expect(host.childNodes).toHaveLength(0);

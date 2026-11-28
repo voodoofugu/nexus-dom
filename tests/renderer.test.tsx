@@ -4,6 +4,7 @@ import { createDOMRenderer } from "../src/renderer.js";
 import { render } from "../src/render.js";
 import { createNexus } from "nexus-state";
 import { createListHelpers } from "../src/list.js";
+import { Owner } from "../src/owner.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   createApp,
@@ -12,6 +13,7 @@ import {
   onCleanup,
   store,
   component,
+  componentScope,
   type CommitEvent,
   type LiveItem,
   type ListController,
@@ -315,9 +317,7 @@ describe("nexus-dom rendering model", () => {
     });
     const Field = component(
       ({ id, state }, { name }: { name: string }) => {
-        const inputId = id("input");
-        expect(id("input")).toBe(inputId);
-        return <label for={inputId}>{name}<input id={inputId} value={state.value} /></label>;
+        return <label for={id}>{name}<input id={id} value={state.value} /></label>;
       },
       [values]
     );
@@ -341,6 +341,44 @@ describe("nexus-dom rendering model", () => {
     expect(Array.from(host.querySelectorAll("input"), (input) => input.id)).toEqual(before);
   });
 
+  it("generates a scoped component ID only when it is first read", () => {
+    const generateId = vi.spyOn(Owner.prototype, "id");
+    const app = createApp();
+    try {
+      const flags = store({ state: { showId: false, count: 0 } });
+      const scoped = componentScope({ flags });
+      const Counter = scoped((scope) => (
+        <button
+          id={scope.state.flags.showId ? scope.id : undefined}
+          onClick={() => {
+            scope.$.flags.showId.set(true);
+            scope.$.flags.count.set((count) => count + 1);
+          }}
+        >
+          {scope.state.flags.count}
+        </button>
+      ));
+      const host = document.createElement("div");
+      const root = app.render(<Counter />, host, { schedule: "manual" });
+      const button = host.querySelector("button")!;
+      expect(generateId).not.toHaveBeenCalled();
+
+      button.click();
+      root.flush();
+      const firstId = button.id;
+      expect(firstId).toMatch(/^nxs-[A-Za-z0-9]{7}$/);
+
+      button.click();
+      root.flush();
+      expect(button.textContent).toBe("2");
+      expect(button.id).toBe(firstId);
+      expect(generateId).toHaveBeenCalledOnce();
+    } finally {
+      app.dispose();
+      generateId.mockRestore();
+    }
+  });
+
   it("preserves component ids through keyed moves", () => {
     const items = store({
       state: { items: [{ id: 1 }, { id: 2 }, { id: 3 }] },
@@ -348,7 +386,7 @@ describe("nexus-dom rendering model", () => {
     });
     const Row = component(
       ({ id }, { itemId }: { itemId: number }) =>
-        <li id={id("row")} data-item={itemId}>{itemId}</li>
+        <li id={id} data-item={itemId}>{itemId}</li>
     );
     const List = component(
       ({ $, acts }) => (

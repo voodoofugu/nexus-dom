@@ -25,7 +25,7 @@ describe("nexus-dom server rendering", () => {
     });
     const Row = component(
       ({ id }, { label }: { label: string }) =>
-        <li id={id("row")} title={'say "hello"'}>{label}</li>
+        <li id={id} title={'say "hello"'}>{label}</li>
     );
     const App = component(
       ({ state, $ }) => (
@@ -41,15 +41,15 @@ describe("nexus-dom server rendering", () => {
 
     expect(html).toBe(
       '<main aria-label="A &lt; B"><h1>A &lt; B</h1><ul>' +
-      '<li id="nxs-re1mZLO" title="say &quot;hello&quot;">One</li>' +
-      '<li id="nxs-MWpvxI8" title="say &quot;hello&quot;">Two</li>' +
+      '<li id="nxs-SKSSYsw" title="say &quot;hello&quot;">One</li>' +
+      '<li id="nxs-XGDFPlM" title="say &quot;hello&quot;">Two</li>' +
       "</ul></main>"
     );
     expect(setups).toBe(0);
   });
 
   it("matches browser component ids with the same prefix", () => {
-    const Field = component(({ id }) => <input id={id("input")} />);
+    const Field = component(({ id }) => <input id={id} />);
     const App = component(() => <section><Field /><Field /></section>);
     const server = renderToString(<App />, { idPrefix: "form" });
     const host = document.createElement("div");
@@ -59,8 +59,8 @@ describe("nexus-dom server rendering", () => {
 
     expect(server).toBe(host.innerHTML);
     expect(Array.from(host.querySelectorAll("input"), (input) => input.id)).toEqual([
-      "nxs-ByvN82F",
-      "nxs-0ZJnesR",
+      "nxs-OoAeevb",
+      "nxs-A90Ydpe",
     ]);
     app.dispose();
   });
@@ -73,7 +73,7 @@ describe("nexus-dom server rendering", () => {
       },
     });
     const Field = component(
-      ({ id }, { name }: { name: string }) => <span id={id("field")}>{name}</span>
+      ({ id }, { name }: { name: string }) => <span id={id}>{name}</span>
     );
     const App = component(
       ({ $ }) => (
@@ -104,7 +104,7 @@ describe("nexus-dom server rendering", () => {
   it("derives keyed component ids from keys instead of list positions", () => {
     const Row = component(
       ({ id }, { itemId }: { itemId: number }) =>
-        <li id={id("row")} data-item={itemId}>{itemId}</li>
+        <li id={id} data-item={itemId}>{itemId}</li>
     );
     const renderItems = (items: readonly { id: number }[]) => {
       const $ = bind(createNexus({ state: { items } }));

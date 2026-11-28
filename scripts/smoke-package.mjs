@@ -33,6 +33,14 @@ if ("view" in app || "$" in app || "nexus" in app || "list" in app) {
 app.dispose();
 const html = renderToString(jsxDEV(Title, {}));
 if (html !== "<p>ready</p>") throw new Error("Unexpected SSR output: " + html);
+const Field = component(({ id }) => {
+  const inputId: string = id;
+  return jsx("input", { id: inputId });
+});
+const field = renderToString(jsx(Field, {}), { idPrefix: "form" });
+if (!/^<input id="nxs-[A-Za-z0-9]{7}">$/.test(field)) {
+  throw new Error("Expected a component ID string: " + field);
+}
 `;
 
 try {

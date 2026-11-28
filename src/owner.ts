@@ -94,15 +94,15 @@ export class Owner {
     return `${region}/k${encodeKey(key, this.ids)}`;
   }
 
-  id(localKey: string) {
-    const identity = `v1\0${this.ids.prefix}\0${this.idPath}\0${localKey}`;
+  id() {
+    const identity = `v2\0${this.ids.prefix}\0${this.idPath}`;
     const token = hashIdentity(identity);
     const claims = (this.ids.claims ??= new Map());
     const existing = claims.get(token);
     if (existing !== undefined && existing.identity !== identity) {
       throw nexusDOMError(
         "ID_HASH_COLLISION",
-        `Component id hash collision for local key ${JSON.stringify(localKey)}.`
+        "Component id hash collision."
       );
     }
     const claim = existing ?? { identity, owners: this };
@@ -224,14 +224,8 @@ export function captureOwnerId() {
     );
   }
   const owner = currentOwner;
-  let values: Map<string, string> | undefined;
-  return (localKey: string) => {
-    const current = values?.get(localKey);
-    if (current !== undefined) return current;
-    const value = owner.id(localKey);
-    (values ??= new Map()).set(localKey, value);
-    return value;
-  };
+  let value: string | undefined;
+  return () => (value ??= owner.id());
 }
 
 /**---
