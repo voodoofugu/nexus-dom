@@ -30,13 +30,27 @@
 
 ### Installation
 
+`nexus-dom` is prepared for its first npm release. To try it now, build
+and pack it from a checkout.
+
 ```bash
-npm install nexus-dom
+npm ci
+npm run build
+npm pack
+```
+
+Install the resulting archive in your application.
+
+```bash
+npm install /path/to/nexus-dom/nexus-dom-1.0.0.tgz
 ```
 
 Use `nexus-dom` for applications, `nexus-dom/server` for HTML rendering
 and `nexus-dom/core` to integrate an existing store. Each entry ships ESM,
 CommonJS and TypeScript declarations.
+
+> **✦ Note:** The package targets Node.js 20 or newer. To build from a
+> checkout, use Node.js 20.19+ on the 20.x line or Node.js 22.12+.
 
 <details><summary><b>TypeScript JSX setup</b></summary>
 
@@ -141,8 +155,8 @@ app.dispose();
 
 **Description:**
 
-Registers a cleanup while a component renders. The callback runs when that
-component owner is disposed.
+Registers cleanup while a plain function component renders. The renderer
+calls it when that component's render scope is disposed.
 
 **Parameters:**
 
@@ -153,17 +167,22 @@ component owner is disposed.
 ```tsx
 import { onCleanup } from "nexus-dom";
 
-function SearchInput() {
+function SearchInput({ onResize }: { onResize: ResizeObserverCallback }) {
   let observer: ResizeObserver | undefined;
   onCleanup(() => observer?.disconnect());
 
-  return <input ref={(node) => {
-    if (!node) return;
-    observer = new ResizeObserver(handleResize);
-    observer.observe(node);
-  }} />;
+  return (
+    <input type="search" ref={(node) => {
+      if (!node) return;
+      observer = new ResizeObserver(onResize);
+      observer.observe(node);
+    }} />
+  );
 }
 ```
+
+> **✦ Note:** For app-scoped store resources, return a cleanup from
+> `store().setup` or `store().mount`, or use their `onCleanup` callback.
 
 </div></ul>
 </details>
@@ -177,7 +196,8 @@ function SearchInput() {
 **Description:**
 
 Declares a lazy store. Components that use the same descriptor in one app
-share its instance.
+share its instance. Its resources live until `app.dispose()`, including
+when an individual root is removed.
 
 **Parameters:**
 
@@ -200,9 +220,9 @@ const preferences = store({
 });
 ```
 
-> **✦ Note:** `setup` prepares state for the first client render. `mount`
-> runs after DOM insertion or hydration, so it is the place to restore
-> persisted preferences. Both can return a cleanup.
+> **✦ Note:** Both hooks run on the client. `setup` prepares the first render.
+> `mount` runs after DOM insertion or hydration and can restore persisted
+> preferences. Both can return a cleanup.
 
 </div></ul>
 </details>
@@ -282,9 +302,9 @@ const Heading = workspaceComponent(
 ```
 
 > **✦ Note:** Reading `state.title.text` tracks the whole `title` store.
-> `$.title.text` binds one field. Use `$.$select` for field tracking across
-> several stores. JSX parent-child nesting leaves the child's declared scope
-> unchanged.
+> `$.title.text` binds one field. Use `$.title.$select` to derive a value within
+> that store, or `$.$select` to track fields across several stores. JSX
+> parent-child nesting leaves the child's declared scope unchanged.
 
 </div></ul>
 </details>
@@ -388,8 +408,8 @@ Updates a local JSX branch when a live value changes.
 **Example:**
 
 ```tsx
-{$.authorized.render((authorized) =>
-  authorized ? <Profile /> : <Login />
+{$.selectedIssueId.render((issueId) =>
+  issueId === null ? <p>Select an issue</p> : <IssueDetails issueId={issueId} />
 )}
 ```
 
@@ -538,6 +558,11 @@ app.hydrate(<App />, "#app", { idPrefix: "account" });
 > snapshots must be JSON-safe. The browser receives them in the HTML, so keep
 > credentials and server-only data outside those stores.
 
+For independently rendered roots that carry lazy-store snapshots, use a
+fresh client app and a distinct `idPrefix` for each root. A DOM mismatch
+reports `HYDRATION_MISMATCH` through `onError` if provided, then mounts the
+root again.
+
 </div></ul>
 </details>
 
@@ -555,7 +580,9 @@ app.hydrate(<App />, "#app", { idPrefix: "account" });
 **Description:**
 
 Provides JSX bindings for an existing Nexus store. The core entry also exposes
-`render`, `hydrate` and `createDOMRenderer` for standalone rendering.
+`render`, `hydrate` and `createDOMRenderer` for standalone rendering,
+plus `createLiveSelector` and `isLiveValue` for working with bindings.
+Mount components that declare their own stores through `createApp()`.
 
 **Parameters:**
 
@@ -573,7 +600,9 @@ render(<h1>{$.title}</h1>, "#app");
 ```
 
 > **✦ Note:** Declare `nexus-state` in your app's dependencies if you import
-> it directly. To render components declared with `store()`, use `createApp()`.
+> it directly. For SSR with an external store, provide the same initial
+> state on the client. Automatic snapshot transfer covers stores declared
+> with `store()` and hydrated with `app.hydrate()`.
 
 </div></ul>
 </details>
