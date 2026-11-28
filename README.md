@@ -1,4 +1,4 @@
-![nexus-dom banner](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/01-banner-logo.svg)
+![nexus-dom banner](https://raw.githubusercontent.com/voodoofugu/nexus-dom/main/src/assets/banner-logo.png)
 
 <h2></h2>
 
@@ -15,66 +15,66 @@
 
 ### About
 
-`nexus-dom` renders JSX to the DOM with
-[`nexus-state`](https://github.com/voodoofugu/nexus-state).
+`nexus-dom` is a UI library for building browser interfaces with JSX and
+TypeScript. Components declare the stores they use, so a toolbar, a list
+and a details panel can share data and actions. Each application owns its
+store instances and cleans up their resources when it is disposed.
 
-- **Two ways to update.** Read `state` to update a component, or put a `$` binding
-  in JSX to update an individual text node or property.
-- **Shared stores.** Each app creates the stores its components use and
-  owns their resources.
-- **Keyed lists.** Rows keep their DOM nodes when reordered.
-- **Server rendering.** Render to HTML and hydrate it with stable IDs and
-  JSON store snapshots.
+Choose how each part of the interface updates. Read `state` when the component
+needs to recompute its JSX, or use a `$` binding when only a DOM property or a
+piece of text needs to change. You can mix both in the same component. For
+example, a task list can keep each row in place when the order changes and
+update a title directly while the user edits it.
+
+The same components can render to HTML on the server. In the browser,
+hydration attaches events and bindings to the existing DOM and restores
+store state from the server.
 
 <h2></h2>
 
 ### Installation
 
-`nexus-dom` is prepared for its first npm release. To try it now, build
-and pack it from a checkout.
-
 ```bash
-npm ci
-npm run build
-npm pack
+npm install nexus-dom
 ```
 
-Install the resulting archive in your application.
+<h2></h2>
 
-```bash
-npm install /path/to/nexus-dom/nexus-dom-1.0.0.tgz
+### Quick start
+
+Configure your build tool to use the automatic JSX runtime from `nexus-dom`.
+
+<details><summary><b>Vite 8 and TypeScript setup</b></summary>
+
+Set the runtime in `vite.config.ts`.
+
+```ts
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "nexus-dom",
+    },
+  },
+});
 ```
 
-Use `nexus-dom` for components, stores and browser rendering. Import
-`renderToString` from `nexus-dom/server`. Both entries ship ESM, CommonJS
-and TypeScript declarations. The package includes `nexus-state` as a dependency.
-
-> **✦ Note:** The package targets Node.js 20 or newer. To build from a
-> checkout, use Node.js 20.19+ on the 20.x line or Node.js 22.12+.
-
-<details><summary><b>TypeScript JSX setup</b></summary>
-
-If TypeScript compiles your JSX, set the automatic JSX mode and point it at
-the Nexus DOM runtime.
+Set the JSX types in `tsconfig.json` and let Vite handle the transform.
 
 ```json
 {
   "compilerOptions": {
-    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
     "jsxImportSource": "nexus-dom"
   }
 }
 ```
 
-> **✦ Note:** `react-jsx` is the TypeScript name for the automatic JSX mode.
-> With this `jsxImportSource`, the generated code imports from
-> `nexus-dom/jsx-runtime`. React is not required.
-
 </details>
-
-<h2></h2>
-
-### Quick start
 
 Add `<div id="app"></div>` to your page and mount the counter in your TSX entry.
 
@@ -89,7 +89,7 @@ const Counter = component(
       Clicks: {$.count}
     </button>
   ),
-  [counter]
+  [counter],
 );
 
 const app = createApp(<Counter />, "#app");
@@ -176,11 +176,14 @@ function SearchInput({ onResize }: { onResize: ResizeObserverCallback }) {
   onCleanup(() => observer?.disconnect());
 
   return (
-    <input type="search" ref={(node) => {
-      if (!node) return;
-      observer = new ResizeObserver(onResize);
-      observer.observe(node);
-    }} />
+    <input
+      type="search"
+      ref={(node) => {
+        if (!node) return;
+        observer = new ResizeObserver(onResize);
+        observer.observe(node);
+      }}
+    />
   );
 }
 ```
@@ -255,10 +258,7 @@ its store scope and JSX props.
 ```tsx
 const title = store({ state: { text: "Issues" } });
 
-const Title = component(
-  ({ state }) => <h1>{state.title.text}</h1>,
-  { title }
-);
+const Title = component(({ state }) => <h1>{state.title.text}</h1>, { title });
 ```
 
 <details><summary><b>TypeScript Snippet:</b></summary>
@@ -270,9 +270,11 @@ Store types are inferred. Add a type to the second parameter to declare props.
 ```tsx
 const Title = component(
   ({ state }, { subtitle }: { subtitle: string }) => (
-    <h1>{state.title.text} · {subtitle}</h1>
+    <h1>
+      {state.title.text} · {subtitle}
+    </h1>
   ),
-  { title }
+  { title },
 );
 
 // <Title subtitle="Open" />
@@ -306,8 +308,12 @@ the stores it accesses. The component factory can add local entries.
 const workspaceComponent = componentScope({ title, preferences });
 
 const Heading = workspaceComponent(
-  ({ state }) => <h1>{state.title.text}: {state.subtitle.text}</h1>,
-  { subtitle: store({ state: { text: "Open" } }) }
+  ({ state }) => (
+    <h1>
+      {state.title.text}: {state.subtitle.text}
+    </h1>
+  ),
+  { subtitle: store({ state: { text: "Open" } }) },
 );
 ```
 
@@ -371,9 +377,7 @@ readers and live bindings.
 **Example:**
 
 ```tsx
-<button onClick={() => $.count.set((count) => count + 1)}>
-  {$.count}
-</button>
+<button onClick={() => $.count.set((count) => count + 1)}>{$.count}</button>
 ```
 
 </div></ul>
@@ -397,7 +401,7 @@ Mounts a local branch and keeps it while the binding's truthiness stays the same
 **Example:**
 
 ```tsx
-{$.authorized.if(<Profile />, <Login />)}
+<main>{$.authorized.if(<Profile />, <Login />)}</main>
 ```
 
 > **✦ Note:** JSX expressions used as arguments evaluate normally. Component
@@ -425,9 +429,11 @@ Updates a local JSX branch when a live value changes.
 **Example:**
 
 ```tsx
-{$.selectedIssueId.render((issueId) =>
-  issueId === null ? <p>Select an issue</p> : <IssueDetails issueId={issueId} />
-)}
+<main>
+  {$.selectedIssueId.render((issueId) =>
+    issueId === null ? <p>Select an issue</p> : <IssueDetails issueId={issueId} />
+  )}
+</main>
 ```
 
 > **✦ Note:** For ordinary JSX conditions, use a ternary with `state` inside
@@ -458,7 +464,9 @@ update its live fields, and removing a key disposes the row.
 <ol>
   {$.tasks.each(
     (task) => task.id,
-    ($task) => <li>{$task.title}</li>
+    ($task) => (
+      <li>{$task.title}</li>
+    ),
   )}
 </ol>
 ```
@@ -522,9 +530,11 @@ again with current state.
 **Example:**
 
 ```tsx
-<ErrorBoundary fallback={(error, reset) => (
-  <button onClick={reset}>{String(error)}. Try again</button>
-)}>
+<ErrorBoundary
+  fallback={(error, reset) => (
+    <button onClick={reset}>{String(error)}. Try again</button>
+  )}
+>
   <Editor />
 </ErrorBoundary>
 ```
@@ -602,11 +612,11 @@ root again.
 <br>
 <ul><div>
 
-| Read | What updates |
-| --- | --- |
-| `state.count` | The component reruns when this key changes in a flat scope. |
-| `state.preferences.theme` | The component reruns when the observed store changes. |
-| `$.count` | The attached text or property updates directly. |
+| Read                      | What updates                                                |
+| ------------------------- | ----------------------------------------------------------- |
+| `state.count`             | The component reruns when this key changes in a flat scope. |
+| `state.preferences.theme` | The component reruns when the observed store changes.       |
+| `$.count`                 | The attached text or property updates directly.             |
 
 <br>
 
@@ -620,7 +630,7 @@ const Panel = component(
       <p>Updates: {$.count}</p>
     </section>
   ),
-  [panelStore]
+  [panelStore],
 );
 ```
 
