@@ -72,6 +72,10 @@ try {
     execFileSync(process.execPath, [output], { cwd: directory, stdio: "inherit" });
   }
   console.log("smoke: packed ESM and CommonJS consumers compiled and rendered");
+  if (process.argv.includes("--browser")) {
+    const { smokePackageBrowser } = await import("./smoke-package-browser.mjs");
+    await smokePackageBrowser(directory);
+  }
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

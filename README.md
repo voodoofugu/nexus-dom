@@ -358,7 +358,8 @@ readers and live bindings.
 
 **Description:**
 
-Mounts a local branch and keeps it while the binding's truthiness stays the same.
+Shorthand for choosing between two branches with `.render()`. It keeps the
+active branch mounted while the binding's truthiness stays the same.
 
 **Parameters:**
 
@@ -386,7 +387,8 @@ Mounts a local branch and keeps it while the binding's truthiness stays the same
 
 **Description:**
 
-Updates a local JSX branch when a live value changes.
+Builds a local JSX branch from the current live value. The rest of the
+component stays mounted when the branch updates.
 
 **Parameters:**
 
@@ -417,8 +419,9 @@ Updates a local JSX branch when a live value changes.
 
 **Description:**
 
-Renders a keyed array. Reordering keeps the DOM nodes, changes to a row
-update its live fields, and removing a key disposes the row.
+Renders one row per item in a reactive array. The renderer uses each key
+to keep the same row when an item moves. Updating an item under the same
+key updates its live fields in place. Removing a key disposes its row.
 
 **Parameters:**
 
@@ -429,12 +432,18 @@ update its live fields, and removing a key disposes the row.
 
 **Example:**
 
+In a component that uses the `taskStore` below, read bindings from `$`
+and call the store's action through `acts`.
+
 ```tsx
 <ol>
   {$.tasks.each(
     (task) => task.id,
     ($task) => (
-      <li>{$task.title}</li>
+      <li>
+        {$task.title}
+        <button onClick={() => acts.moveToFront($task.id.get())}>Move to front</button>
+      </li>
     ),
   )}
 </ol>
@@ -452,9 +461,10 @@ update its live fields, and removing a key disposes the row.
 
 **Description:**
 
-Updates an array with typed operations. A direct keyed binding can use the
-recorded operation to apply changes such as insert, remove, move and replace.
-Use `list` inside a store's action factory.
+Call `list(key)` inside a store's action factory to update an array field.
+Along with the updated array, it records what changed. A direct binding such
+as `$.tasks.each(...)` can use that information to apply a move, insert,
+remove or replacement without scanning all keys.
 
 **Parameters:**
 
@@ -466,14 +476,19 @@ Use `list` inside a store's action factory.
 
 ```ts
 const taskStore = store({
-  state: { tasks: ["Review", "Publish", "Draft"] },
-  acts: ({ list }) => ({
-    moveToFront(index: number) {
-      list("tasks").move(index, 0);
+  state: { tasks: [{ id: 1, title: "Review" }, { id: 2, title: "Publish" }] },
+  acts: ({ get, list }) => ({
+    moveToFront(id: number) {
+      const index = get("tasks").findIndex((task) => task.id === id);
+      if (index > 0) list("tasks").move(index, 0);
     },
   }),
 });
 ```
+
+> **✦ Note:** Use `list` when the action knows the operation. Setting the whole
+> array also works with `.each()` and uses keyed reconciliation. Use
+> `list(key).batch(...)` to commit several operations in one store update.
 
 </div></ul>
 </details>

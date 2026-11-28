@@ -253,6 +253,7 @@ npm install
 npm run dev
 npm run check
 npm run smoke:package
+npm run smoke:package:browser
 npm run smoke:dogfood
 npm run smoke:dogfood:ssr
 ```
@@ -270,6 +271,12 @@ to use a specific browser executable.
 loader. It checks that hydration adopts the server DOM, keeps the focused
 search input and applies persisted preferences after hydration. Set
 `NEXUS_DOM_BROWSER` to `firefox` or `webkit` to run with those browsers.
+
+`npm run smoke:package:browser` installs the built tarball in a clean
+directory and builds the lifecycle test page against that copy. It checks
+keyed moves with a focused input, recovery from a rendering failure, shared
+state across browser history and cleanup on screen exit and app disposal.
+To try the same page manually, open `/crash.html` in the dev server.
 
 </details>
 

@@ -40,3 +40,5 @@ jobs:
       - run: npm ci
       - run: npx --no-install playwright-core install --with-deps ${{ matrix.browser }}
       - run: npm run smoke:dogfood:ssr
+      - run: npm run build
+      - run: npm run smoke:package:browser
